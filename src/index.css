@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Trust Build-IA — Inspired by logo colors */
+    --background: 180 20% 97%;        /* Warm teal-tinted white */
+    --foreground: 210 50% 18%;        /* Dark navy from logo outlines */
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 50% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 50% 18%;
+
+    --primary: 180 35% 50%;           /* Teal from logo circle */
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 180 35% 50% / 0.12;
+
+    --secondary: 180 15% 95%;
+    --secondary-foreground: 210 50% 18%;
+
+    --muted: 180 12% 94%;
+    --muted-foreground: 210 20% 45%;
+
+    --accent: 25 80% 55%;             /* Orange from logo hands */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 50% 18% / 0.08;
+    --input: 180 10% 90%;
+    --ring: 180 35% 50%;
+
+    --radius: 0.875rem;
+
+    --warning: 25 80% 55%;            /* Orange accent */
+    --warning-foreground: 0 0% 100%;
+
+    --success: 75 45% 45%;            /* Olive green from logo dot */
+    --success-foreground: 0 0% 100%;
+
+    --sidebar-background: 180 15% 95%;
+    --sidebar-foreground: 210 50% 18%;
+    --sidebar-primary: 180 35% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 15% 90%;
+    --sidebar-accent-foreground: 210 50% 18%;
+    --sidebar-border: 210 50% 18% / 0.08;
+    --sidebar-ring: 180 35% 50%;
+
+    /* Extended tokens */
+    --accent-ai: 180 35% 50%;         /* Teal for AI */
+    --accent-cta: 25 80% 55%;         /* Orange for CTA */
+    --text-secondary: 210 20% 34%;
+    --border-active: 180 35% 50% / 0.35;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    line-height: 1.2;
+  }
+}
+
+@layer utilities {
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  .font-mono-data {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+}
+
+/* ========== CARD HOVER SYSTEM ========== */
+@layer components {
+  .forge-card {
+    @apply relative overflow-hidden bg-card border rounded-[14px] p-5;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.04);
+    transition: box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease;
+  }
+  .forge-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .forge-card:hover {
+    border-color: hsl(var(--border-active));
+    box-shadow: 0 4px 20px hsl(var(--primary-glow)), 0 1px 4px rgba(15,23,42,0.06);
+    transform: translateY(-2px);
+  }
+  .forge-card:hover::before { opacity: 1; }
+}
+
+/* ========== ANIMATIONS ========== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ctaPulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(38 92% 50% / 0.25); }
+  50%      { box-shadow: 0 0 0 8px transparent; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+@keyframes badgeIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes pendingPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.35s ease forwards;
+}
+.animate-fade-up-1 { animation: fadeUp 0.35s ease 0.08s forwards; opacity: 0; }
+.animate-fade-up-2 { animation: fadeUp 0.35s ease 0.16s forwards; opacity: 0; }
+.animate-fade-up-3 { animation: fadeUp 0.35s ease 0.24s forwards; opacity: 0; }
+.animate-fade-up-4 { animation: fadeUp 0.35s ease 0.32s forwards; opacity: 0; }
+
+.btn-cta-pulse {
+  animation: ctaPulse 2.5s ease infinite;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, hsl(var(--secondary)) 25%, hsl(var(--muted)) 50%, hsl(var(--secondary)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.animate-badge-in {
+  animation: badgeIn 0.2s ease forwards;
+}
+
+.animate-pending {
+  animation: pendingPulse 1.5s ease-in-out infinite;
+}
+
+/* ========== AI VALIDATION CARD ========== */
+.ai-validation-card {
+  @apply relative rounded-xl p-4;
+  background: hsl(var(--accent-ai) / 0.08);
+  border-left: 3px solid hsl(var(--accent-ai));
+}
