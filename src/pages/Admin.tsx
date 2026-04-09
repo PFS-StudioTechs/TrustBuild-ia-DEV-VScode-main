@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Shield, Users, HardHat, Trash2, Edit, RefreshCw, Search } from "lucide-react";
+import { Shield, Users, HardHat, Trash2, Edit, RefreshCw, Search, Brain, Globe, CheckCircle2, AlertCircle, Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Navigate } from "react-router-dom";
 
@@ -156,6 +156,75 @@ export default function Admin() {
     litige: "bg-destructive/10 text-destructive",
   };
 
+  // ── Base de connaissances globale ──────────────────────────────────────────
+  const GLOBAL_SOURCES = [
+    { url: "https://www.castorama.fr/idees-conseils/pieces/salle-de-bain", nom: "Castorama — Salle de bain", categorie: "bricolage" },
+    { url: "https://www.castorama.fr/idees-conseils/travaux/plomberie", nom: "Castorama — Plomberie", categorie: "bricolage" },
+    { url: "https://www.castorama.fr/idees-conseils/travaux/electricite", nom: "Castorama — Électricité", categorie: "bricolage" },
+    { url: "https://www.castorama.fr/idees-conseils/travaux/peinture", nom: "Castorama — Peinture", categorie: "bricolage" },
+    { url: "https://www.castorama.fr/idees-conseils/travaux/carrelage", nom: "Castorama — Carrelage", categorie: "bricolage" },
+    { url: "https://www.bricodepot.fr/conseils-bricolage/plomberie/", nom: "Brico Dépôt — Plomberie", categorie: "bricolage" },
+    { url: "https://www.bricodepot.fr/conseils-bricolage/electricite/", nom: "Brico Dépôt — Électricité", categorie: "bricolage" },
+    { url: "https://www.bricodepot.fr/conseils-bricolage/peinture/", nom: "Brico Dépôt — Peinture", categorie: "bricolage" },
+    { url: "https://www.leroymerlin.fr/comment-choisir/plomberie-sanitaire/", nom: "Leroy Merlin — Plomberie", categorie: "bricolage" },
+    { url: "https://www.leroymerlin.fr/comment-choisir/electricite/", nom: "Leroy Merlin — Électricité", categorie: "bricolage" },
+    { url: "https://www.leroymerlin.fr/comment-choisir/peinture/", nom: "Leroy Merlin — Peinture", categorie: "bricolage" },
+    { url: "https://www.leroymerlin.fr/comment-choisir/carrelage/", nom: "Leroy Merlin — Carrelage", categorie: "bricolage" },
+    { url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F23449", nom: "Service-Public — Obligations artisan", categorie: "reglementation" },
+    { url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F23461", nom: "Service-Public — Garanties construction", categorie: "reglementation" },
+    { url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F31132", nom: "Service-Public — Devis & factures", categorie: "reglementation" },
+    { url: "https://bpifrance-creation.fr/encyclopedie/statuts-juridiques/entreprise-individuelle/auto-entrepreneur-micro-entrepreneur", nom: "BPI France — Micro-entrepreneur", categorie: "reglementation" },
+    { url: "https://www.oppbtp.fr/nos-offres/prevention-risques-metiers/", nom: "OPPBTP — Prévention BTP", categorie: "securite" },
+    { url: "https://www.ffbatiment.fr/federation-francaise-du-batiment/le-secteur-du-batiment/le-secteur-en-chiffres/", nom: "FFB — Secteur bâtiment", categorie: "secteur" },
+  ];
+
+  const [globalDocs, setGlobalDocs] = useState<Array<{ id: string; nom: string; statut: string; storage_path: string | null; metadata: any }>>([]);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResults, setSeedResults] = useState<{ ok: number; errors: number; skipped: number } | null>(null);
+
+  const loadGlobalDocs = useCallback(async () => {
+    const { data } = await supabase
+      .from("knowledge_documents")
+      .select("id, nom, statut, storage_path, metadata")
+      .eq("is_global", true)
+      .order("created_at", { ascending: true });
+    setGlobalDocs((data as any[]) ?? []);
+  }, []);
+
+  useEffect(() => { loadGlobalDocs(); }, [loadGlobalDocs]);
+
+  const handleSeedGlobal = async (force = false) => {
+    setSeeding(true);
+    setSeedResults(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/seed-global-knowledge`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ force }),
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error ?? "Erreur");
+      setSeedResults({ ok: result.ok, errors: result.errors, skipped: result.skipped });
+      toast.success(`Indexation terminée : ${result.ok} OK, ${result.errors} erreurs, ${result.skipped} ignorées`);
+      loadGlobalDocs();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleDeleteGlobalDoc = async (id: string) => {
+    await supabase.from("knowledge_chunks").delete().eq("document_id", id);
+    await supabase.from("knowledge_documents").delete().eq("id", id);
+    setGlobalDocs(prev => prev.filter(d => d.id !== id));
+    toast.success("Document global supprimé");
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center gap-2 animate-fade-up">
@@ -172,6 +241,7 @@ export default function Admin() {
         <TabsList className="bg-secondary w-full">
           <TabsTrigger value="users" className="flex-1 gap-1 touch-target"><Users className="w-4 h-4" /> Utilisateurs ({users.length})</TabsTrigger>
           <TabsTrigger value="chantiers" className="flex-1 gap-1 touch-target"><HardHat className="w-4 h-4" /> Chantiers ({chantiers.length})</TabsTrigger>
+          <TabsTrigger value="knowledge" className="flex-1 gap-1 touch-target"><Brain className="w-4 h-4" /> Base globale</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="space-y-3 mt-3">
@@ -305,6 +375,107 @@ export default function Admin() {
             </div>
           )}
         </TabsContent>
+
+        {/* ── Base de connaissances globale ── */}
+        <TabsContent value="knowledge" className="space-y-4 mt-3">
+          <div className="forge-card !p-4 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <p className="font-semibold text-sm">Sources partagées pour tous les artisans</p>
+                <p className="text-xs text-muted-foreground">
+                  {globalDocs.filter(d => d.statut === "indexe").length} / {GLOBAL_SOURCES.length} sources indexées
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleSeedGlobal(false)}
+                  disabled={seeding}
+                  className="gap-1.5 text-xs"
+                >
+                  {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  Indexer les manquantes
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleSeedGlobal(true)}
+                  disabled={seeding}
+                  className="gap-1.5 text-xs text-amber-600 border-amber-500/30 hover:bg-amber-500/5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Tout réindexer
+                </Button>
+              </div>
+            </div>
+
+            {seedResults && (
+              <div className="flex gap-3 text-xs p-2 rounded-lg bg-muted">
+                <span className="text-emerald-600 font-semibold">{seedResults.ok} indexées</span>
+                <span className="text-destructive font-semibold">{seedResults.errors} erreurs</span>
+                <span className="text-muted-foreground">{seedResults.skipped} ignorées (déjà indexées)</span>
+              </div>
+            )}
+          </div>
+
+          {/* Liste des sources */}
+          <div className="space-y-1.5">
+            {GLOBAL_SOURCES.map((source) => {
+              const doc = globalDocs.find(d => d.storage_path === source.url);
+              const statut = doc?.statut;
+              const errorMsg = doc?.metadata?.error;
+              return (
+                <div key={source.url} className="forge-card !p-3 flex items-center gap-3">
+                  <Globe className="w-4 h-4 text-violet-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{source.nom}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{source.url}</p>
+                    {statut === "erreur" && errorMsg && (
+                      <p className="text-[11px] text-destructive truncate">{errorMsg}</p>
+                    )}
+                  </div>
+                  <Badge variant="outline" className={`text-[10px] shrink-0 ${
+                    source.categorie === "bricolage" ? "border-blue-500/30 text-blue-600" :
+                    source.categorie === "reglementation" ? "border-amber-500/30 text-amber-600" :
+                    source.categorie === "securite" ? "border-red-500/30 text-red-600" :
+                    "border-border text-muted-foreground"
+                  }`}>
+                    {source.categorie}
+                  </Badge>
+                  {!statut && <Badge variant="outline" className="text-[10px] shrink-0">Non indexé</Badge>}
+                  {statut === "en_cours" && (
+                    <Badge variant="outline" className="gap-1 text-[10px] border-primary/40 text-primary shrink-0">
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" /> En cours
+                    </Badge>
+                  )}
+                  {statut === "indexe" && (
+                    <Badge variant="outline" className="gap-1 text-[10px] border-emerald-500/40 text-emerald-600 shrink-0">
+                      <CheckCircle2 className="w-2.5 h-2.5" /> Indexé
+                    </Badge>
+                  )}
+                  {statut === "erreur" && (
+                    <Badge variant="outline" className="gap-1 text-[10px] border-destructive/40 text-destructive shrink-0">
+                      <AlertCircle className="w-2.5 h-2.5" /> Erreur
+                    </Badge>
+                  )}
+                  {doc && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive shrink-0"
+                      onClick={() => handleDeleteGlobalDoc(doc.id)}
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </TabsContent>
+
       </Tabs>
 
       {/* Edit Profile Dialog */}
