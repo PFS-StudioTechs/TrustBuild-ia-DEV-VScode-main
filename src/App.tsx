@@ -18,6 +18,7 @@ import AugusteP from "@/pages/AugusteP";
 import Finances from "@/pages/Finances";
 import ResetPassword from "@/pages/ResetPassword";
 import Knowledge from "@/pages/Knowledge";
+import Testing from "@/pages/Testing";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -62,6 +63,14 @@ function PremiumRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Réserve une route aux testeurs et admins. */
+function TesterRoute({ children }: { children: React.ReactNode }) {
+  const { isTester, isAdmin, loading } = useRole();
+  if (loading) return null;
+  if (!isTester && !isAdmin) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -84,6 +93,7 @@ const App = () => (
               <Route path="/robert-b" element={<PremiumRoute><RobertB /></PremiumRoute>} />
               <Route path="/auguste-p" element={<PremiumRoute><AugusteP /></PremiumRoute>} />
               <Route path="/knowledge" element={<Knowledge />} />
+              <Route path="/testing" element={<TesterRoute><Testing /></TesterRoute>} />
               {/* Administration — admins uniquement */}
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             </Route>

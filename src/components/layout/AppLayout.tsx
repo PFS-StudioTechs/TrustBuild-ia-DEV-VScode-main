@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Scale, Wrench, Wallet, Menu, Brain } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Scale, Wrench, Wallet, Menu, Brain, FlaskConical } from "lucide-react";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -22,6 +22,7 @@ const baseTabs = [
 ];
 
 const adminTab = { path: "/admin", icon: Shield, label: "Admin" };
+const testerTab = { path: "/testing", icon: FlaskConical, label: "Tests" };
 
 // Mobile: show primary 5 tabs, rest in "more" expandable
 const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/documents", "/assistant"];
@@ -29,9 +30,11 @@ const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/documents
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin } = useRole();
+  const { isAdmin, isTester } = useRole();
   const { signOut } = useAuth();
-  const tabs = isAdmin ? [...baseTabs, adminTab] : baseTabs;
+  let tabs = [...baseTabs];
+  if (isAdmin) tabs = [...tabs, adminTab];
+  if (isTester || isAdmin) tabs = [...tabs, testerTab];
   const [moreOpen, setMoreOpen] = useState(false);
 
   const primaryMobileTabs = tabs.filter(t => primaryMobilePaths.includes(t.path));
@@ -78,6 +81,13 @@ export default function AppLayout() {
             <div className="px-2">
               <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
                 <Shield className="w-3 h-3" /> Super Admin
+              </Badge>
+            </div>
+          )}
+          {isTester && !isAdmin && (
+            <div className="px-2">
+              <Badge variant="outline" className="text-[10px] gap-1 border-violet-500/30 text-violet-600 bg-violet-500/5">
+                <FlaskConical className="w-3 h-3" /> Mode Test
               </Badge>
             </div>
           )}
