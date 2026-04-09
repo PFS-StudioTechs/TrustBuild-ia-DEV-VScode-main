@@ -63,6 +63,22 @@ export default function Admin() {
   const [deleteTarget, setDeleteTarget] = useState<EnrichedUser | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // ── Base de connaissances globale — hooks AVANT tout return conditionnel ──
+  const [globalDocs, setGlobalDocs] = useState<Array<{ id: string; nom: string; statut: string; storage_path: string | null; metadata: any }>>([]);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResults, setSeedResults] = useState<{ ok: number; errors: number; skipped: number } | null>(null);
+
+  const loadGlobalDocs = useCallback(async () => {
+    const { data } = await supabase
+      .from("knowledge_documents")
+      .select("id, nom, statut, storage_path, metadata")
+      .eq("is_global", true)
+      .order("created_at", { ascending: true });
+    setGlobalDocs((data as any[]) ?? []);
+  }, []);
+
+  useEffect(() => { loadGlobalDocs(); }, [loadGlobalDocs]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -156,7 +172,6 @@ export default function Admin() {
     litige: "bg-destructive/10 text-destructive",
   };
 
-  // ── Base de connaissances globale ──────────────────────────────────────────
   const GLOBAL_SOURCES = [
     { url: "https://www.castorama.fr/idees-conseils/pieces/salle-de-bain", nom: "Castorama — Salle de bain", categorie: "bricolage" },
     { url: "https://www.castorama.fr/idees-conseils/travaux/plomberie", nom: "Castorama — Plomberie", categorie: "bricolage" },
@@ -177,21 +192,6 @@ export default function Admin() {
     { url: "https://www.oppbtp.fr/nos-offres/prevention-risques-metiers/", nom: "OPPBTP — Prévention BTP", categorie: "securite" },
     { url: "https://www.ffbatiment.fr/federation-francaise-du-batiment/le-secteur-du-batiment/le-secteur-en-chiffres/", nom: "FFB — Secteur bâtiment", categorie: "secteur" },
   ];
-
-  const [globalDocs, setGlobalDocs] = useState<Array<{ id: string; nom: string; statut: string; storage_path: string | null; metadata: any }>>([]);
-  const [seeding, setSeeding] = useState(false);
-  const [seedResults, setSeedResults] = useState<{ ok: number; errors: number; skipped: number } | null>(null);
-
-  const loadGlobalDocs = useCallback(async () => {
-    const { data } = await supabase
-      .from("knowledge_documents")
-      .select("id, nom, statut, storage_path, metadata")
-      .eq("is_global", true)
-      .order("created_at", { ascending: true });
-    setGlobalDocs((data as any[]) ?? []);
-  }, []);
-
-  useEffect(() => { loadGlobalDocs(); }, [loadGlobalDocs]);
 
   const handleSeedGlobal = async (force = false) => {
     setSeeding(true);
