@@ -8,6 +8,7 @@ import { UserPlus, Building2, FileText, Trash2, Plus, Check, Loader2 } from "luc
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import AddressFields from "@/components/ui/AddressFields";
 
 export interface DevisData {
   client: {
@@ -173,11 +174,12 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
             </div>
           </div>
           <div>
-            <Label className="text-[10px]">Adresse</Label>
-            <Input
+            <Label className="text-[10px]">Adresse *</Label>
+            <AddressFields
               value={client.adresse}
-              onChange={(e) => setClient((c) => ({ ...c, adresse: e.target.value }))}
-              className="h-8 text-xs"
+              onChange={(v) => setClient((c) => ({ ...c, adresse: v }))}
+              required
+              compact
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -219,11 +221,12 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
             />
           </div>
           <div>
-            <Label className="text-[10px]">Adresse du chantier</Label>
-            <Input
+            <Label className="text-[10px]">Adresse du chantier *</Label>
+            <AddressFields
               value={chantier.adresse}
-              onChange={(e) => setChantier((c) => ({ ...c, adresse: e.target.value }))}
-              className="h-8 text-xs"
+              onChange={(v) => setChantier((c) => ({ ...c, adresse: v }))}
+              required
+              compact
             />
           </div>
           <div className="grid grid-cols-2 gap-2">

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users } from "lucide-react";
+import AddressFields from "@/components/ui/AddressFields";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
@@ -449,7 +450,11 @@ export default function Chantiers() {
             </div>
             <div className="space-y-2">
               <Label>Adresse du chantier</Label>
-              <Input value={chForm.adresse_chantier} onChange={(e) => setChForm(p => ({ ...p, adresse_chantier: e.target.value }))} placeholder="12 rue des Lilas, 75001 Paris" />
+              <AddressFields
+                value={chForm.adresse_chantier}
+                onChange={(v) => setChForm(p => ({ ...p, adresse_chantier: v }))}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label>Statut</Label>
@@ -511,7 +516,11 @@ export default function Chantiers() {
             </div>
             <div className="space-y-2">
               <Label>Adresse</Label>
-              <Input value={clForm.adresse} onChange={(e) => setClForm(p => ({ ...p, adresse: e.target.value }))} placeholder="12 rue des Lilas, 75001 Paris" />
+              <AddressFields
+                value={clForm.adresse}
+                onChange={(v) => setClForm(p => ({ ...p, adresse: v }))}
+                required
+              />
             </div>
           </div>
           <DialogFooter>
@@ -544,7 +553,11 @@ export default function Chantiers() {
               </div>
               <div className="space-y-2">
                 <Label>Adresse du chantier</Label>
-                <Input value={detailForm.adresse_chantier} onChange={(e) => setDetailForm(p => ({ ...p, adresse_chantier: e.target.value }))} />
+                <AddressFields
+                  value={detailForm.adresse_chantier}
+                  onChange={(v) => setDetailForm(p => ({ ...p, adresse_chantier: v }))}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>Statut</Label>

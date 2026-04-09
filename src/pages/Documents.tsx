@@ -15,6 +15,7 @@ import { Plus, Bot, FileText, Receipt, CheckCircle, Edit, Trash2, Download } fro
 import { toast } from "sonner";
 import { generateDevisPdf, generateFacturePdf } from "@/lib/generatePdf";
 import type { Database } from "@/integrations/supabase/types";
+import AddressFields from "@/components/ui/AddressFields";
 
 type Devis = Database["public"]["Tables"]["devis"]["Row"];
 type Facture = Database["public"]["Tables"]["factures"]["Row"];
@@ -424,8 +425,12 @@ export default function Documents() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Adresse client</Label>
-                    <Input value={devisForm.client_adresse} onChange={(e) => setDevisForm(p => ({ ...p, client_adresse: e.target.value }))} />
+                    <Label>Adresse client *</Label>
+                    <AddressFields
+                      value={devisForm.client_adresse}
+                      onChange={(v) => setDevisForm(p => ({ ...p, client_adresse: v }))}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Type</Label>
@@ -445,8 +450,12 @@ export default function Documents() {
                     <Input value={devisForm.chantier_nom} onChange={(e) => setDevisForm(p => ({ ...p, chantier_nom: e.target.value }))} placeholder="Rénovation salle de bain" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Adresse du chantier</Label>
-                    <Input value={devisForm.chantier_adresse} onChange={(e) => setDevisForm(p => ({ ...p, chantier_adresse: e.target.value }))} />
+                    <Label>Adresse du chantier *</Label>
+                    <AddressFields
+                      value={devisForm.chantier_adresse}
+                      onChange={(v) => setDevisForm(p => ({ ...p, chantier_adresse: v }))}
+                      required
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
