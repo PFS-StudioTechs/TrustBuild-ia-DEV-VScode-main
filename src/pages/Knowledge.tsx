@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import {
   Upload,
   Trash2,
@@ -15,6 +16,8 @@ import {
   AlertCircle,
   Loader2,
   BookOpen,
+  Link,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +51,7 @@ function FileIcon({ type }: { type: string }) {
   if (type === "pdf") return <FileText className="w-5 h-5 text-red-500" />;
   if (type === "xlsx") return <FileSpreadsheet className="w-5 h-5 text-green-600" />;
   if (type === "docx") return <FileText className="w-5 h-5 text-blue-500" />;
+  if (type === "url") return <Globe className="w-5 h-5 text-violet-500" />;
   return <File className="w-5 h-5 text-muted-foreground" />;
 }
 
@@ -78,6 +82,8 @@ export default function Knowledge() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [indexingUrl, setIndexingUrl] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocuments = useCallback(async () => {
@@ -237,6 +243,33 @@ export default function Knowledge() {
     toast.success("Document supprimé de la base de connaissances");
   };
 
+  const handleIndexUrl = async () => {
+    if (!urlInput.trim() || !user) return;
+    setIndexingUrl(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Non connecté");
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const resp = await fetch(`${supabaseUrl}/functions/v1/index-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ url: urlInput.trim() }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Erreur lors de l'indexation");
+      setDocuments((prev) => [data.document as KnowledgeDocument, ...prev]);
+      setUrlInput("");
+      toast.success("URL ajoutée — indexation en cours…");
+    } catch (e: any) {
+      toast.error(e.message || "Erreur lors de l'indexation de l'URL");
+    } finally {
+      setIndexingUrl(false);
+    }
+  };
+
   const handleReindex = async (doc: KnowledgeDocument) => {
     setDocuments((prev) =>
       prev.map((d) => (d.id === doc.id ? { ...d, statut: "en_cours" } : d))
@@ -329,6 +362,35 @@ export default function Knowledge() {
         onChange={(e) => e.target.files && handleFiles(e.target.files)}
       />
 
+      {/* Section URL */}
+      <div className="forge-card !p-4 space-y-3 animate-fade-up-1">
+        <div className="flex items-center gap-2">
+          <Link className="w-4 h-4 text-violet-500" />
+          <span className="text-sm font-medium">Indexer une page web</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Collez l'URL d'une page (documentation, catalogue, article technique) — Jarvis en extraira le contenu.
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleIndexUrl()}
+            placeholder="https://www.exemple.fr/documentation-dtu"
+            className="flex-1 text-sm"
+            disabled={indexingUrl}
+          />
+          <Button
+            onClick={handleIndexUrl}
+            disabled={!urlInput.trim() || indexingUrl}
+            className="shrink-0"
+            size="sm"
+          >
+            {indexingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : "Indexer"}
+          </Button>
+        </div>
+      </div>
+
       {/* Liste des documents */}
       <div className="space-y-2">
         {loading ? (
@@ -358,14 +420,20 @@ export default function Knowledge() {
 
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{doc.nom}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(doc.created_at).toLocaleDateString("fr-FR", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                  {" · "}
-                  <span className="uppercase">{doc.type_fichier}</span>
+                <p className="text-xs text-muted-foreground truncate">
+                  {doc.type_fichier === "url" ? (
+                    <span className="text-violet-500">{doc.storage_path}</span>
+                  ) : (
+                    <>
+                      {new Date(doc.created_at).toLocaleDateString("fr-FR", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                      {" · "}
+                      <span className="uppercase">{doc.type_fichier}</span>
+                    </>
+                  )}
                 </p>
               </div>
 
