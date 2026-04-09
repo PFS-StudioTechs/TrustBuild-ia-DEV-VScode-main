@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, User, Save, CheckCircle, Mic, MicOff, Smartphone, Monitor } from "lucide-react";
+import { Send, User, Save, CheckCircle, Mic, MicOff, Smartphone, Monitor, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -9,6 +9,7 @@ import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { streamChat } from "@/hooks/useStreamingChat";
+import jsPDF from "jspdf";
 
 interface Message {
   role: "user" | "assistant";
@@ -210,6 +211,94 @@ export default function AgentChat({
     }
   };
 
+  const exportToPdf = (msgIndex: number) => {
+    const msg = messages[msgIndex];
+    if (!msg || msg.role !== "assistant") return;
+
+    const question = msgIndex > 0 ? messages[msgIndex - 1]?.content : null;
+    const raw = cleanContent(msg.content);
+
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxW = pageW - margin * 2;
+    let y = 20;
+
+    const addLine = (text: string, size: number, style: "normal" | "bold" = "normal", color = 40) => {
+      doc.setFontSize(size);
+      doc.setFont("helvetica", style);
+      doc.setTextColor(color);
+      const lines = doc.splitTextToSize(text, maxW);
+      lines.forEach((line: string) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text(line, margin, y);
+        y += size * 0.45;
+      });
+      y += 2;
+    };
+
+    // Header
+    doc.setFillColor(59, 130, 246);
+    doc.rect(0, 0, pageW, 14, "F");
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255);
+    doc.text("Trust Build-IA", margin, 9);
+    doc.setFont("helvetica", "normal");
+    doc.text(new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }), pageW - margin, 9, { align: "right" });
+
+    y = 24;
+    addLine(title, 16, "bold", 30);
+    doc.setDrawColor(220);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
+    if (question) {
+      addLine("Question", 9, "bold", 100);
+      addLine(question, 10, "normal", 60);
+      doc.setDrawColor(220);
+      doc.line(margin, y, pageW - margin, y);
+      y += 6;
+    }
+
+    addLine("Réponse", 9, "bold", 100);
+
+    // Render markdown lines with basic formatting
+    const mdLines = raw.split("\n");
+    for (const line of mdLines) {
+      if (!line.trim()) { y += 3; continue; }
+      if (line.startsWith("### ")) {
+        y += 2;
+        addLine(line.replace(/^### /, ""), 12, "bold", 30);
+      } else if (line.startsWith("## ")) {
+        y += 3;
+        addLine(line.replace(/^## /, ""), 13, "bold", 30);
+      } else if (line.startsWith("# ")) {
+        y += 3;
+        addLine(line.replace(/^# /, ""), 14, "bold", 30);
+      } else if (/^[-*•]\s/.test(line)) {
+        const text = line.replace(/^[-*•]\s/, "").replace(/\*\*(.*?)\*\*/g, "$1");
+        addLine(`  • ${text}`, 10, "normal", 40);
+      } else {
+        const text = line.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
+        addLine(text, 10, "normal", 40);
+      }
+    }
+
+    // Footer
+    const pageCount = (doc.internal as any).getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(160);
+      doc.text(`Page ${p} / ${pageCount}`, pageW - margin, 287, { align: "right" });
+    }
+
+    const filename = `${title.replace(/[^a-z0-9]/gi, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
+  };
+
   const cleanContent = (content: string) => content.replace(/^\[(Robert B|Auguste P|Jarvis)\]\s*/i, "");
 
   const SourceBadge = ({ source }: { source?: string }) => {
@@ -270,10 +359,16 @@ export default function AgentChat({
               <div className="flex items-center gap-2">
                 <SourceBadge source={msg.source} />
                 {msg.role === "assistant" && !loading && (
-                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => saveDocument(i)} disabled={savingIdx === i}>
-                    {savingIdx === i ? <CheckCircle className="w-3 h-3 text-emerald-500" /> : <Save className="w-3 h-3" />}
-                    Sauvegarder
-                  </Button>
+                  <>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => saveDocument(i)} disabled={savingIdx === i}>
+                      {savingIdx === i ? <CheckCircle className="w-3 h-3 text-emerald-500" /> : <Save className="w-3 h-3" />}
+                      Sauvegarder
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => exportToPdf(i)}>
+                      <FileDown className="w-3 h-3" />
+                      PDF
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
