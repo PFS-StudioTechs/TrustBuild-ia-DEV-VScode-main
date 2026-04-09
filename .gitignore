@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Supabase temp files (contient des infos de connexion)
+supabase/.temp/

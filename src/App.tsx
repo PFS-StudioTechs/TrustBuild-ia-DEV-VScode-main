@@ -17,6 +17,7 @@ import RobertB from "@/pages/RobertB";
 import AugusteP from "@/pages/AugusteP";
 import Finances from "@/pages/Finances";
 import ResetPassword from "@/pages/ResetPassword";
+import Knowledge from "@/pages/Knowledge";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -82,6 +83,7 @@ const App = () => (
               {/* Agents IA — réservés aux artisans et admins */}
               <Route path="/robert-b" element={<PremiumRoute><RobertB /></PremiumRoute>} />
               <Route path="/auguste-p" element={<PremiumRoute><AugusteP /></PremiumRoute>} />
+              <Route path="/knowledge" element={<Knowledge />} />
               {/* Administration — admins uniquement */}
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             </Route>

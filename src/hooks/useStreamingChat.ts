@@ -1,10 +1,10 @@
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/call-openai`;
-const AUTH_HEADER = `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/call-claude`;
 
 export interface StreamingChatOptions {
-  /** Corps de la requête envoyé à call-openai (messages, persona, context…) */
+  /** Corps de la requête envoyé à call-claude (messages, persona, context…) */
   body: Record<string, unknown>;
   /** Appelé à chaque chunk de texte reçu, avec le texte accumulé depuis le début */
   onChunk: (accumulated: string) => void;
@@ -13,8 +13,8 @@ export interface StreamingChatOptions {
 }
 
 /**
- * Lance un appel SSE vers l'edge function call-openai et parse le stream.
- * Gère les codes d'erreur HTTP (429, 402) et renvoie le texte final.
+ * Lance un appel SSE vers l'edge function call-claude et parse le stream.
+ * Utilise le JWT de session pour permettre la recherche RAG par utilisateur.
  * @returns Le texte complet de la réponse, ou null en cas d'erreur.
  */
 export async function streamChat({
@@ -22,11 +22,17 @@ export async function streamChat({
   onChunk,
   onDone,
 }: StreamingChatOptions): Promise<string | null> {
+  // Récupère le token de session pour identifier l'utilisateur côté edge function
+  const { data: { session } } = await supabase.auth.getSession();
+  const authHeader = session?.access_token
+    ? `Bearer ${session.access_token}`
+    : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
+
   const resp = await fetch(CHAT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: AUTH_HEADER,
+      Authorization: authHeader,
     },
     body: JSON.stringify({ ...body, stream: true }),
   });

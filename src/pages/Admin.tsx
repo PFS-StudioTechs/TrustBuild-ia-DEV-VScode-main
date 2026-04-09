@@ -47,7 +47,7 @@ async function adminAction(action: string, payload: Record<string, unknown> = {}
 
 export default function Admin() {
   const { user } = useAuth();
-  const { isAdmin, loading: roleLoading } = useRole();
+  const { isAdmin, isSuperAdmin, loading: roleLoading } = useRole();
   const [users, setUsers] = useState<EnrichedUser[]>([]);
   const [chantiers, setChantiers] = useState<EnrichedChantier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,27 +208,45 @@ export default function Admin() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Select value={u.roles[0] || "artisan"} onValueChange={(v) => handleRoleChange(u.id, v)} disabled={u.id === user?.id}>
-                            <SelectTrigger className="w-[120px] h-8 text-small"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="artisan">Artisan</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          {(() => {
+                            const targetIsAdminOrAbove = u.roles.some(r => r === "admin" || r === "super_admin");
+                            const canEdit = u.id !== user?.id && (isSuperAdmin || !targetIsAdminOrAbove);
+                            const displayRole = u.roles.includes("super_admin") ? "super_admin" : u.roles.includes("admin") ? "admin" : "artisan";
+                            return (
+                              <Select value={displayRole} onValueChange={(v) => handleRoleChange(u.id, v)} disabled={!canEdit}>
+                                <SelectTrigger className="w-[140px] h-8 text-small"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                  <SelectItem value="artisan">Artisan</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-small capitalize bg-primary-glow text-primary border-primary/20">{u.profile?.plan_abonnement || "gratuit"}</Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="text-small capitalize bg-primary-glow text-primary border-primary/20">{u.profile?.plan_abonnement || "gratuit"}</Badge>
+                            {u.roles.includes("super_admin") && <Badge variant="outline" className="text-small bg-amber-500/10 text-amber-600 border-amber-500/20">Super Admin</Badge>}
+                          </div>
                         </TableCell>
                         <TableCell className="text-small text-muted-foreground font-mono">
                           {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "Jamais"}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(u)} className="h-8 w-8 hover:bg-primary-glow"><Edit className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(u)} disabled={u.id === user?.id} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
+                          {(() => {
+                            const targetIsAdminOrAbove = u.roles.some(r => r === "admin" || r === "super_admin");
+                            const canDelete = u.id !== user?.id && (isSuperAdmin || !targetIsAdminOrAbove);
+                            const canEdit = isSuperAdmin || !targetIsAdminOrAbove;
+                            return (
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => openEdit(u)} disabled={!canEdit} className="h-8 w-8 hover:bg-primary-glow"><Edit className="w-4 h-4" /></Button>
+                                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(u)} disabled={!canDelete} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}

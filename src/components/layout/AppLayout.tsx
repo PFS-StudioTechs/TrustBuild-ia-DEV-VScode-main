@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Scale, Wrench, Wallet, Menu } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Scale, Wrench, Wallet, Menu, Brain } from "lucide-react";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -17,6 +17,7 @@ const baseTabs = [
   { path: "/auguste-p", icon: Wrench, label: "Technique" },
   { path: "/documents", icon: FileText, label: "Devis" },
   { path: "/mes-documents", icon: FolderOpen, label: "Docs" },
+  { path: "/knowledge", icon: Brain, label: "Savoir" },
   { path: "/parametres", icon: Settings, label: "Réglages" },
 ];
 
