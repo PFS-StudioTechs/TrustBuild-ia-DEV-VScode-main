@@ -28,6 +28,7 @@ interface KnowledgeDocument {
   statut: "en_cours" | "indexe" | "erreur";
   storage_path: string | null;
   created_at: string;
+  metadata?: { error?: string } | null;
 }
 
 const ACCEPTED_TYPES: Record<string, string> = {
@@ -370,13 +371,14 @@ export default function Knowledge() {
         </div>
         <p className="text-xs text-muted-foreground">
           Collez l'URL d'une page (documentation, catalogue, article technique) — Jarvis en extraira le contenu.
+          Les pages d'accueil de grands sites (Leroy Merlin, Amazon…) sont souvent protégées anti-bot : préférez une <strong>page produit ou catalogue spécifique</strong>.
         </p>
         <div className="flex gap-2">
           <Input
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleIndexUrl()}
-            placeholder="https://www.exemple.fr/documentation-dtu"
+            placeholder="https://www.leroymerlin.fr/catalogue/plomberie/"
             className="flex-1 text-sm"
             disabled={indexingUrl}
           />
@@ -435,6 +437,11 @@ export default function Knowledge() {
                     </>
                   )}
                 </p>
+                {doc.statut === "erreur" && doc.metadata?.error && (
+                  <p className="text-[11px] text-destructive mt-0.5 line-clamp-2" title={doc.metadata.error}>
+                    {doc.metadata.error}
+                  </p>
+                )}
               </div>
 
               <StatutBadge statut={doc.statut} />

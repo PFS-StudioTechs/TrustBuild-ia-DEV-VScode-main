@@ -38,23 +38,57 @@ async function embed(text: string, apiKey: string): Promise<number[]> {
 
 /** Scrape une URL et retourne le texte brut */
 async function scrapeUrl(url: string): Promise<string> {
-  const resp = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; TrustBuildIA/1.0; +https://trust-build.ia)",
-      "Accept": "text/html,application/xhtml+xml",
-      "Accept-Language": "fr,en;q=0.9",
-    },
-    redirect: "follow",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000); // 20s timeout
 
-  if (!resp.ok) throw new Error(`Impossible d'accéder à l'URL (${resp.status})`);
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Upgrade-Insecure-Requests": "1",
+      },
+      redirect: "follow",
+    });
+  } catch (e: any) {
+    if (e?.name === "AbortError") throw new Error("Délai dépassé — le site ne répond pas (timeout 20s)");
+    throw new Error(`Impossible de contacter l'URL : ${e?.message ?? e}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (resp.status === 403) throw new Error(`Accès refusé (403) — ce site bloque les robots (ex: Cloudflare, anti-scraping). Essayez une page produit ou catalogue spécifique plutôt que la page d'accueil.`);
+  if (resp.status === 429) throw new Error(`Trop de requêtes (429) — le site limite l'accès. Réessayez dans quelques minutes.`);
+  if (resp.status === 401 || resp.status === 407) throw new Error(`Authentification requise (${resp.status}) — page protégée.`);
+  if (!resp.ok) throw new Error(`Impossible d'accéder à l'URL (HTTP ${resp.status})`);
 
   const contentType = resp.headers.get("content-type") || "";
   if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-    throw new Error("Le contenu de l'URL n'est pas du texte HTML");
+    throw new Error(`Le contenu retourné n'est pas du HTML (type: ${contentType})`);
   }
 
   const html = await resp.text();
+
+  // Détection des pages de protection anti-bot
+  const htmlLower = html.toLowerCase();
+  if (
+    (htmlLower.includes("cloudflare") && (htmlLower.includes("checking your browser") || htmlLower.includes("challenge"))) ||
+    htmlLower.includes("ddos-guard") ||
+    htmlLower.includes("access denied") ||
+    htmlLower.includes("bot detection") ||
+    (html.length < 5000 && htmlLower.includes("enable javascript"))
+  ) {
+    throw new Error("Ce site utilise une protection anti-bot (Cloudflare ou équivalent) qui bloque l'accès automatique. Essayez d'indexer une page produit ou une sous-page spécifique.");
+  }
 
   // Extraction du texte depuis le HTML
   let text = html
@@ -175,7 +209,10 @@ serve(async (req) => {
         const rawText = await scrapeUrl(url);
 
         if (rawText.length < 50) {
-          await supabase.from("knowledge_documents").update({ statut: "erreur" }).eq("id", doc.id);
+          await supabase.from("knowledge_documents").update({
+            statut: "erreur",
+            metadata: { error: "Contenu extrait trop court — page vide ou protégée" },
+          } as any).eq("id", doc.id);
           return;
         }
 
@@ -210,9 +247,13 @@ serve(async (req) => {
           .from("knowledge_documents")
           .update({ statut: indexed > 0 ? "indexe" : "erreur" })
           .eq("id", doc.id);
-      } catch (e) {
-        console.error("index-url background error:", e);
-        await supabase.from("knowledge_documents").update({ statut: "erreur" }).eq("id", doc.id);
+      } catch (e: any) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("index-url background error:", msg);
+        await supabase.from("knowledge_documents").update({
+          statut: "erreur",
+          metadata: { error: msg },
+        } as any).eq("id", doc.id);
       }
     })();
 
