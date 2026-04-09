@@ -1,0 +1,416 @@
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Palette, Upload, CheckCircle2, Loader2, FileText,
+  Wrench, Zap, Brush, Trees, Building2, HardHat,
+} from "lucide-react";
+import { toast } from "sonner";
+
+// ─── Sectoral templates ───────────────────────────────────────────────────────
+const SECTORS = [
+  { id: "plomberie",    label: "Plomberie",             icon: Wrench,    primary: "#1d4ed8", secondary: "#1e3a5f", accent: "#0ea5e9" },
+  { id: "electricite",  label: "Électricité",            icon: Zap,       primary: "#ca8a04", secondary: "#78350f", accent: "#facc15" },
+  { id: "architecture", label: "Architecture",           icon: Building2, primary: "#374151", secondary: "#111827", accent: "#6366f1" },
+  { id: "peinture",     label: "Peinture & Revêtements", icon: Brush,     primary: "#7c3aed", secondary: "#4c1d95", accent: "#f472b6" },
+  { id: "menuiserie",   label: "Menuiserie",             icon: Trees,     primary: "#92400e", secondary: "#451a03", accent: "#f59e0b" },
+  { id: "general",      label: "BTP Général",            icon: HardHat,   primary: "#2563eb", secondary: "#1e40af", accent: "#f59e0b" },
+];
+
+interface Template {
+  id: string;
+  secteur: string;
+  nom: string;
+  couleur_primaire: string;
+  couleur_secondaire: string;
+  couleur_accent: string;
+  logo_url: string | null;
+  is_active: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export default function TemplatePanel() {
+  const { user } = useAuth();
+  const [template, setTemplate] = useState<Template | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // Form state
+  const [couleurPrimaire, setCouleurPrimaire]    = useState("#2563eb");
+  const [couleurSecondaire, setCouleurSecondaire] = useState("#1e40af");
+  const [couleurAccent, setCouleurAccent]         = useState("#f59e0b");
+  const [logoUrl, setLogoUrl]                     = useState<string | null>(null);
+  const [selectedSector, setSelectedSector]       = useState<string | null>(null);
+
+  const fileInputRef    = useRef<HTMLInputElement>(null);
+  const logoInputRef    = useRef<HTMLInputElement>(null);
+
+  // ── Load active template ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    fetchTemplate();
+  }, [user]);
+
+  const fetchTemplate = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("document_templates")
+      .select("*")
+      .eq("artisan_id", user!.id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      setTemplate(data as Template);
+      setCouleurPrimaire(data.couleur_primaire);
+      setCouleurSecondaire(data.couleur_secondaire);
+      setCouleurAccent(data.couleur_accent);
+      setLogoUrl(data.logo_url);
+      setSelectedSector(data.secteur);
+    }
+    setLoading(false);
+  };
+
+  // ── Apply a sectoral template ─────────────────────────────────────────────
+  const applySectorTemplate = async (sector: typeof SECTORS[0]) => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      // Deactivate old
+      await supabase.from("document_templates").update({ is_active: false }).eq("artisan_id", user.id);
+
+      const { data, error } = await supabase.from("document_templates").insert({
+        artisan_id:         user.id,
+        secteur:            sector.id,
+        nom:                `Template ${sector.label}`,
+        couleur_primaire:   sector.primary,
+        couleur_secondaire: sector.secondary,
+        couleur_accent:     sector.accent,
+        logo_url:           logoUrl,
+        is_active:          true,
+        metadata:           {},
+      }).select().single();
+
+      if (error) throw error;
+      toast.success(`Template "${sector.label}" activé`);
+      setSelectedSector(sector.id);
+      setCouleurPrimaire(sector.primary);
+      setCouleurSecondaire(sector.secondary);
+      setCouleurAccent(sector.accent);
+      setTemplate(data as Template);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Save color/logo customizations ───────────────────────────────────────
+  const saveCustomization = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      if (template?.id) {
+        const { error } = await supabase.from("document_templates").update({
+          couleur_primaire:   couleurPrimaire,
+          couleur_secondaire: couleurSecondaire,
+          couleur_accent:     couleurAccent,
+          logo_url:           logoUrl,
+        }).eq("id", template.id);
+        if (error) throw error;
+      } else {
+        // Create template with selected sector or general
+        const sector = SECTORS.find(s => s.id === selectedSector) ?? SECTORS[5];
+        await supabase.from("document_templates").insert({
+          artisan_id:         user.id,
+          secteur:            sector.id,
+          nom:                `Mon template`,
+          couleur_primaire:   couleurPrimaire,
+          couleur_secondaire: couleurSecondaire,
+          couleur_accent:     couleurAccent,
+          logo_url:           logoUrl,
+          is_active:          true,
+          metadata:           {},
+        });
+      }
+      toast.success("Personnalisation enregistrée");
+      fetchTemplate();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Upload logo ───────────────────────────────────────────────────────────
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingLogo(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `logos/${user.id}/logo.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("documents")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+      setLogoUrl(urlData.publicUrl);
+      toast.success("Logo uploadé");
+    } catch (e: any) {
+      toast.error("Erreur upload logo : " + e.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  // ── Analyze existing document ─────────────────────────────────────────────
+  const handleDocumentAnalysis = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setAnalyzing(true);
+    try {
+      // Convert to base64
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const base64 = btoa(binary);
+
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-document-template`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            file_base64: base64,
+            file_type:   file.type,
+            nom:         file.name.replace(/\.[^.]+$/, ""),
+          }),
+        }
+      );
+
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error ?? "Erreur analyse");
+
+      toast.success("Document analysé ! Template extrait automatiquement.");
+      if (result.couleur_primaire)   setCouleurPrimaire(result.couleur_primaire);
+      if (result.couleur_secondaire) setCouleurSecondaire(result.couleur_secondaire);
+      if (result.secteur)            setSelectedSector(result.secteur);
+      fetchTemplate();
+    } catch (e: any) {
+      toast.error("Analyse échouée : " + e.message);
+    } finally {
+      setAnalyzing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // ── Preview card ──────────────────────────────────────────────────────────
+  const PreviewCard = () => (
+    <div className="rounded-xl overflow-hidden border shadow-sm">
+      <div
+        className="h-16 flex items-center justify-between px-4"
+        style={{ background: `linear-gradient(135deg, ${couleurPrimaire}, ${couleurSecondaire})` }}
+      >
+        <div className="flex items-center gap-3">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-10 w-10 rounded-lg object-contain bg-white/10 p-1" />
+          ) : (
+            <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-white" />
+            </div>
+          )}
+          <div>
+            <div className="font-bold text-white text-sm">Dupont Artisanat</div>
+            <div className="text-white/70 text-[10px]">SIRET : 123 456 789 00012</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-white font-bold text-lg">DEVIS</div>
+          <div className="text-white/80 text-[10px]">N° DEV-2026-001</div>
+        </div>
+      </div>
+      <div className="bg-white p-3 space-y-2">
+        <div className="h-2 rounded" style={{ background: couleurPrimaire, width: "60%", opacity: 0.2 }} />
+        <div className="h-2 rounded bg-gray-100 w-full" />
+        <div className="h-2 rounded bg-gray-100 w-4/5" />
+        <div className="flex justify-end mt-2">
+          <div className="rounded px-3 py-1 text-white text-[10px] font-bold" style={{ background: couleurPrimaire }}>
+            Total TTC : 1 200,00 €
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-muted-foreground py-4">
+      <Loader2 className="w-4 h-4 animate-spin" /> Chargement…
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+
+      {/* Step 1 — Sector choice */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">1</div>
+          <h3 className="font-semibold text-sm">Choisir votre secteur</h3>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {SECTORS.map((s) => {
+            const Icon = s.icon;
+            const active = selectedSector === s.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => applySectorTemplate(s)}
+                disabled={saving}
+                className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-sm font-medium ${
+                  active
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border hover:border-primary/40 hover:bg-muted/50 text-muted-foreground"
+                }`}
+              >
+                {active && <CheckCircle2 className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-primary" />}
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: s.primary + "22" }}>
+                  <Icon className="w-4 h-4" style={{ color: s.primary }} />
+                </div>
+                <span className="text-xs leading-tight text-center">{s.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Step 2 — Import existing doc */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">2</div>
+          <h3 className="font-semibold text-sm">Importer un document existant</h3>
+          <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">IA</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Uploadez un ancien devis ou facture (PDF ou image). Claude analysera automatiquement les couleurs, la structure et les mentions légales.
+        </p>
+        <input ref={fileInputRef} type="file" accept=".pdf,image/*" className="hidden" onChange={handleDocumentAnalysis} />
+        <Button
+          variant="outline"
+          className="w-full gap-2 border-dashed"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={analyzing}
+        >
+          {analyzing ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Analyse en cours par Claude…</>
+          ) : (
+            <><Upload className="w-4 h-4" /> Analyser un document existant</>
+          )}
+        </Button>
+      </div>
+
+      {/* Step 3 — Manual customization */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">3</div>
+          <h3 className="font-semibold text-sm">Personnalisation manuelle</h3>
+        </div>
+
+        {/* Logo */}
+        <div className="space-y-2 mb-4">
+          <Label className="text-xs">Logo de l'entreprise</Label>
+          <div className="flex items-center gap-3">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="h-12 w-12 rounded-lg object-contain border bg-white p-1" />
+            ) : (
+              <div className="h-12 w-12 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted">
+                <FileText className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1">
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => logoInputRef.current?.click()}
+                disabled={uploadingLogo}
+              >
+                {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                {logoUrl ? "Changer le logo" : "Uploader un logo"}
+              </Button>
+              {logoUrl && (
+                <Button variant="ghost" size="sm" className="text-xs text-destructive ml-1" onClick={() => setLogoUrl(null)}>
+                  Supprimer
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Colors */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {[
+            { label: "Couleur principale", value: couleurPrimaire, set: setCouleurPrimaire },
+            { label: "Couleur secondaire", value: couleurSecondaire, set: setCouleurSecondaire },
+            { label: "Couleur accent",     value: couleurAccent,     set: setCouleurAccent },
+          ].map(({ label, value, set }) => (
+            <div key={label} className="space-y-1.5">
+              <Label className="text-[10px]">{label}</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={value}
+                  onChange={e => set(e.target.value)}
+                  className="w-8 h-8 rounded border cursor-pointer"
+                />
+                <Input
+                  value={value}
+                  onChange={e => set(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                  maxLength={7}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <Button onClick={saveCustomization} disabled={saving} className="w-full gap-2 bg-primary text-primary-foreground" size="sm">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Palette className="w-4 h-4" />}
+          Enregistrer la personnalisation
+        </Button>
+      </div>
+
+      {/* Preview */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">↓</div>
+          <h3 className="font-semibold text-sm text-muted-foreground">Aperçu</h3>
+        </div>
+        <PreviewCard />
+        {template && (
+          <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+            Template actif : <strong>{template.nom}</strong> — secteur {template.secteur}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}

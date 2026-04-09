@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { User, Key, Save, Shield, Users, MessageCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { User, Key, Save, Shield, Users, MessageCircle, CheckCircle2, Loader2, Palette } from "lucide-react";
 import { toast } from "sonner";
 import MfaSetup from "@/components/security/MfaSetup";
 import IntegrationsPanel from "@/components/integrations/IntegrationsPanel";
+import TemplatePanel from "@/components/settings/TemplatePanel";
 
 export default function Parametres() {
   const { user } = useAuth();
@@ -100,8 +102,17 @@ export default function Parametres() {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-lg mx-auto">
-      <h1 className="text-h2 font-display animate-fade-up">Paramètres</h1>
+    <div className="p-4 md:p-8 max-w-lg mx-auto">
+      <h1 className="text-h2 font-display animate-fade-up mb-6">Paramètres</h1>
+
+      <Tabs defaultValue="profil">
+        <TabsList className="bg-secondary w-full mb-6">
+          <TabsTrigger value="profil" className="flex-1 gap-1.5"><User className="w-3.5 h-3.5" /> Profil</TabsTrigger>
+          <TabsTrigger value="template" className="flex-1 gap-1.5"><Palette className="w-3.5 h-3.5" /> Mon template</TabsTrigger>
+          <TabsTrigger value="integrations" className="flex-1 gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> Intégrations</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profil" className="space-y-6">
 
       {/* Profil */}
       <div className="forge-card animate-fade-up-1">
@@ -139,57 +150,6 @@ export default function Parametres() {
       {/* 2FA Security */}
       <MfaSetup />
 
-      {/* Telegram Integration */}
-      <div className="forge-card animate-fade-up-3">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <MessageCircle className="w-4 h-4 text-primary" />
-          </div>
-          <h2 className="text-h3 font-display">Intégration Telegram</h2>
-          {botName && <Badge variant="secondary" className="bg-success/10 text-success text-xs">@{botName}</Badge>}
-        </div>
-        <p className="text-small text-muted-foreground mb-3">
-          Connectez votre compte Telegram pour recevoir les notifications de Jarvis et envoyer des commandes vocales.
-        </p>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-small">Votre Chat ID Telegram</Label>
-            <Input
-              value={telegramChatId}
-              onChange={(e) => { setTelegramChatId(e.target.value); setTelegramStatus("idle"); }}
-              placeholder="Ex: 123456789"
-              className="touch-target font-mono"
-              disabled={telegramStatus === "connected"}
-            />
-            <p className="text-xs text-muted-foreground">
-              Envoyez <code>/start</code> à <strong>@userinfobot</strong> sur Telegram pour obtenir votre Chat ID.
-            </p>
-          </div>
-          {telegramStatus === "connected" ? (
-            <div className="flex items-center gap-2 text-success text-sm">
-              <CheckCircle2 className="w-4 h-4" /> Connecté — notifications actives
-            </div>
-          ) : (
-            <Button
-              onClick={handleLinkTelegram}
-              disabled={!telegramChatId.trim() || telegramStatus === "loading"}
-              className="w-full touch-target"
-            >
-              {telegramStatus === "loading" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageCircle className="w-4 h-4 mr-2" />}
-              {telegramStatus === "loading" ? "Test en cours…" : "Connecter Telegram"}
-            </Button>
-          )}
-          {telegramStatus === "error" && (
-            <p className="text-xs text-destructive">Vérifiez votre Chat ID et réessayez. Assurez-vous d'avoir démarré une conversation avec le bot.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Intégrations complètes */}
-      <div className="forge-card animate-fade-up-3">
-        <IntegrationsPanel />
-      </div>
-
       {/* Admin Panel */}
       {isAdmin && (
         <div className="forge-card animate-fade-up-4 !border-primary/20">
@@ -215,6 +175,78 @@ export default function Parametres() {
           </div>
         </div>
       )}
+
+        </TabsContent>
+
+        {/* ── Mon template ── */}
+        <TabsContent value="template">
+          <div className="forge-card">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Palette className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-h3 font-display">Mon template de document</h2>
+                <p className="text-xs text-muted-foreground">Personnalisez l'apparence de vos devis et factures</p>
+              </div>
+            </div>
+            <TemplatePanel />
+          </div>
+        </TabsContent>
+
+        {/* ── Intégrations ── */}
+        <TabsContent value="integrations" className="space-y-4">
+          {/* Telegram */}
+          <div className="forge-card">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <MessageCircle className="w-4 h-4 text-primary" />
+              </div>
+              <h2 className="text-h3 font-display">Intégration Telegram</h2>
+              {botName && <Badge variant="secondary" className="bg-success/10 text-success text-xs">@{botName}</Badge>}
+            </div>
+            <p className="text-small text-muted-foreground mb-3">
+              Connectez votre compte Telegram pour recevoir les notifications de Jarvis et envoyer des commandes vocales.
+            </p>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-small">Votre Chat ID Telegram</Label>
+                <Input
+                  value={telegramChatId}
+                  onChange={(e) => { setTelegramChatId(e.target.value); setTelegramStatus("idle"); }}
+                  placeholder="Ex: 123456789"
+                  className="touch-target font-mono"
+                  disabled={telegramStatus === "connected"}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Envoyez <code>/start</code> à <strong>@userinfobot</strong> sur Telegram pour obtenir votre Chat ID.
+                </p>
+              </div>
+              {telegramStatus === "connected" ? (
+                <div className="flex items-center gap-2 text-success text-sm">
+                  <CheckCircle2 className="w-4 h-4" /> Connecté — notifications actives
+                </div>
+              ) : (
+                <Button
+                  onClick={handleLinkTelegram}
+                  disabled={!telegramChatId.trim() || telegramStatus === "loading"}
+                  className="w-full touch-target"
+                >
+                  {telegramStatus === "loading" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageCircle className="w-4 h-4 mr-2" />}
+                  {telegramStatus === "loading" ? "Test en cours…" : "Connecter Telegram"}
+                </Button>
+              )}
+              {telegramStatus === "error" && (
+                <p className="text-xs text-destructive">Vérifiez votre Chat ID et réessayez. Assurez-vous d'avoir démarré une conversation avec le bot.</p>
+              )}
+            </div>
+          </div>
+          <div className="forge-card">
+            <IntegrationsPanel />
+          </div>
+        </TabsContent>
+
+      </Tabs>
     </div>
   );
 }

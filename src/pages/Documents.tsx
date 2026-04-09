@@ -312,13 +312,34 @@ export default function Documents() {
     setDeleteId(null);
   };
 
+  const openTemplatePdf = async (type: "devis" | "facture", id: string) => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pdf-html`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(type === "devis" ? { type, devis_id: id } : { type, facture_id: id }),
+        }
+      );
+      const data = await resp.json();
+      if (!resp.ok || !data.html) throw new Error(data.error ?? "Erreur génération");
+      const win = window.open("", "_blank");
+      if (win) { win.document.write(data.html); win.document.close(); }
+      else toast.error("Autorisez les popups pour ouvrir le PDF");
+    } catch (e: any) {
+      toast.error("Erreur PDF : " + e.message);
+    }
+  };
+
   const downloadDevisPdf = (d: Devis) => {
-    const chantier = chantiers.find(c => c.id === d.chantier_id);
-    generateDevisPdf({ numero: d.numero, montant_ht: Number(d.montant_ht), tva: Number(d.tva), statut: devisStatutLabels[d.statut] || d.statut, date_validite: d.date_validite, created_at: d.created_at, chantierNom: chantier?.nom });
+    openTemplatePdf("devis", d.id);
   };
 
   const downloadFacturePdf = (f: Facture) => {
-    generateFacturePdf({ numero: f.numero, montant_ht: Number(f.montant_ht), tva: Number(f.tva), statut: factureStatutLabels[f.statut] || f.statut, date_echeance: f.date_echeance, solde_restant: Number(f.solde_restant), created_at: f.created_at });
+    openTemplatePdf("facture", f.id);
   };
 
   return (
