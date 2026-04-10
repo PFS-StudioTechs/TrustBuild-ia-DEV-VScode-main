@@ -190,7 +190,10 @@ export default function Knowledge() {
         continue;
       }
 
-      const storagePath = `${user.id}/${Date.now()}-${file.name}`;
+      const safeName = file.name
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // supprime accents
+        .replace(/[^a-zA-Z0-9._-]/g, "_");               // remplace espaces/apostrophes/etc.
+      const storagePath = `${user.id}/${Date.now()}-${safeName}`;
 
       // Upload dans le bucket knowledge-documents
       const { error: uploadError } = await supabase.storage
