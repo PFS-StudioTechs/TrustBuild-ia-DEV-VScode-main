@@ -56,7 +56,15 @@ function FileIcon({ type }: { type: string }) {
   return <File className="w-5 h-5 text-muted-foreground" />;
 }
 
-function StatutBadge({ statut }: { statut: KnowledgeDocument["statut"] }) {
+function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem > 0 ? `${m}m${rem}s` : `${m}m`;
+}
+
+function StatutBadge({ statut, createdAt, now }: { statut: KnowledgeDocument["statut"]; createdAt?: string; now: number }) {
   if (statut === "indexe")
     return (
       <Badge variant="outline" className="gap-1 border-green-500/40 text-green-600 bg-green-500/5">
@@ -69,9 +77,17 @@ function StatutBadge({ statut }: { statut: KnowledgeDocument["statut"] }) {
         <AlertCircle className="w-3 h-3" /> Erreur
       </Badge>
     );
+  // En cours : affiche le temps écoulé
+  const elapsed = createdAt ? now - new Date(createdAt).getTime() : 0;
+  const isStuck = elapsed > 3 * 60 * 1000; // > 3 minutes
   return (
-    <Badge variant="outline" className="gap-1 border-primary/40 text-primary bg-primary/5">
-      <Loader2 className="w-3 h-3 animate-spin" /> En cours…
+    <Badge
+      variant="outline"
+      className={`gap-1 ${isStuck ? "border-amber-500/40 text-amber-600 bg-amber-500/5" : "border-primary/40 text-primary bg-primary/5"}`}
+      title={isStuck ? "L'indexation semble bloquée — essayez de relancer" : "Indexation en cours"}
+    >
+      <Loader2 className="w-3 h-3 animate-spin" />
+      {isStuck ? `Bloqué ? ${formatElapsed(elapsed)}` : `En cours… ${createdAt ? formatElapsed(elapsed) : ""}`}
     </Badge>
   );
 }
@@ -85,7 +101,16 @@ export default function Knowledge() {
   const [dragOver, setDragOver] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [indexingUrl, setIndexingUrl] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Tick toutes les 5s pour mettre à jour les temps écoulés
+  useEffect(() => {
+    const hasOngoing = documents.some((d) => d.statut === "en_cours");
+    if (!hasOngoing) return;
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, [documents]);
 
   const fetchDocuments = useCallback(async () => {
     if (!user) return;
@@ -444,15 +469,15 @@ export default function Knowledge() {
                 )}
               </div>
 
-              <StatutBadge statut={doc.statut} />
+              <StatutBadge statut={doc.statut} createdAt={doc.created_at} now={now} />
 
               <div className="flex gap-1 shrink-0">
-                {doc.statut === "erreur" && (
+                {(doc.statut === "erreur" || (doc.statut === "en_cours" && now - new Date(doc.created_at).getTime() > 3 * 60 * 1000)) && (
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => handleReindex(doc)}
-                    className="h-8 px-2 text-primary"
+                    className="h-8 px-2 text-amber-600"
                     title="Réessayer l'indexation"
                   >
                     <Loader2 className="w-3.5 h-3.5" />
