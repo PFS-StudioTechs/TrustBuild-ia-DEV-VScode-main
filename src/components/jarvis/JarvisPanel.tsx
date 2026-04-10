@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send, Bot, User, Scale, Wrench, Mic, MicOff, Smartphone, Monitor, FilePlus } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -275,7 +276,13 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                     ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground rounded-br-sm"
                     : "bg-card border rounded-bl-sm"
                 )}>
-                  <div className="whitespace-pre-wrap">{stripDevisData(msg.content)}</div>
+                  {msg.role === "assistant" ? (
+                    <div className="prose prose-xs max-w-none dark:prose-invert [&_p]:my-0.5 [&_ul]:my-0.5 [&_li]:my-0 [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
+                      <ReactMarkdown>{stripDevisData(msg.content)}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  )}
                 </div>
                 {msg.devisData && (
                   <DevisCreationForm

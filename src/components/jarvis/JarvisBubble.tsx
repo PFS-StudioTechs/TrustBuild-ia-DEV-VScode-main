@@ -72,16 +72,21 @@ export default function JarvisBubble() {
       {/* Chat Panel */}
       <div
         className={cn(
-          "fixed z-50 w-[calc(100vw-2rem)] md:w-[420px] h-[70vh] md:h-[600px] max-h-[80vh] rounded-2xl shadow-2xl border bg-card overflow-hidden transition-all duration-300 origin-bottom-right",
+          "fixed z-50 rounded-2xl shadow-2xl border bg-card overflow-hidden transition-all duration-300 origin-bottom-right",
+          "w-[calc(100vw-2rem)] md:w-[420px] h-[80vh] md:h-[600px] max-h-[90vh]",
           open ? "scale-100 opacity-100 pointer-events-auto" : "scale-90 opacity-0 pointer-events-none",
           !pos && "bottom-20 right-4 md:bottom-6 md:right-6"
         )}
-        style={pos ? {
-          left: Math.min(pos.x, window.innerWidth - 440) + "px",
-          top: Math.max(0, pos.y - 620) + "px",
-          right: "auto",
-          bottom: "auto",
-        } : undefined}
+        style={pos ? (
+          window.innerWidth < 768
+            ? { left: "1rem", right: "1rem", width: "auto", top: "5vh", bottom: "auto" }
+            : {
+                left: Math.max(8, Math.min(pos.x, window.innerWidth - 440)) + "px",
+                top: Math.max(8, pos.y - 620) + "px",
+                right: "auto",
+                bottom: "auto",
+              }
+        ) : undefined}
       >
         {open && <JarvisPanel onClose={() => setOpen(false)} />}
       </div>

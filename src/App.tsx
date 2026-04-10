@@ -44,6 +44,15 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Redirige les purs testeurs vers /testing — les autres voient la page normalement. */
+function ProductionRoute({ children }: { children: React.ReactNode }) {
+  const { isTester, isAdmin, isArtisan, loading } = useRole();
+  if (loading) return null;
+  // Pur testeur = tester sans artisan ni admin
+  if (isTester && !isArtisan && !isAdmin) return <Navigate to="/testing" replace />;
+  return <>{children}</>;
+}
+
 /** Réserve une route aux admins — redirige vers /dashboard sinon. */
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { isAdmin, loading } = useRole();
@@ -82,17 +91,17 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/chantiers" element={<Chantiers />} />
-              <Route path="/documents" element={<Documents />} />
-              <Route path="/mes-documents" element={<MesDocuments />} />
-              <Route path="/assistant" element={<Assistant />} />
-              <Route path="/parametres" element={<Parametres />} />
-              <Route path="/finances" element={<Finances />} />
+              <Route path="/dashboard" element={<ProductionRoute><Dashboard /></ProductionRoute>} />
+              <Route path="/chantiers" element={<ProductionRoute><Chantiers /></ProductionRoute>} />
+              <Route path="/documents" element={<ProductionRoute><Documents /></ProductionRoute>} />
+              <Route path="/mes-documents" element={<ProductionRoute><MesDocuments /></ProductionRoute>} />
+              <Route path="/assistant" element={<ProductionRoute><Assistant /></ProductionRoute>} />
+              <Route path="/parametres" element={<ProductionRoute><Parametres /></ProductionRoute>} />
+              <Route path="/finances" element={<ProductionRoute><Finances /></ProductionRoute>} />
               {/* Agents IA — réservés aux artisans et admins */}
-              <Route path="/robert-b" element={<PremiumRoute><RobertB /></PremiumRoute>} />
-              <Route path="/auguste-p" element={<PremiumRoute><AugusteP /></PremiumRoute>} />
-              <Route path="/knowledge" element={<Knowledge />} />
+              <Route path="/robert-b" element={<ProductionRoute><PremiumRoute><RobertB /></PremiumRoute></ProductionRoute>} />
+              <Route path="/auguste-p" element={<ProductionRoute><PremiumRoute><AugusteP /></PremiumRoute></ProductionRoute>} />
+              <Route path="/knowledge" element={<ProductionRoute><Knowledge /></ProductionRoute>} />
               <Route path="/testing" element={<TesterRoute><Testing /></TesterRoute>} />
               {/* Administration — admins uniquement */}
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />

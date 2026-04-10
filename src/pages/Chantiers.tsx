@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users } from "lucide-react";
+import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users, FileText, Receipt, Download, Loader2 } from "lucide-react";
 import AddressFields from "@/components/ui/AddressFields";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -127,6 +127,9 @@ export default function Chantiers() {
       nom: ch.nom, client_id: ch.client_id, adresse_chantier: ch.adresse_chantier || "",
       statut: ch.statut, date_debut: ch.date_debut || "", date_fin_prevue: ch.date_fin_prevue || "",
     });
+    setChantierDevis([]);
+    setChantierFactures([]);
+    loadChantierDocs(ch.id);
     setDetailOpen(true);
   };
 
@@ -153,6 +156,78 @@ export default function Chantiers() {
   const [clForm, setClForm] = useState({ nom: "", type: "particulier" as "particulier" | "pro", adresse: "", telephone: "", email: "" });
 
   const [loading, setLoading] = useState(false);
+
+  // Devis/Factures dans la fiche chantier
+  type DevisRow = { id: string; numero: string; montant_ht: number; tva: number; statut: string; date_validite: string | null; created_at: string };
+  type FactureRow = { id: string; numero: string; montant_ht: number; tva: number; statut: string; date_echeance: string; solde_restant: number };
+  const [chantierDevis, setChantierDevis] = useState<DevisRow[]>([]);
+  const [chantierFactures, setChantierFactures] = useState<FactureRow[]>([]);
+  const [chantierDocsLoading, setChantierDocsLoading] = useState(false);
+  const [newDevisForm, setNewDevisForm] = useState({ numero: "", montant_ht: "", tva: "20", statut: "brouillon", date_validite: "" });
+  const [addDevisOpen, setAddDevisOpen] = useState(false);
+
+  const loadChantierDocs = async (chantierId: string) => {
+    setChantierDocsLoading(true);
+    const [devisRes, facturesRes] = await Promise.all([
+      supabase.from("devis").select("id, numero, montant_ht, tva, statut, date_validite, created_at")
+        .eq("chantier_id", chantierId).order("created_at", { ascending: false }),
+      supabase.from("factures").select("id, numero, montant_ht, tva, statut, date_echeance, solde_restant")
+        .eq("artisan_id", user!.id).order("created_at", { ascending: false }),
+    ]);
+    const devisIds = (devisRes.data ?? []).map((d: DevisRow) => d.id);
+    setChantierDevis((devisRes.data ?? []) as DevisRow[]);
+    setChantierFactures(((facturesRes.data ?? []) as FactureRow[]).filter(f => devisIds.includes((f as any).devis_id)));
+    setChantierDocsLoading(false);
+  };
+
+  const handleAddDevis = async (chantierId: string) => {
+    if (!user) return;
+    setLoading(true);
+    const numero = newDevisForm.numero || `DEV-${Date.now().toString(36).toUpperCase()}`;
+    const { error } = await supabase.from("devis").insert({
+      artisan_id: user.id,
+      chantier_id: chantierId,
+      numero,
+      montant_ht: parseFloat(newDevisForm.montant_ht) || 0,
+      tva: parseFloat(newDevisForm.tva) || 20,
+      statut: newDevisForm.statut as any,
+      date_validite: newDevisForm.date_validite || null,
+    });
+    if (error) { toast.error(error.message); }
+    else {
+      toast.success(`Devis ${numero} créé`);
+      setAddDevisOpen(false);
+      setNewDevisForm({ numero: "", montant_ht: "", tva: "20", statut: "brouillon", date_validite: "" });
+      loadChantierDocs(chantierId);
+    }
+    setLoading(false);
+  };
+
+  const openTemplatePdf = async (type: "devis" | "facture", id: string) => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pdf-html`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(type === "devis" ? { type, devis_id: id } : { type, facture_id: id }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.html) throw new Error(data.error ?? "Erreur génération");
+      const win = window.open("", "_blank");
+      if (win) { win.document.write(data.html); win.document.close(); }
+      else toast.error("Autorisez les popups pour ouvrir le PDF");
+    } catch (e: any) { toast.error("Erreur PDF : " + e.message); }
+  };
+
+  const devisStatutStyles: Record<string, string> = {
+    brouillon: "bg-muted text-muted-foreground", envoye: "bg-yellow-500/10 text-yellow-700",
+    signe: "bg-green-500/10 text-green-700", refuse: "bg-destructive/10 text-destructive",
+  };
+  const factureStatutStyles: Record<string, string> = {
+    brouillon: "bg-muted text-muted-foreground", envoyee: "bg-primary/10 text-primary",
+    payee: "bg-green-500/10 text-green-700", impayee: "bg-destructive/10 text-destructive",
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -534,58 +609,171 @@ export default function Chantiers() {
 
       {/* Chantier Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display">Détail du chantier</DialogTitle>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
+            <DialogTitle className="font-display">{detailChantier?.nom || "Détail du chantier"}</DialogTitle>
           </DialogHeader>
           {detailChantier && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nom du chantier</Label>
-                <Input value={detailForm.nom} onChange={(e) => setDetailForm(p => ({ ...p, nom: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Client</Label>
-                <Select value={detailForm.client_id} onValueChange={(v) => setDetailForm(p => ({ ...p, client_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                  <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Adresse du chantier</Label>
-                <AddressFields
-                  value={detailForm.adresse_chantier}
-                  onChange={(v) => setDetailForm(p => ({ ...p, adresse_chantier: v }))}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Statut</Label>
-                <Select value={detailForm.statut} onValueChange={(v) => setDetailForm(p => ({ ...p, statut: v as ChantierStatut }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <p className="text-[10px] text-muted-foreground">Statuts : Prospect → En cours → Terminé ou Litige</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            <Tabs defaultValue="infos" className="flex flex-col flex-1 overflow-hidden">
+              <TabsList className="mx-6 mb-2 grid grid-cols-3 shrink-0">
+                <TabsTrigger value="infos" className="text-xs">Infos</TabsTrigger>
+                <TabsTrigger value="devis" className="text-xs gap-1">
+                  <FileText className="w-3 h-3" /> Devis {chantierDevis.length > 0 && `(${chantierDevis.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="factures" className="text-xs gap-1">
+                  <Receipt className="w-3 h-3" /> Factures {chantierFactures.length > 0 && `(${chantierFactures.length})`}
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Onglet Infos */}
+              <TabsContent value="infos" className="flex-1 overflow-y-auto px-6 space-y-4 mt-0">
                 <div className="space-y-2">
-                  <Label>Date de début</Label>
-                  <Input type="date" value={detailForm.date_debut} onChange={(e) => setDetailForm(p => ({ ...p, date_debut: e.target.value }))} />
+                  <Label>Nom du chantier</Label>
+                  <Input value={detailForm.nom} onChange={(e) => setDetailForm(p => ({ ...p, nom: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Date de fin prévue</Label>
-                  <Input type="date" value={detailForm.date_fin_prevue} onChange={(e) => setDetailForm(p => ({ ...p, date_fin_prevue: e.target.value }))} />
+                  <Label>Client</Label>
+                  <Select value={detailForm.client_id} onValueChange={(v) => setDetailForm(p => ({ ...p, client_id: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
+                    <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
+                  </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label>Adresse du chantier</Label>
+                  <AddressFields value={detailForm.adresse_chantier} onChange={(v) => setDetailForm(p => ({ ...p, adresse_chantier: v }))} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Statut</Label>
+                  <Select value={detailForm.statut} onValueChange={(v) => setDetailForm(p => ({ ...p, statut: v as ChantierStatut }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">Statuts : Prospect → En cours → Terminé ou Litige</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Date de début</Label>
+                    <Input type="date" value={detailForm.date_debut} onChange={(e) => setDetailForm(p => ({ ...p, date_debut: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date de fin prévue</Label>
+                    <Input type="date" value={detailForm.date_fin_prevue} onChange={(e) => setDetailForm(p => ({ ...p, date_fin_prevue: e.target.value }))} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground pb-2">Créé le {new Date(detailChantier.created_at).toLocaleString("fr-FR")}</p>
+              </TabsContent>
+
+              {/* Onglet Devis */}
+              <TabsContent value="devis" className="flex-1 overflow-y-auto px-6 mt-0 pb-4">
+                <div className="flex justify-between items-center py-3">
+                  <p className="text-sm font-medium">Devis liés à ce chantier</p>
+                  <Button size="sm" onClick={() => setAddDevisOpen(true)} className="h-8 text-xs gap-1">
+                    <Plus className="w-3 h-3" /> Nouveau devis
+                  </Button>
+                </div>
+                {chantierDocsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                ) : chantierDevis.length === 0 ? (
+                  <p className="text-center text-muted-foreground text-sm py-8">Aucun devis pour ce chantier</p>
+                ) : (
+                  <div className="space-y-2">
+                    {chantierDevis.map(d => (
+                      <div key={d.id} className="forge-card !p-3 flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{d.numero}</p>
+                          <p className="text-xs text-muted-foreground">{Number(d.montant_ht).toLocaleString("fr-FR")} € HT • TVA {Number(d.tva)}%</p>
+                          {d.date_validite && <p className="text-xs text-muted-foreground">Validité : {new Date(d.date_validite).toLocaleDateString("fr-FR")}</p>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className={`text-[10px] ${devisStatutStyles[d.statut] || ""}`}>{d.statut}</Badge>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTemplatePdf("devis", d.id)}>
+                            <Download className="w-3.5 h-3.5 text-primary" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Onglet Factures */}
+              <TabsContent value="factures" className="flex-1 overflow-y-auto px-6 mt-0 pb-4">
+                <div className="py-3">
+                  <p className="text-sm font-medium">Factures liées à ce chantier</p>
+                </div>
+                {chantierDocsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                ) : chantierFactures.length === 0 ? (
+                  <p className="text-center text-muted-foreground text-sm py-8">Aucune facture pour ce chantier</p>
+                ) : (
+                  <div className="space-y-2">
+                    {chantierFactures.map(f => (
+                      <div key={f.id} className="forge-card !p-3 flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{f.numero}</p>
+                          <p className="text-xs text-muted-foreground">{Number(f.montant_ht).toLocaleString("fr-FR")} € HT</p>
+                          <p className="text-xs text-muted-foreground">Échéance : {new Date(f.date_echeance).toLocaleDateString("fr-FR")} • Reste : {Number(f.solde_restant).toLocaleString("fr-FR")} €</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className={`text-[10px] ${factureStatutStyles[f.statut] || ""}`}>{f.statut}</Badge>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTemplatePdf("facture", f.id)}>
+                            <Download className="w-3.5 h-3.5 text-primary" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Footer always visible */}
+              <div className="px-6 py-3 border-t shrink-0 flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setDetailOpen(false)}>Fermer</Button>
+                <Button size="sm" onClick={handleSaveDetail} disabled={loading} className="bg-primary text-primary-foreground">
+                  {loading ? "Enregistrement…" : "Enregistrer"}
+                </Button>
               </div>
-              <div className="text-xs text-muted-foreground">Créé le {new Date(detailChantier.created_at).toLocaleString("fr-FR")} • Modifié le {new Date(detailChantier.updated_at).toLocaleString("fr-FR")}</div>
-            </div>
+            </Tabs>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Nouveau devis depuis chantier */}
+      <Dialog open={addDevisOpen} onOpenChange={setAddDevisOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Nouveau devis</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Numéro (auto si vide)</Label>
+              <Input value={newDevisForm.numero} onChange={e => setNewDevisForm(p => ({ ...p, numero: e.target.value }))} placeholder="DEV-001" />
+            </div>
+            <div className="space-y-1">
+              <Label>Montant HT (€)</Label>
+              <Input type="number" value={newDevisForm.montant_ht} onChange={e => setNewDevisForm(p => ({ ...p, montant_ht: e.target.value }))} placeholder="0" />
+            </div>
+            <div className="space-y-1">
+              <Label>TVA (%)</Label>
+              <Select value={newDevisForm.tva} onValueChange={v => setNewDevisForm(p => ({ ...p, tva: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0%</SelectItem>
+                  <SelectItem value="5.5">5,5%</SelectItem>
+                  <SelectItem value="10">10%</SelectItem>
+                  <SelectItem value="20">20%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Date de validité</Label>
+              <Input type="date" value={newDevisForm.date_validite} onChange={e => setNewDevisForm(p => ({ ...p, date_validite: e.target.value }))} />
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailOpen(false)}>Fermer</Button>
-            <Button onClick={handleSaveDetail} disabled={loading} className="bg-primary text-primary-foreground">
-              {loading ? "Enregistrement…" : "Enregistrer les modifications"}
+            <Button variant="outline" onClick={() => setAddDevisOpen(false)}>Annuler</Button>
+            <Button onClick={() => detailChantier && handleAddDevis(detailChantier.id)} disabled={loading}>
+              {loading ? "Création…" : "Créer"}
             </Button>
           </DialogFooter>
         </DialogContent>

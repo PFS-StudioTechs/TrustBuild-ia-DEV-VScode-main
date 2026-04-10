@@ -144,8 +144,9 @@ async function embed(text: string, apiKey: string): Promise<number[]> {
     },
     body: JSON.stringify({
       model: "text-embedding-3-small",
-      input: text.slice(0, 8000), // limite de tokens
+      input: text.slice(0, 8000),
     }),
+    signal: AbortSignal.timeout(30000), // 30s max par embedding
   });
   if (!resp.ok) {
     const err = await resp.text();
@@ -255,12 +256,15 @@ serve(async (req) => {
 
     rawText = rawText.replace(/\s+/g, " ").trim();
     if (rawText.length < 20) {
+      const errMsg = ext === "pdf"
+        ? "Impossible d'extraire du texte de ce PDF. Il s'agit peut-être d'un PDF scanné (image uniquement) — l'OCR n'est pas supporté."
+        : "Impossible d'extraire du texte du document.";
       await supabase
         .from("knowledge_documents")
-        .update({ statut: "erreur" })
+        .update({ statut: "erreur", metadata: { error: errMsg } })
         .eq("id", document_id);
       return new Response(
-        JSON.stringify({ error: "Impossible d'extraire du texte du document" }),
+        JSON.stringify({ error: errMsg }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -308,8 +312,23 @@ serve(async (req) => {
     );
   } catch (e) {
     console.error("index-document error:", e);
+    const errMsg = e instanceof Error ? e.message : "Erreur inconnue lors de l'indexation";
+    // Tente de mettre le statut à erreur (best-effort, peut échouer si supabase pas encore init)
+    try {
+      const body = await req.clone().json().catch(() => ({}));
+      const docId = (body as any).document_id;
+      if (docId) {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+        const sb = createClient(supabaseUrl, serviceRoleKey);
+        await sb.from("knowledge_documents")
+          .update({ statut: "erreur", metadata: { error: errMsg } })
+          .eq("id", docId);
+      }
+    } catch {}
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Erreur inconnue" }),
+      JSON.stringify({ error: errMsg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

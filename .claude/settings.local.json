@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(export PATH=\"$PATH:$HOME/scoop/shims\")",
+      "Bash(supabase functions:*)",
+      "Bash(supabase db:*)"
+    ]
+  }
+}

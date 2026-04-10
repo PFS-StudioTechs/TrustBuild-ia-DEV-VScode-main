@@ -175,37 +175,42 @@ export default function AgentChat({
     }
   };
 
-  const callOpenai = async (body: Record<string, unknown>) => {
-    const resp = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/call-openai`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify(body),
-      }
-    );
-    if (!resp.ok) throw new Error("Erreur de sauvegarde");
-    return resp;
-  };
-
   const saveDocument = async (msgIndex: number) => {
+    if (!user) return;
     const msg = messages[msgIndex];
     if (!msg || msg.role !== "assistant") return;
     setSavingIdx(msgIndex);
     try {
-      await callOpenai({
-        action: "save_document",
-        nom: `${title} — ${new Date().toLocaleDateString("fr-FR")}`,
-        contenu: msg.content,
-        type_fichier: persona === "robert_b" ? "courrier" : "note_technique",
-        persona,
+      const nom = `${title} — ${new Date().toLocaleDateString("fr-FR")}`;
+      const contenu = cleanContent(msg.content);
+      const type_fichier = persona === "robert_b" ? "courrier" : "note_technique";
+
+      // Upload le contenu texte dans le bucket artisan-documents
+      const blob = new Blob([contenu], { type: "text/plain;charset=utf-8" });
+      const safeName = nom.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `${user.id}/${Date.now()}-${safeName}.txt`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from("artisan-documents")
+        .upload(storagePath, blob);
+      if (uploadErr) throw uploadErr;
+
+      // Crée l'enregistrement dans la table documents
+      const { error: dbErr } = await supabase.from("documents").insert({
+        artisan_id: user.id,
+        nom,
+        description: `Conversation avec ${title}`,
+        type_fichier,
+        taille_octets: blob.size,
+        mime_type: "text/plain",
+        storage_path: storagePath,
+        tags: [persona, "ia"],
       });
-      toast.success("Document sauvegardé dans Mes Documents (en attente de validation)");
-    } catch {
-      toast.error("Impossible de sauvegarder le document");
+      if (dbErr) throw dbErr;
+
+      toast.success("Conversation sauvegardée dans Mes Documents");
+    } catch (e: any) {
+      toast.error("Impossible de sauvegarder : " + (e.message || "erreur inconnue"));
     } finally {
       setSavingIdx(null);
     }

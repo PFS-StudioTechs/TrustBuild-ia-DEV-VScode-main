@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Scale, Wrench, Wallet, Menu, Brain, FlaskConical } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Wallet, Menu, Brain, FlaskConical } from "lucide-react";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -13,9 +13,6 @@ const baseTabs = [
   { path: "/chantiers", icon: Building2, label: "Chantiers" },
   { path: "/finances", icon: Wallet, label: "Finances" },
   { path: "/assistant", icon: Bot, label: "IA" },
-  { path: "/robert-b", icon: Scale, label: "Juridique" },
-  { path: "/auguste-p", icon: Wrench, label: "Technique" },
-  { path: "/documents", icon: FileText, label: "Devis" },
   { path: "/mes-documents", icon: FolderOpen, label: "Docs" },
   { path: "/knowledge", icon: Brain, label: "Savoir" },
   { path: "/parametres", icon: Settings, label: "Réglages" },
@@ -25,16 +22,19 @@ const adminTab = { path: "/admin", icon: Shield, label: "Admin" };
 const testerTab = { path: "/testing", icon: FlaskConical, label: "Tests" };
 
 // Mobile: show primary 5 tabs, rest in "more" expandable
-const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/documents", "/assistant"];
+const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/assistant", "/mes-documents"];
 
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin, isTester } = useRole();
+  const { isAdmin, isTester, isArtisan } = useRole();
   const { signOut } = useAuth();
-  let tabs = [...baseTabs];
-  if (isAdmin) tabs = [...tabs, adminTab];
-  if (isTester || isAdmin) tabs = [...tabs, testerTab];
+  const isPureTester = isTester && !isArtisan && !isAdmin;
+
+  // Pur testeur : uniquement l'onglet Tests
+  let tabs = isPureTester ? [testerTab] : [...baseTabs];
+  if (!isPureTester && isAdmin) tabs = [...tabs, adminTab];
+  if (!isPureTester && (isTester || isAdmin)) tabs = [...tabs, testerTab];
   const [moreOpen, setMoreOpen] = useState(false);
 
   const primaryMobileTabs = tabs.filter(t => primaryMobilePaths.includes(t.path));

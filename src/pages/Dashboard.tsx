@@ -39,6 +39,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [kpis, setKpis] = useState<KPIs>({ caMois: 0, devisEnAttente: 0, impayes: 0, chantiersActifs: 0 });
   const [profile, setProfile] = useState<{ nom: string; prenom: string } | null>(null);
+  const [devisBrouillon, setDevisBrouillon] = useState<{ id: string; numero: string; montant_ht: number; chantier_nom?: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -46,8 +47,8 @@ export default function Dashboard() {
     const fetchData = async () => {
       const [profileRes, chantiersRes, devisRes, facturesRes] = await Promise.all([
         supabase.from("profiles").select("nom, prenom").eq("user_id", user.id).single(),
-        supabase.from("chantiers").select("id, statut").eq("artisan_id", user.id),
-        supabase.from("devis").select("id, statut, montant_ht").eq("artisan_id", user.id),
+        supabase.from("chantiers").select("id, nom, statut").eq("artisan_id", user.id),
+        supabase.from("devis").select("id, statut, montant_ht, numero, chantier_id").eq("artisan_id", user.id),
         supabase.from("factures").select("id, statut, montant_ht, solde_restant").eq("artisan_id", user.id),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
@@ -57,6 +58,16 @@ export default function Dashboard() {
       const caMois = facturePayees.reduce((sum, f) => sum + Number(f.montant_ht), 0);
       const impayes = facturesRes.data?.filter((f) => f.statut === "impayee").length ?? 0;
       setKpis({ caMois, devisEnAttente, impayes, chantiersActifs });
+
+      // Devis brouillon avec nom du chantier
+      const brouillons = (devisRes.data ?? []).filter(d => d.statut === "brouillon").slice(0, 5);
+      setDevisBrouillon(brouillons.map(d => ({
+        id: d.id,
+        numero: d.numero,
+        montant_ht: Number(d.montant_ht),
+        chantier_nom: chantiersRes.data?.find(c => c.id === d.chantier_id)?.nom,
+      })));
+
       setLoaded(true);
     };
     fetchData();
@@ -104,6 +115,27 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Devis brouillon */}
+      {devisBrouillon.length > 0 && (
+        <div className="animate-fade-up-4">
+          <h2 className="text-small font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Devis en brouillon</h2>
+          <div className="space-y-2">
+            {devisBrouillon.map(d => (
+              <div key={d.id} className="forge-card !p-3 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-all" onClick={() => navigate("/chantiers")}>
+                <div>
+                  <p className="text-sm font-medium">{d.numero}</p>
+                  {d.chantier_nom && <p className="text-xs text-muted-foreground">{d.chantier_nom}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-mono">{d.montant_ht.toLocaleString("fr-FR")} € HT</span>
+                  <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Brouillon</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="animate-fade-up-4">
