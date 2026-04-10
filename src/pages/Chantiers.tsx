@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users, FileText, Receipt, Download, Loader2 } from "lucide-react";
+import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users, FileText, Receipt, Download, Loader2, Mic, MicOff, Pencil } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import AddressFields from "@/components/ui/AddressFields";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -119,13 +120,56 @@ export default function Chantiers() {
   // Detail dialog
   const [detailChantier, setDetailChantier] = useState<Chantier | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailForm, setDetailForm] = useState({ nom: "", client_id: "", adresse_chantier: "", statut: "prospect" as ChantierStatut, date_debut: "", date_fin_prevue: "" });
+  const [detailEditMode, setDetailEditMode] = useState(false);
+  const [detailForm, setDetailForm] = useState({ nom: "", client_id: "", adresse_chantier: "", statut: "prospect" as ChantierStatut, date_debut: "", date_fin_prevue: "", description: "" });
+
+  // Micro pour description
+  const [descRecording, setDescRecording] = useState(false);
+  const descMediaRef = useRef<MediaRecorder | null>(null);
+  const descChunksRef = useRef<Blob[]>([]);
+
+  const startDescRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      descChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) descChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(descChunksRef.current, { type: "audio/webm" });
+        const formData = new FormData();
+        formData.append("audio", blob, "recording.webm");
+        try {
+          const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+            body: formData,
+          });
+          const data = await resp.json();
+          if (data.text) setDetailForm(p => ({ ...p, description: (p.description ? p.description + " " : "") + data.text }));
+          else toast.error("Aucun texte détecté");
+        } catch { toast.error("Erreur de transcription"); }
+      };
+      mr.start();
+      descMediaRef.current = mr;
+      setDescRecording(true);
+    } catch { toast.error("Impossible d'accéder au microphone"); }
+  };
+
+  const stopDescRecording = () => {
+    if (descMediaRef.current?.state === "recording") {
+      descMediaRef.current.stop();
+      setDescRecording(false);
+    }
+  };
 
   const openChantierDetail = (ch: Chantier) => {
     setDetailChantier(ch);
+    setDetailEditMode(false);
     setDetailForm({
       nom: ch.nom, client_id: ch.client_id, adresse_chantier: ch.adresse_chantier || "",
       statut: ch.statut, date_debut: ch.date_debut || "", date_fin_prevue: ch.date_fin_prevue || "",
+      description: (ch as any).description || "",
     });
     setChantierDevis([]);
     setChantierFactures([]);
@@ -139,9 +183,10 @@ export default function Chantiers() {
     const { error } = await supabase.from("chantiers").update({
       nom: detailForm.nom, client_id: detailForm.client_id, adresse_chantier: detailForm.adresse_chantier || null,
       statut: detailForm.statut, date_debut: detailForm.date_debut || null, date_fin_prevue: detailForm.date_fin_prevue || null,
-    }).eq("id", detailChantier.id);
+      description: detailForm.description || null,
+    } as any).eq("id", detailChantier.id);
     if (error) toast.error(error.message);
-    else { toast.success("Chantier mis à jour"); setDetailOpen(false); fetchData(); }
+    else { toast.success("Chantier mis à jour"); setDetailEditMode(false); fetchData(); }
     setLoading(false);
   };
 
@@ -149,11 +194,13 @@ export default function Chantiers() {
   const [chantierDialogOpen, setChantierDialogOpen] = useState(false);
   const [editChantier, setEditChantier] = useState<Chantier | null>(null);
   const [chForm, setChForm] = useState({ nom: "", client_id: "", adresse_chantier: "", statut: "prospect" as ChantierStatut, date_debut: "", date_fin_prevue: "" });
+  const [chantierUseNewClient, setChantierUseNewClient] = useState(false);
+  const [chantierNewClient, setChantierNewClient] = useState({ nom: "", email: "", telephone: "", type: "particulier" as "particulier" | "pro" });
 
   // Client dialog
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   const [editClient, setEditClient] = useState<Client | null>(null);
-  const [clForm, setClForm] = useState({ nom: "", type: "particulier" as "particulier" | "pro", adresse: "", telephone: "", email: "" });
+  const [clForm, setClForm] = useState({ nom: "", type: "particulier" as "particulier" | "pro", adresse: "", telephone: "", email: "", siret: "" });
 
   const [loading, setLoading] = useState(false);
 
@@ -250,6 +297,8 @@ export default function Chantiers() {
   const openNewChantier = () => {
     setEditChantier(null);
     setChForm({ nom: "", client_id: "", adresse_chantier: "", statut: "prospect", date_debut: "", date_fin_prevue: "" });
+    setChantierUseNewClient(false);
+    setChantierNewClient({ nom: "", email: "", telephone: "", type: "particulier" });
     setChantierDialogOpen(true);
   };
 
@@ -269,29 +318,47 @@ export default function Chantiers() {
   const handleSaveChantier = async () => {
     if (!user) return;
     setLoading(true);
-    if (editChantier) {
-      const { error } = await supabase.from("chantiers").update({
-        nom: chForm.nom || editChantier.nom,
-        client_id: chForm.client_id || editChantier.client_id,
-        adresse_chantier: chForm.adresse_chantier || null,
-        statut: chForm.statut,
-        date_debut: chForm.date_debut || null,
-        date_fin_prevue: chForm.date_fin_prevue || null,
-      }).eq("id", editChantier.id);
-      if (error) toast.error(error.message);
-      else { toast.success("Chantier modifié"); setChantierDialogOpen(false); fetchData(); }
-    } else {
-      const { error } = await supabase.from("chantiers").insert({
-        artisan_id: user.id,
-        nom: chForm.nom,
-        client_id: chForm.client_id,
-        adresse_chantier: chForm.adresse_chantier || null,
-        statut: chForm.statut,
-        date_debut: chForm.date_debut || null,
-        date_fin_prevue: chForm.date_fin_prevue || null,
-      });
-      if (error) toast.error(error.message);
-      else { toast.success("Chantier créé"); setChantierDialogOpen(false); fetchData(); }
+    try {
+      let clientId = chForm.client_id;
+
+      // Créer un nouveau client si demandé
+      if (!editChantier && chantierUseNewClient) {
+        if (!chantierNewClient.nom.trim()) { toast.error("Le nom du client est obligatoire"); setLoading(false); return; }
+        const { data: newCl, error: clErr } = await supabase.from("clients").insert({
+          artisan_id: user.id,
+          nom: chantierNewClient.nom.trim(),
+          type: chantierNewClient.type,
+          email: chantierNewClient.email || null,
+          telephone: chantierNewClient.telephone || null,
+        }).select("id").single();
+        if (clErr) throw clErr;
+        clientId = newCl.id;
+        toast.success(`Client "${chantierNewClient.nom}" créé`);
+      }
+
+      if (!clientId) { toast.error("Sélectionnez ou créez un client"); setLoading(false); return; }
+
+      if (editChantier) {
+        const { error } = await supabase.from("chantiers").update({
+          nom: chForm.nom || editChantier.nom, client_id: clientId,
+          adresse_chantier: chForm.adresse_chantier || null, statut: chForm.statut,
+          date_debut: chForm.date_debut || null, date_fin_prevue: chForm.date_fin_prevue || null,
+        }).eq("id", editChantier.id);
+        if (error) throw error;
+        toast.success("Chantier modifié");
+      } else {
+        const { error } = await supabase.from("chantiers").insert({
+          artisan_id: user.id, nom: chForm.nom, client_id: clientId,
+          adresse_chantier: chForm.adresse_chantier || null, statut: chForm.statut,
+          date_debut: chForm.date_debut || null, date_fin_prevue: chForm.date_fin_prevue || null,
+        });
+        if (error) throw error;
+        toast.success("Chantier créé");
+      }
+      setChantierDialogOpen(false);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
     }
     setLoading(false);
   };
@@ -305,27 +372,48 @@ export default function Chantiers() {
   // Client CRUD
   const openNewClient = () => {
     setEditClient(null);
-    setClForm({ nom: "", type: "particulier", adresse: "", telephone: "", email: "" });
+    setClForm({ nom: "", type: "particulier", adresse: "", telephone: "", email: "", siret: "" });
     setClientDialogOpen(true);
   };
 
   const openEditClient = (cl: Client) => {
     setEditClient(cl);
-    setClForm({ nom: cl.nom, type: cl.type, adresse: cl.adresse || "", telephone: cl.telephone || "", email: cl.email || "" });
+    setClForm({ nom: cl.nom, type: cl.type, adresse: cl.adresse || "", telephone: cl.telephone || "", email: cl.email || "", siret: (cl as any).siret || "" });
     setClientDialogOpen(true);
   };
 
   const handleSaveClient = async () => {
     if (!user) return;
+    // Validation champs obligatoires
+    if (!clForm.nom.trim()) { toast.error("Le nom est obligatoire"); return; }
+    if (!clForm.email.trim()) { toast.error("L'email est obligatoire"); return; }
+    if (!clForm.telephone.trim()) { toast.error("Le téléphone est obligatoire"); return; }
+    if (!clForm.adresse.trim()) { toast.error("L'adresse est obligatoire"); return; }
+
+    // Vérif unicité email (côté client, avant envoi)
+    const emailQuery = supabase.from("clients").select("id").eq("artisan_id", user.id).eq("email", clForm.email.trim());
+    if (editClient) emailQuery.neq("id", editClient.id);
+    const { data: existingEmail } = await emailQuery.maybeSingle();
+    if (existingEmail) { toast.error("Un client avec cet email existe déjà"); return; }
+
+    // Vérif unicité SIRET si renseigné
+    if (clForm.siret.trim()) {
+      const siretQuery = supabase.from("clients").select("id").eq("artisan_id", user.id).eq("siret" as any, clForm.siret.trim());
+      if (editClient) siretQuery.neq("id", editClient.id);
+      const { data: existingSiret } = await siretQuery.maybeSingle();
+      if (existingSiret) { toast.error("Un client avec ce SIRET existe déjà"); return; }
+    }
+
     setLoading(true);
     if (editClient) {
       const { error } = await supabase.from("clients").update({
-        nom: clForm.nom || editClient.nom,
+        nom: clForm.nom,
         type: clForm.type,
-        adresse: clForm.adresse || null,
-        telephone: clForm.telephone || null,
-        email: clForm.email || null,
-      }).eq("id", editClient.id);
+        adresse: clForm.adresse,
+        telephone: clForm.telephone,
+        email: clForm.email,
+        siret: clForm.siret || null,
+      } as any).eq("id", editClient.id);
       if (error) toast.error(error.message);
       else { toast.success("Client modifié"); setClientDialogOpen(false); fetchData(); }
     } else {
@@ -333,10 +421,11 @@ export default function Chantiers() {
         artisan_id: user.id,
         nom: clForm.nom,
         type: clForm.type,
-        adresse: clForm.adresse || null,
-        telephone: clForm.telephone || null,
-        email: clForm.email || null,
-      });
+        adresse: clForm.adresse,
+        telephone: clForm.telephone,
+        email: clForm.email,
+        siret: clForm.siret || null,
+      } as any);
       if (error) toast.error(error.message);
       else { toast.success("Client créé"); setClientDialogOpen(false); fetchData(); }
     }
@@ -509,35 +598,59 @@ export default function Chantiers() {
           <DialogHeader>
             <DialogTitle className="font-display">{editChantier ? "Modifier le chantier" : "Nouveau chantier"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-4 max-h-[65vh] overflow-y-auto">
             <div className="space-y-2">
               <Label>Nom du chantier</Label>
               <Input value={chForm.nom} onChange={(e) => setChForm(p => ({ ...p, nom: e.target.value }))} placeholder="Rénovation cuisine" />
             </div>
-            <div className="space-y-2">
-              <Label>Client</Label>
-              <Select value={chForm.client_id} onValueChange={(v) => setChForm(p => ({ ...p, client_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Sélectionner un client" /></SelectTrigger>
-                <SelectContent>
-                  {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Toggle client existant / nouveau */}
+            {!editChantier && (
+              <div className="space-y-3">
+                <div className="flex rounded-lg border overflow-hidden text-sm">
+                  <button className={`flex-1 py-2 transition-colors ${!chantierUseNewClient ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                    onClick={() => setChantierUseNewClient(false)}>Client existant</button>
+                  <button className={`flex-1 py-2 transition-colors ${chantierUseNewClient ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                    onClick={() => setChantierUseNewClient(true)}>Nouveau client</button>
+                </div>
+                {!chantierUseNewClient ? (
+                  <Select value={chForm.client_id} onValueChange={(v) => setChForm(p => ({ ...p, client_id: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Sélectionner un client" /></SelectTrigger>
+                    <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
+                  </Select>
+                ) : (
+                  <div className="space-y-2 p-3 bg-muted/40 rounded-lg">
+                    <Input value={chantierNewClient.nom} onChange={e => setChantierNewClient(p => ({ ...p, nom: e.target.value }))} placeholder="Nom du client *" />
+                    <Select value={chantierNewClient.type} onValueChange={v => setChantierNewClient(p => ({ ...p, type: v as "particulier" | "pro" }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="particulier">Particulier</SelectItem>
+                        <SelectItem value="pro">Professionnel</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input type="email" value={chantierNewClient.email} onChange={e => setChantierNewClient(p => ({ ...p, email: e.target.value }))} placeholder="Email" />
+                    <Input value={chantierNewClient.telephone} onChange={e => setChantierNewClient(p => ({ ...p, telephone: e.target.value }))} placeholder="Téléphone" />
+                  </div>
+                )}
+              </div>
+            )}
+            {editChantier && (
+              <div className="space-y-2">
+                <Label>Client</Label>
+                <Select value={chForm.client_id} onValueChange={(v) => setChForm(p => ({ ...p, client_id: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Sélectionner un client" /></SelectTrigger>
+                  <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Adresse du chantier</Label>
-              <AddressFields
-                value={chForm.adresse_chantier}
-                onChange={(v) => setChForm(p => ({ ...p, adresse_chantier: v }))}
-                required
-              />
+              <AddressFields value={chForm.adresse_chantier} onChange={(v) => setChForm(p => ({ ...p, adresse_chantier: v }))} required />
             </div>
             <div className="space-y-2">
               <Label>Statut</Label>
               <Select value={chForm.statut} onValueChange={(v) => setChForm(p => ({ ...p, statut: v as ChantierStatut }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
+                <SelectContent>{Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -566,10 +679,10 @@ export default function Chantiers() {
           <DialogHeader>
             <DialogTitle className="font-display">{editClient ? "Modifier le client" : "Nouveau client"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-4 max-h-[65vh] overflow-y-auto">
             <div className="space-y-2">
-              <Label>Nom</Label>
-              <Input value={clForm.nom} onChange={(e) => setClForm(p => ({ ...p, nom: e.target.value }))} placeholder="Jean Dupont" />
+              <Label>Nom <span className="text-destructive">*</span></Label>
+              <Input value={clForm.nom} onChange={(e) => setClForm(p => ({ ...p, nom: e.target.value }))} placeholder="Jean Dupont" required />
             </div>
             <div className="space-y-2">
               <Label>Type</Label>
@@ -582,15 +695,20 @@ export default function Chantiers() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input type="email" value={clForm.email} onChange={(e) => setClForm(p => ({ ...p, email: e.target.value }))} placeholder="jean@email.com" />
+              <Label>Email <span className="text-destructive">*</span></Label>
+              <Input type="email" value={clForm.email} onChange={(e) => setClForm(p => ({ ...p, email: e.target.value }))} placeholder="jean@email.com" required />
             </div>
             <div className="space-y-2">
-              <Label>Téléphone</Label>
-              <Input value={clForm.telephone} onChange={(e) => setClForm(p => ({ ...p, telephone: e.target.value }))} placeholder="06 12 34 56 78" />
+              <Label>Téléphone <span className="text-destructive">*</span></Label>
+              <Input value={clForm.telephone} onChange={(e) => setClForm(p => ({ ...p, telephone: e.target.value }))} placeholder="06 12 34 56 78" required />
             </div>
             <div className="space-y-2">
-              <Label>Adresse</Label>
+              <Label>SIRET {clForm.type === "pro" && <span className="text-destructive">*</span>}</Label>
+              <Input value={clForm.siret} onChange={(e) => setClForm(p => ({ ...p, siret: e.target.value }))} placeholder="12345678901234" maxLength={14} />
+              <p className="text-[10px] text-muted-foreground">14 chiffres — obligatoire pour les professionnels</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Adresse <span className="text-destructive">*</span></Label>
               <AddressFields
                 value={clForm.adresse}
                 onChange={(v) => setClForm(p => ({ ...p, adresse: v }))}
@@ -626,41 +744,89 @@ export default function Chantiers() {
               </TabsList>
 
               {/* Onglet Infos */}
-              <TabsContent value="infos" className="flex-1 overflow-y-auto px-6 space-y-4 mt-0">
-                <div className="space-y-2">
-                  <Label>Nom du chantier</Label>
-                  <Input value={detailForm.nom} onChange={(e) => setDetailForm(p => ({ ...p, nom: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Client</Label>
-                  <Select value={detailForm.client_id} onValueChange={(v) => setDetailForm(p => ({ ...p, client_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                    <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Adresse du chantier</Label>
-                  <AddressFields value={detailForm.adresse_chantier} onChange={(v) => setDetailForm(p => ({ ...p, adresse_chantier: v }))} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Statut</Label>
-                  <Select value={detailForm.statut} onValueChange={(v) => setDetailForm(p => ({ ...p, statut: v as ChantierStatut }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <p className="text-[10px] text-muted-foreground">Statuts : Prospect → En cours → Terminé ou Litige</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Date de début</Label>
-                    <Input type="date" value={detailForm.date_debut} onChange={(e) => setDetailForm(p => ({ ...p, date_debut: e.target.value }))} />
+              <TabsContent value="infos" className="flex-1 overflow-y-auto px-6 mt-0 pb-4">
+                {!detailEditMode ? (
+                  /* Vue lecture */
+                  <div className="space-y-3 pt-2">
+                    <div className="flex justify-end">
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setDetailEditMode(true)}>
+                        <Pencil className="w-3 h-3" /> Modifier
+                      </Button>
+                    </div>
+                    {[
+                      { label: "Client", value: clients.find(c => c.id === detailChantier.client_id)?.nom || "—" },
+                      { label: "Adresse", value: detailForm.adresse_chantier || "—" },
+                      { label: "Statut", value: statutLabels[detailChantier.statut] },
+                      { label: "Début", value: detailChantier.date_debut ? new Date(detailChantier.date_debut).toLocaleDateString("fr-FR") : "—" },
+                      { label: "Fin prévue", value: detailChantier.date_fin_prevue ? new Date(detailChantier.date_fin_prevue).toLocaleDateString("fr-FR") : "—" },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex gap-3">
+                        <span className="text-xs text-muted-foreground w-24 shrink-0 pt-0.5">{label}</span>
+                        <span className="text-sm">{value}</span>
+                      </div>
+                    ))}
+                    <div className="flex gap-3">
+                      <span className="text-xs text-muted-foreground w-24 shrink-0 pt-0.5">Description</span>
+                      <span className="text-sm whitespace-pre-wrap">{detailForm.description || <span className="text-muted-foreground italic">Aucune description</span>}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground pt-2">Créé le {new Date(detailChantier.created_at).toLocaleString("fr-FR")}</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Date de fin prévue</Label>
-                    <Input type="date" value={detailForm.date_fin_prevue} onChange={(e) => setDetailForm(p => ({ ...p, date_fin_prevue: e.target.value }))} />
+                ) : (
+                  /* Vue édition */
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <Label>Nom du chantier</Label>
+                      <Input value={detailForm.nom} onChange={(e) => setDetailForm(p => ({ ...p, nom: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Client</Label>
+                      <Select value={detailForm.client_id} onValueChange={(v) => setDetailForm(p => ({ ...p, client_id: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
+                        <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Adresse du chantier</Label>
+                      <AddressFields value={detailForm.adresse_chantier} onChange={(v) => setDetailForm(p => ({ ...p, adresse_chantier: v }))} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Statut</Label>
+                      <Select value={detailForm.statut} onValueChange={(v) => setDetailForm(p => ({ ...p, statut: v as ChantierStatut }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>Date de début</Label>
+                        <Input type="date" value={detailForm.date_debut} onChange={(e) => setDetailForm(p => ({ ...p, date_debut: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Date de fin prévue</Label>
+                        <Input type="date" value={detailForm.date_fin_prevue} onChange={(e) => setDetailForm(p => ({ ...p, date_fin_prevue: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Description du chantier</Label>
+                        <Button type="button" size="icon" variant={descRecording ? "destructive" : "outline"}
+                          className={`h-7 w-7 ${descRecording ? "animate-pulse" : ""}`}
+                          onClick={descRecording ? stopDescRecording : startDescRecording}
+                          title={descRecording ? "Arrêter l'enregistrement" : "Dicter la description"}>
+                          {descRecording ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                        </Button>
+                      </div>
+                      <Textarea
+                        value={detailForm.description}
+                        onChange={(e) => setDetailForm(p => ({ ...p, description: e.target.value }))}
+                        placeholder="Décrivez les travaux, contraintes, matériaux…"
+                        rows={4}
+                        className="resize-none text-sm"
+                      />
+                      {descRecording && <p className="text-xs text-destructive animate-pulse">🎙 Enregistrement en cours… cliquez sur le micro pour arrêter</p>}
+                    </div>
                   </div>
-                </div>
-                <p className="text-xs text-muted-foreground pb-2">Créé le {new Date(detailChantier.created_at).toLocaleString("fr-FR")}</p>
+                )}
               </TabsContent>
 
               {/* Onglet Devis */}
@@ -726,12 +892,18 @@ export default function Chantiers() {
                 )}
               </TabsContent>
 
-              {/* Footer always visible */}
+              {/* Footer */}
               <div className="px-6 py-3 border-t shrink-0 flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setDetailOpen(false)}>Fermer</Button>
-                <Button size="sm" onClick={handleSaveDetail} disabled={loading} className="bg-primary text-primary-foreground">
-                  {loading ? "Enregistrement…" : "Enregistrer"}
-                </Button>
+                {detailEditMode ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => setDetailEditMode(false)}>Annuler</Button>
+                    <Button size="sm" onClick={handleSaveDetail} disabled={loading} className="bg-primary text-primary-foreground">
+                      {loading ? "Enregistrement…" : "Enregistrer"}
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => setDetailOpen(false)}>Fermer</Button>
+                )}
               </div>
             </Tabs>
           )}

@@ -161,7 +161,7 @@ export default function Knowledge() {
     if (!session) return;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     try {
-      await fetch(`${supabaseUrl}/functions/v1/index-document`, {
+      const resp = await fetch(`${supabaseUrl}/functions/v1/index-document`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -169,8 +169,18 @@ export default function Knowledge() {
         },
         body: JSON.stringify({ document_id: documentId }),
       });
-    } catch (e) {
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        const errMsg = data.error || `Erreur HTTP ${resp.status}`;
+        await supabase.from("knowledge_documents")
+          .update({ statut: "erreur", metadata: { error: errMsg } })
+          .eq("id", documentId);
+      }
+    } catch (e: any) {
       console.error("Erreur déclenchement indexation:", e);
+      await supabase.from("knowledge_documents")
+        .update({ statut: "erreur", metadata: { error: e.message || "Erreur réseau lors de l'indexation" } })
+        .eq("id", documentId);
     }
   };
 
