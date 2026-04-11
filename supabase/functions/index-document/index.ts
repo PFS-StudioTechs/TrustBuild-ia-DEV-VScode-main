@@ -255,9 +255,64 @@ serve(async (req) => {
     }
 
     rawText = rawText.replace(/\s+/g, " ").trim();
+
+    // Si le PDF ne contient pas de texte lisible, tenter l'OCR via Claude
+    if (rawText.length < 20 && ext === "pdf") {
+      const claudeKey = Deno.env.get("ANTHROPIC_API_KEY");
+      if (claudeKey) {
+        try {
+          // Encode le PDF en base64
+          const uint8 = new Uint8Array(buffer);
+          let binary = "";
+          for (let i = 0; i < uint8.length; i++) {
+            binary += String.fromCharCode(uint8[i]);
+          }
+          const base64 = btoa(binary);
+
+          const ocrResp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": claudeKey,
+              "anthropic-version": "2023-06-01",
+              "anthropic-beta": "pdfs-2024-09-25",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 4096,
+              messages: [{
+                role: "user",
+                content: [
+                  {
+                    type: "document",
+                    source: { type: "base64", media_type: "application/pdf", data: base64 },
+                  },
+                  {
+                    type: "text",
+                    text: "Extrais tout le texte visible de ce document. Retourne uniquement le texte brut, sans commentaire ni mise en forme.",
+                  },
+                ],
+              }],
+            }),
+            signal: AbortSignal.timeout(90000), // 90s pour les gros PDFs scannés
+          });
+
+          if (ocrResp.ok) {
+            const ocrData = await ocrResp.json();
+            rawText = (ocrData.content?.[0]?.text ?? "").trim();
+          } else {
+            const ocrErr = await ocrResp.text();
+            console.error("Claude OCR error:", ocrErr);
+          }
+        } catch (ocrEx) {
+          console.error("Claude OCR exception:", ocrEx);
+        }
+      }
+    }
+
     if (rawText.length < 20) {
       const errMsg = ext === "pdf"
-        ? "Impossible d'extraire du texte de ce PDF. Il s'agit peut-être d'un PDF scanné (image uniquement) — l'OCR n'est pas supporté."
+        ? "Impossible d'extraire du texte de ce PDF (OCR inclus). Le fichier est peut-être corrompu ou vide."
         : "Impossible d'extraire du texte du document.";
       await supabase
         .from("knowledge_documents")
