@@ -195,7 +195,7 @@ export default function Chantiers() {
   const [editChantier, setEditChantier] = useState<Chantier | null>(null);
   const [chForm, setChForm] = useState({ nom: "", client_id: "", adresse_chantier: "", statut: "prospect" as ChantierStatut, date_debut: "", date_fin_prevue: "" });
   const [chantierUseNewClient, setChantierUseNewClient] = useState(false);
-  const [chantierNewClient, setChantierNewClient] = useState({ nom: "", email: "", telephone: "", type: "particulier" as "particulier" | "pro" });
+  const [chantierNewClient, setChantierNewClient] = useState({ nom: "", email: "", telephone: "", type: "particulier" as "particulier" | "pro", adresse: "", siret: "" });
 
   // Client dialog
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
@@ -298,7 +298,7 @@ export default function Chantiers() {
     setEditChantier(null);
     setChForm({ nom: "", client_id: "", adresse_chantier: "", statut: "prospect", date_debut: "", date_fin_prevue: "" });
     setChantierUseNewClient(false);
-    setChantierNewClient({ nom: "", email: "", telephone: "", type: "particulier" });
+    setChantierNewClient({ nom: "", email: "", telephone: "", type: "particulier", adresse: "", siret: "" });
     setChantierDialogOpen(true);
   };
 
@@ -324,12 +324,18 @@ export default function Chantiers() {
       // Créer un nouveau client si demandé
       if (!editChantier && chantierUseNewClient) {
         if (!chantierNewClient.nom.trim()) { toast.error("Le nom du client est obligatoire"); setLoading(false); return; }
+        if (!chantierNewClient.email.trim()) { toast.error("L'email du client est obligatoire"); setLoading(false); return; }
+        if (!chantierNewClient.telephone.trim()) { toast.error("Le téléphone du client est obligatoire"); setLoading(false); return; }
+        if (!chantierNewClient.adresse.trim()) { toast.error("L'adresse du client est obligatoire"); setLoading(false); return; }
+        if (chantierNewClient.type === "pro" && !chantierNewClient.siret.trim()) { toast.error("Le SIRET est obligatoire pour un professionnel"); setLoading(false); return; }
         const { data: newCl, error: clErr } = await supabase.from("clients").insert({
           artisan_id: user.id,
           nom: chantierNewClient.nom.trim(),
           type: chantierNewClient.type,
-          email: chantierNewClient.email || null,
-          telephone: chantierNewClient.telephone || null,
+          email: chantierNewClient.email.trim() || null,
+          telephone: chantierNewClient.telephone.trim() || null,
+          adresse: chantierNewClient.adresse.trim() || null,
+          ...(chantierNewClient.siret.trim() ? { siret: chantierNewClient.siret.trim() } : {}),
         }).select("id").single();
         if (clErr) throw clErr;
         clientId = newCl.id;
@@ -618,17 +624,40 @@ export default function Chantiers() {
                     <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
-                  <div className="space-y-2 p-3 bg-muted/40 rounded-lg">
-                    <Input value={chantierNewClient.nom} onChange={e => setChantierNewClient(p => ({ ...p, nom: e.target.value }))} placeholder="Nom du client *" />
-                    <Select value={chantierNewClient.type} onValueChange={v => setChantierNewClient(p => ({ ...p, type: v as "particulier" | "pro" }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="particulier">Particulier</SelectItem>
-                        <SelectItem value="pro">Professionnel</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input type="email" value={chantierNewClient.email} onChange={e => setChantierNewClient(p => ({ ...p, email: e.target.value }))} placeholder="Email" />
-                    <Input value={chantierNewClient.telephone} onChange={e => setChantierNewClient(p => ({ ...p, telephone: e.target.value }))} placeholder="Téléphone" />
+                  <div className="space-y-3 p-3 bg-muted/40 rounded-lg border border-border/50">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Informations du nouveau client</p>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nom <span className="text-destructive">*</span></Label>
+                      <Input value={chantierNewClient.nom} onChange={e => setChantierNewClient(p => ({ ...p, nom: e.target.value }))} placeholder="Jean Dupont" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Type</Label>
+                      <Select value={chantierNewClient.type} onValueChange={v => setChantierNewClient(p => ({ ...p, type: v as "particulier" | "pro" }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="particulier">Particulier</SelectItem>
+                          <SelectItem value="pro">Professionnel</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Email <span className="text-destructive">*</span></Label>
+                      <Input type="email" value={chantierNewClient.email} onChange={e => setChantierNewClient(p => ({ ...p, email: e.target.value }))} placeholder="jean@email.com" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Téléphone <span className="text-destructive">*</span></Label>
+                      <Input value={chantierNewClient.telephone} onChange={e => setChantierNewClient(p => ({ ...p, telephone: e.target.value }))} placeholder="06 12 34 56 78" />
+                    </div>
+                    {chantierNewClient.type === "pro" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">SIRET <span className="text-destructive">*</span></Label>
+                        <Input value={chantierNewClient.siret} onChange={e => setChantierNewClient(p => ({ ...p, siret: e.target.value }))} placeholder="12345678901234" maxLength={14} />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Adresse <span className="text-destructive">*</span></Label>
+                      <AddressFields value={chantierNewClient.adresse} onChange={v => setChantierNewClient(p => ({ ...p, adresse: v }))} required />
+                    </div>
                   </div>
                 )}
               </div>
