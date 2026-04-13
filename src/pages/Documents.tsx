@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Bot, FileText, Receipt, Trash2, Download, PenLine, CreditCard,
-  Send, Eye, Phone, Mail, MapPin, Wrench, FileX, Edit2,
+  Send, Eye, Phone, Mail, MapPin, Wrench, FileX, Edit2, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
@@ -39,6 +39,94 @@ interface ClientDetail {
   email: string | null; telephone: string | null; adresse: string | null; type: string;
 }
 interface ChantierRow { id: string; nom: string; client_id: string; }
+
+// Ligne de devis / facture
+interface LigneForm {
+  _key: string;
+  designation: string;
+  quantite: string;
+  unite: string;
+  prix_unitaire: string;
+  tva: string;
+}
+
+const newLigne = (): LigneForm => ({
+  _key: Math.random().toString(36).slice(2),
+  designation: "", quantite: "1", unite: "u", prix_unitaire: "", tva: "20",
+});
+
+function lignesTotal(lignes: LigneForm[]): number {
+  return lignes.reduce((s, l) => s + (parseFloat(l.quantite) || 0) * (parseFloat(l.prix_unitaire) || 0), 0);
+}
+
+function fmt(n: number) {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── LignesEditor component ─────────────────────────────────────────────────────
+function LignesEditor({ lignes, onChange }: { lignes: LigneForm[]; onChange: (l: LigneForm[]) => void }) {
+  const total = lignesTotal(lignes);
+  const upd = (i: number, f: keyof LigneForm, v: string) =>
+    onChange(lignes.map((l, j) => (j === i ? { ...l, [f]: v } : l)));
+
+  return (
+    <div className="space-y-2">
+      {lignes.length > 0 && (
+        <div className="grid gap-1 text-[10px] font-medium text-muted-foreground px-0.5"
+          style={{ gridTemplateColumns: "1fr 52px 52px 80px 46px 68px 28px" }}>
+          <span>Désignation</span>
+          <span>Qté</span>
+          <span>Unité</span>
+          <span>P.U. HT €</span>
+          <span>TVA%</span>
+          <span className="text-right">Total HT</span>
+          <span />
+        </div>
+      )}
+      {lignes.map((l, i) => (
+        <div key={l._key} className="grid gap-1 items-center"
+          style={{ gridTemplateColumns: "1fr 52px 52px 80px 46px 68px 28px" }}>
+          <Input value={l.designation} onChange={(e) => upd(i, "designation", e.target.value)}
+            placeholder="Désignation / prestation" className="h-8 text-xs" />
+          <Input value={l.quantite} onChange={(e) => upd(i, "quantite", e.target.value)}
+            type="number" min="0" step="0.01" className="h-8 text-xs px-1.5" />
+          <Input value={l.unite} onChange={(e) => upd(i, "unite", e.target.value)}
+            placeholder="u" className="h-8 text-xs px-1.5" />
+          <Input value={l.prix_unitaire} onChange={(e) => upd(i, "prix_unitaire", e.target.value)}
+            type="number" min="0" step="0.01" placeholder="0" className="h-8 text-xs px-1.5" />
+          <Input value={l.tva} onChange={(e) => upd(i, "tva", e.target.value)}
+            type="number" min="0" className="h-8 text-xs px-1.5" />
+          <span className="text-xs font-mono text-right pr-1 tabular-nums">
+            {fmt((parseFloat(l.quantite) || 0) * (parseFloat(l.prix_unitaire) || 0))}
+          </span>
+          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
+            onClick={() => onChange(lignes.filter((_, j) => j !== i))}>
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
+      ))}
+      {lignes.length === 0 && (
+        <p className="text-xs text-center text-muted-foreground py-4 border border-dashed rounded-lg">
+          Aucune ligne — ajoutez des prestations ci-dessous
+        </p>
+      )}
+      <Button size="sm" variant="outline" onClick={() => onChange([...lignes, newLigne()])} className="w-full h-8 text-xs gap-1.5">
+        <Plus className="w-3.5 h-3.5" /> Ajouter une ligne
+      </Button>
+      {lignes.length > 0 && (
+        <div className="flex justify-between items-center border-t pt-2 text-sm">
+          <span className="text-muted-foreground text-xs">
+            {lignes.length} ligne{lignes.length > 1 ? "s" : ""}
+          </span>
+          <div className="flex gap-4">
+            <span className="text-muted-foreground">Total HT :</span>
+            <span className="font-mono font-semibold">{fmt(total)} €</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Statuts ──────────────────────────────────────────────────────────────────
 const DEVIS_STATUTS: Record<string, string> = {
@@ -136,6 +224,13 @@ export default function Documents() {
 
   // UI
   const [saving, setSaving] = useState(false);
+
+  // Lignes (create forms)
+  const [createLignesDevis, setCreateLignesDevis]       = useState<LigneForm[]>([newLigne()]);
+  const [createLignesFacture, setCreateLignesFacture]   = useState<LigneForm[]>([newLigne()]);
+  // Lignes (detail view — loaded on open)
+  const [detailLignes, setDetailLignes]                 = useState<LigneForm[]>([]);
+  const [detailLignesLoading, setDetailLignesLoading]   = useState(false);
 
   // ── Create Devis ──
   const [createDevisOpen, setCreateDevisOpen] = useState(false);
@@ -258,6 +353,69 @@ export default function Documents() {
     } catch (e: any) { toast.error("Erreur PDF : " + e.message); }
   };
 
+  // ── Lignes helpers ────────────────────────────────────────────────────────
+  const dbToLigneForm = (l: any): LigneForm => ({
+    _key: l.id,
+    designation: l.designation,
+    quantite: String(l.quantite),
+    unite: l.unite,
+    prix_unitaire: String(l.prix_unitaire),
+    tva: String(l.tva),
+  });
+
+  const loadDetailLignes = async (type: "devis" | "facture", id: string) => {
+    setDetailLignesLoading(true);
+    const table = type === "devis" ? "lignes_devis" : "lignes_facture";
+    const fk    = type === "devis" ? "devis_id"    : "facture_id";
+    const { data } = await (supabase as any).from(table).select("*").eq(fk, id).order("ordre");
+    setDetailLignes((data ?? []).map(dbToLigneForm));
+    setDetailLignesLoading(false);
+  };
+
+  const saveLignes = async (type: "devis" | "facture", id: string, lignes: LigneForm[]) => {
+    if (!user) return;
+    const table = type === "devis" ? "lignes_devis" : "lignes_facture";
+    const fk    = type === "devis" ? "devis_id"    : "facture_id";
+    // Replace strategy: delete all then insert
+    await (supabase as any).from(table).delete().eq(fk, id);
+    if (lignes.length === 0) return;
+    await (supabase as any).from(table).insert(
+      lignes.map((l, i) => ({
+        artisan_id:    user.id,
+        [fk]:          id,
+        designation:   l.designation,
+        quantite:      parseFloat(l.quantite)      || 1,
+        unite:         l.unite                     || "u",
+        prix_unitaire: parseFloat(l.prix_unitaire) || 0,
+        tva:           parseFloat(l.tva)           || 20,
+        ordre:         i,
+      }))
+    );
+  };
+
+  // Parse AI JSON result → populate lignes
+  const importAiLignes = () => {
+    if (!aiResult) return;
+    try {
+      const m = aiResult.match(/\{[\s\S]*\}/);
+      if (!m) { toast.error("Format non reconnu"); return; }
+      const parsed = JSON.parse(m[0]);
+      if (!parsed.postes?.length) { toast.error("Aucun poste dans la réponse IA"); return; }
+      const lignes: LigneForm[] = parsed.postes.map((p: any) => ({
+        _key:          Math.random().toString(36).slice(2),
+        designation:   p.designation   ?? "",
+        quantite:      String(p.quantite        ?? 1),
+        unite:         p.unite         ?? "u",
+        prix_unitaire: String(p.prix_unitaire    ?? 0),
+        tva:           String(p.tva             ?? 20),
+      }));
+      setCreateLignesDevis(lignes);
+      toast.success(`${lignes.length} ligne(s) importée(s) depuis l'IA`);
+    } catch {
+      toast.error("Impossible de parser le résultat IA");
+    }
+  };
+
   // ── Send dialog ───────────────────────────────────────────────────────────
   const openSend = (mode: "signature" | "paiement", docType: "devis" | "facture", docId: string) => {
     const docNum = docType === "devis"
@@ -340,14 +498,21 @@ export default function Documents() {
       }
       if (!chantierId) { toast.error("Un chantier est requis"); setSaving(false); return; }
       const numero = devisForm.numero || `DEV-${Date.now().toString(36).toUpperCase()}`;
-      const { error } = await supabase.from("devis").insert({
+      const montantHt = createLignesDevis.filter(l => l.designation || l.prix_unitaire).length > 0
+        ? lignesTotal(createLignesDevis)
+        : parseFloat(devisForm.montant_ht) || 0;
+      const { data: newDevis, error } = await supabase.from("devis").insert({
         artisan_id: user.id, chantier_id: chantierId, numero,
-        montant_ht: parseFloat(devisForm.montant_ht) || 0, tva: parseFloat(devisForm.tva) || 20,
+        montant_ht: montantHt, tva: parseFloat(devisForm.tva) || 20,
         statut: devisForm.statut as any, date_validite: devisForm.date_validite || null,
-      });
+      }).select("id").single();
       if (error) throw error;
+      // Sauvegarder les lignes
+      const lignesValides = createLignesDevis.filter(l => l.designation.trim() || parseFloat(l.prix_unitaire) > 0);
+      if (lignesValides.length > 0) await saveLignes("devis", newDevis.id, lignesValides);
       toast.success(`Devis ${numero} créé`);
       setCreateDevisOpen(false);
+      setCreateLignesDevis([newLigne()]);
       setDevisForm({ chantier_id: "", numero: "", montant_ht: "", tva: "20", statut: "brouillon", date_validite: "", client_nom: "", client_prenom: "", client_email: "", client_telephone: "", client_adresse: "", client_type: "particulier", chantier_nom: "", chantier_adresse: "", chantier_date_debut: "", chantier_date_fin_prevue: "", use_existing_chantier: true });
       setAiResult(null); setAiDesc("");
       fetchData();
@@ -389,14 +554,21 @@ export default function Documents() {
     if (!user) return;
     setSaving(true);
     const numero = factureForm.numero || `FAC-${Date.now().toString(36).toUpperCase()}`;
-    const montant = parseFloat(factureForm.montant_ht) || 0;
-    const { error } = await supabase.from("factures").insert({
+    const lignesValides = createLignesFacture.filter(l => l.designation.trim() || parseFloat(l.prix_unitaire) > 0);
+    const montant = lignesValides.length > 0
+      ? lignesTotal(createLignesFacture)
+      : parseFloat(factureForm.montant_ht) || 0;
+    const { data: newFacture, error } = await supabase.from("factures").insert({
       artisan_id: user.id, devis_id: factureForm.devis_id, numero, montant_ht: montant,
       tva: parseFloat(factureForm.tva) || 20, statut: factureForm.statut as any,
       date_echeance: factureForm.date_echeance, solde_restant: parseFloat(factureForm.solde_restant) || montant,
-    });
-    if (error) toast.error(error.message);
-    else { toast.success(`Facture ${numero} créée`); setCreateFactureOpen(false); fetchData(); }
+    }).select("id").single();
+    if (error) { toast.error(error.message); setSaving(false); return; }
+    if (lignesValides.length > 0) await saveLignes("facture", newFacture.id, lignesValides);
+    toast.success(`Facture ${numero} créée`);
+    setCreateFactureOpen(false);
+    setCreateLignesFacture([newLigne()]);
+    fetchData();
     setSaving(false);
   };
 
@@ -477,29 +649,38 @@ export default function Documents() {
     setDetailItem(item);
     if (type === "devis") setDetailForm({ numero: item.numero, montant_ht: String(item.montant_ht), tva: String(item.tva), statut: item.statut, date_validite: item.date_validite || "", chantier_id: item.chantier_id, facturx_ready: item.facturx_ready });
     else setDetailForm({ numero: item.numero, montant_ht: String(item.montant_ht), tva: String(item.tva), statut: item.statut, date_echeance: item.date_echeance || "", solde_restant: String(item.solde_restant) });
+    setDetailLignes([]);
+    loadDetailLignes(type, item.id);
     setDetailOpen(true);
   };
 
   const handleSaveDetail = async () => {
     if (!detailItem) return;
     setSaving(true);
+    // Recalcule montant_ht si des lignes sont présentes
+    const lignesValides = detailLignes.filter(l => l.designation.trim() || parseFloat(l.prix_unitaire) > 0);
+    const montantHt = lignesValides.length > 0 ? lignesTotal(detailLignes) : parseFloat(detailForm.montant_ht) || 0;
     let error: any = null;
     if (detailType === "devis") {
       ({ error } = await supabase.from("devis").update({
-        numero: detailForm.numero, montant_ht: parseFloat(detailForm.montant_ht) || 0,
+        numero: detailForm.numero, montant_ht: montantHt,
         tva: parseFloat(detailForm.tva) || 20, statut: detailForm.statut as any,
         date_validite: detailForm.date_validite || null, chantier_id: detailForm.chantier_id,
         facturx_ready: detailForm.facturx_ready,
       }).eq("id", detailItem.id));
     } else {
+      const solde = lignesValides.length > 0 ? montantHt : parseFloat(detailForm.solde_restant) || 0;
       ({ error } = await supabase.from("factures").update({
-        numero: detailForm.numero, montant_ht: parseFloat(detailForm.montant_ht) || 0,
+        numero: detailForm.numero, montant_ht: montantHt,
         tva: parseFloat(detailForm.tva) || 20, statut: detailForm.statut as any,
-        date_echeance: detailForm.date_echeance, solde_restant: parseFloat(detailForm.solde_restant) || 0,
+        date_echeance: detailForm.date_echeance, solde_restant: solde,
       }).eq("id", detailItem.id));
     }
-    if (error) toast.error(error.message);
-    else { toast.success("Mis à jour"); setDetailOpen(false); fetchData(); }
+    if (error) { toast.error(error.message); setSaving(false); return; }
+    await saveLignes(detailType, detailItem.id, lignesValides);
+    toast.success("Mis à jour");
+    setDetailOpen(false);
+    fetchData();
     setSaving(false);
   };
 
@@ -772,25 +953,46 @@ export default function Documents() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Numéro</Label><Input value={devisForm.numero} onChange={(e) => setDevisForm((p) => ({ ...p, numero: e.target.value }))} placeholder="Auto-généré" /></div>
-              <div className="space-y-1"><Label>Montant HT (€)</Label><Input type="number" value={devisForm.montant_ht} onChange={(e) => setDevisForm((p) => ({ ...p, montant_ht: e.target.value }))} placeholder="0" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>TVA (%)</Label><Input type="number" value={devisForm.tva} onChange={(e) => setDevisForm((p) => ({ ...p, tva: e.target.value }))} /></div>
               <div className="space-y-1"><Label>Date validité</Label><Input type="date" value={devisForm.date_validite} onChange={(e) => setDevisForm((p) => ({ ...p, date_validite: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1"><Label>Statut</Label>
-              <Select value={devisForm.statut} onValueChange={(v) => setDevisForm((p) => ({ ...p, statut: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.entries(DEVIS_STATUTS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>TVA par défaut (%)</Label><Input type="number" value={devisForm.tva} onChange={(e) => setDevisForm((p) => ({ ...p, tva: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Statut</Label>
+                <Select value={devisForm.statut} onValueChange={(v) => setDevisForm((p) => ({ ...p, statut: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{Object.entries(DEVIS_STATUTS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {/* Lignes du devis */}
+            <div className="space-y-2">
+              <Label>Lignes du devis</Label>
+              <LignesEditor lignes={createLignesDevis} onChange={setCreateLignesDevis} />
+            </div>
+
+            {/* Montant global si aucune ligne */}
+            {createLignesDevis.filter(l => l.designation.trim() || l.prix_unitaire).length === 0 && (
+              <div className="space-y-1">
+                <Label>Montant HT global (€) <span className="text-muted-foreground text-xs">— si pas de lignes détaillées</span></Label>
+                <Input type="number" value={devisForm.montant_ht} onChange={(e) => setDevisForm((p) => ({ ...p, montant_ht: e.target.value }))} placeholder="0" />
+              </div>
+            )}
+
             <div className="border-t pt-3 space-y-2">
-              <Label>Génération IA (optionnel)</Label>
-              <Textarea value={aiDesc} onChange={(e) => setAiDesc(e.target.value)} placeholder="Décrivez les travaux pour un chiffrage IA…" rows={3} />
-              <Button onClick={handleGenerateAI} disabled={aiLoading || !aiDesc} variant="outline" className="w-full">
-                <Bot className="w-4 h-4 mr-2" />{aiLoading ? "Génération…" : "Chiffrer avec l'IA"}
-              </Button>
-              {aiResult && <div className="bg-card rounded-lg p-3 text-sm font-mono whitespace-pre-wrap max-h-40 overflow-y-auto border">{aiResult}</div>}
+              <Label>Génération IA des lignes (optionnel)</Label>
+              <Textarea value={aiDesc} onChange={(e) => setAiDesc(e.target.value)} placeholder="Décrivez les travaux : rénovation salle de bain, pose carrelage 20m², peinture…" rows={3} />
+              <div className="flex gap-2">
+                <Button onClick={handleGenerateAI} disabled={aiLoading || !aiDesc} variant="outline" className="flex-1">
+                  <Bot className="w-4 h-4 mr-2" />{aiLoading ? "Génération…" : "Chiffrer avec l'IA"}
+                </Button>
+                {aiResult && (
+                  <Button onClick={importAiLignes} variant="default" className="flex-1 bg-primary gap-1.5">
+                    <Sparkles className="w-4 h-4" /> Importer les lignes
+                  </Button>
+                )}
+              </div>
+              {aiResult && <div className="bg-card rounded-lg p-3 text-xs font-mono whitespace-pre-wrap max-h-32 overflow-y-auto border text-muted-foreground">{aiResult}</div>}
             </div>
           </div>
           <DialogFooter>
@@ -881,14 +1083,10 @@ export default function Documents() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Numéro</Label><Input value={factureForm.numero} onChange={(e) => setFactureForm((p) => ({ ...p, numero: e.target.value }))} placeholder="Auto-généré" /></div>
-              <div className="space-y-1"><Label>Montant HT (€)</Label><Input type="number" value={factureForm.montant_ht} onChange={(e) => setFactureForm((p) => ({ ...p, montant_ht: e.target.value }))} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>TVA (%)</Label><Input type="number" value={factureForm.tva} onChange={(e) => setFactureForm((p) => ({ ...p, tva: e.target.value }))} /></div>
               <div className="space-y-1"><Label>Date d'échéance *</Label><Input type="date" value={factureForm.date_echeance} onChange={(e) => setFactureForm((p) => ({ ...p, date_echeance: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Solde restant (€)</Label><Input type="number" value={factureForm.solde_restant} onChange={(e) => setFactureForm((p) => ({ ...p, solde_restant: e.target.value }))} placeholder="= Montant HT" /></div>
+              <div className="space-y-1"><Label>TVA par défaut (%)</Label><Input type="number" value={factureForm.tva} onChange={(e) => setFactureForm((p) => ({ ...p, tva: e.target.value }))} /></div>
               <div className="space-y-1"><Label>Statut</Label>
                 <Select value={factureForm.statut} onValueChange={(v) => setFactureForm((p) => ({ ...p, statut: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -896,6 +1094,20 @@ export default function Documents() {
                 </Select>
               </div>
             </div>
+
+            {/* Lignes de la facture */}
+            <div className="space-y-2">
+              <Label>Lignes de la facture</Label>
+              <LignesEditor lignes={createLignesFacture} onChange={setCreateLignesFacture} />
+            </div>
+
+            {/* Montant global si aucune ligne */}
+            {createLignesFacture.filter(l => l.designation.trim() || l.prix_unitaire).length === 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Montant HT (€)</Label><Input type="number" value={factureForm.montant_ht} onChange={(e) => setFactureForm((p) => ({ ...p, montant_ht: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>Solde restant (€)</Label><Input type="number" value={factureForm.solde_restant} onChange={(e) => setFactureForm((p) => ({ ...p, solde_restant: e.target.value }))} placeholder="= Montant HT" /></div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateFactureOpen(false)}>Annuler</Button>
@@ -1047,6 +1259,15 @@ export default function Documents() {
                   <div><p className="text-xs text-muted-foreground">Solde restant (€)</p><Input type="number" value={detailForm.solde_restant ?? ""} onChange={(e) => setDetailForm((p: any) => ({ ...p, solde_restant: e.target.value }))} /></div>
                 </div>
               )}
+              {/* Lignes éditables */}
+              <div className="space-y-2">
+                <Label>Lignes</Label>
+                {detailLignesLoading
+                  ? <p className="text-xs text-muted-foreground text-center py-3">Chargement des lignes…</p>
+                  : <LignesEditor lignes={detailLignes} onChange={setDetailLignes} />
+                }
+              </div>
+
               <div className="text-xs text-muted-foreground">
                 Créé le {new Date(detailItem.created_at).toLocaleString("fr-FR")} · Modifié le {new Date(detailItem.updated_at).toLocaleString("fr-FR")}
               </div>
