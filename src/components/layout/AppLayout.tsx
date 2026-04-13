@@ -10,7 +10,7 @@ import JarvisBubble from "@/components/jarvis/JarvisBubble";
 
 const baseTabs = [
   { path: "/dashboard", icon: LayoutDashboard, label: "Tableau" },
-  { path: "/chantiers", icon: Building2, label: "Chantiers / Clients" },
+  { path: "/chantiers", icon: Building2, label: "Chantiers" },
   { path: "/finances", icon: Wallet, label: "Comptabilité" },
   { path: "/clients", icon: Users, label: "Clients" },
   { path: "/fournisseurs", icon: Truck, label: "Fournisseurs" },
