@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Wallet, Menu, Brain, FlaskConical } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Wallet, Menu, Brain, FlaskConical, Users, Truck, BookUser, MessageSquare } from "lucide-react";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -10,11 +10,14 @@ import JarvisBubble from "@/components/jarvis/JarvisBubble";
 
 const baseTabs = [
   { path: "/dashboard", icon: LayoutDashboard, label: "Tableau" },
-  { path: "/chantiers", icon: Building2, label: "Chantiers" },
-  { path: "/finances", icon: Wallet, label: "Finances" },
-  { path: "/assistant", icon: Bot, label: "IA" },
-  { path: "/mes-documents", icon: FolderOpen, label: "Docs" },
-  { path: "/knowledge", icon: Brain, label: "Savoir" },
+  { path: "/chantiers", icon: Building2, label: "Chantiers / Clients" },
+  { path: "/finances", icon: Wallet, label: "Comptabilité" },
+  { path: "/clients", icon: Users, label: "Clients" },
+  { path: "/fournisseurs", icon: Truck, label: "Fournisseurs" },
+  { path: "/contacts", icon: BookUser, label: "Contacts" },
+  { path: "/messagerie", icon: MessageSquare, label: "Messagerie" },
+  { path: "/assistant", icon: Bot, label: "Assistants" },
+  { path: "/mes-documents", icon: FolderOpen, label: "Devis / Factures" },
   { path: "/parametres", icon: Settings, label: "Réglages" },
 ];
 
@@ -23,6 +26,7 @@ const testerTab = { path: "/testing", icon: FlaskConical, label: "Tests" };
 
 // Mobile: show primary 5 tabs, rest in "more" expandable
 const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/assistant", "/mes-documents"];
+
 
 export default function AppLayout() {
   const location = useLocation();

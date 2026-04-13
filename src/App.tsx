@@ -17,6 +17,10 @@ import ResetPassword from "@/pages/ResetPassword";
 import Knowledge from "@/pages/Knowledge";
 import Testing from "@/pages/Testing";
 import NotFound from "@/pages/NotFound";
+import Clients from "@/pages/Clients";
+import Fournisseurs from "@/pages/Fournisseurs";
+import Contacts from "@/pages/Contacts";
+import Messagerie from "@/pages/Messagerie";
 
 const queryClient = new QueryClient();
 
@@ -83,6 +87,10 @@ const App = () => (
               <Route path="/assistant" element={<ProductionRoute><Assistant /></ProductionRoute>} />
               <Route path="/parametres" element={<ProductionRoute><Parametres /></ProductionRoute>} />
               <Route path="/finances" element={<ProductionRoute><Finances /></ProductionRoute>} />
+              <Route path="/clients" element={<ProductionRoute><Clients /></ProductionRoute>} />
+              <Route path="/fournisseurs" element={<ProductionRoute><Fournisseurs /></ProductionRoute>} />
+              <Route path="/contacts" element={<ProductionRoute><Contacts /></ProductionRoute>} />
+              <Route path="/messagerie" element={<ProductionRoute><Messagerie /></ProductionRoute>} />
               <Route path="/knowledge" element={<ProductionRoute><Knowledge /></ProductionRoute>} />
               <Route path="/testing" element={<TesterRoute><Testing /></TesterRoute>} />
               {/* Administration — admins uniquement */}
