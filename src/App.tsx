@@ -17,6 +17,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import Knowledge from "@/pages/Knowledge";
 import Testing from "@/pages/Testing";
 import NotFound from "@/pages/NotFound";
+import Documents from "@/pages/Documents";
 import Clients from "@/pages/Clients";
 import Fournisseurs from "@/pages/Fournisseurs";
 import Contacts from "@/pages/Contacts";
@@ -83,6 +84,7 @@ const App = () => (
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<ProductionRoute><Dashboard /></ProductionRoute>} />
               <Route path="/chantiers" element={<ProductionRoute><Chantiers /></ProductionRoute>} />
+              <Route path="/documents" element={<ProductionRoute><Documents /></ProductionRoute>} />
               <Route path="/mes-documents" element={<ProductionRoute><MesDocuments /></ProductionRoute>} />
               <Route path="/assistant" element={<ProductionRoute><Assistant /></ProductionRoute>} />
               <Route path="/parametres" element={<ProductionRoute><Parametres /></ProductionRoute>} />

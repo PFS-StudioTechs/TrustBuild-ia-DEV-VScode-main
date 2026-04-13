@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Upload, Search, Grid3X3, List, Download, Trash2, Tag, Link2, Archive,
   FileText, Image, File, Bot, X, FolderOpen, Plus, Edit2, Filter,
+  PenLine, CreditCard, Send, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -71,6 +73,13 @@ export default function MesDocuments() {
   const [chantiers, setChantiers] = useState<{ id: string; nom: string }[]>([]);
   const [clients, setClients] = useState<{ id: string; nom: string }[]>([]);
   const [fournisseurs, setFournisseurs] = useState<{ id: string; nom: string }[]>([]);
+
+  // Send dialog (signature / paiement)
+  const [sendDialog, setSendDialog] = useState<{ doc: Document; mode: "signature" | "paiement" } | null>(null);
+  const [sendEmail, setSendEmail] = useState("");
+  const [sendMessage, setSendMessage] = useState("");
+  const [sendLoading, setSendLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Edit dialog
   const [editDoc, setEditDoc] = useState<Document | null>(null);
@@ -226,6 +235,56 @@ export default function MesDocuments() {
     // Navigate to assistant with doc context - could be expanded
   };
 
+  const openSend = async (doc: Document, mode: "signature" | "paiement") => {
+    // Pre-generate a preview URL
+    const { data } = await supabase.storage
+      .from("artisan-documents")
+      .createSignedUrl(doc.storage_path, 3600);
+    setPreviewUrl(data?.signedUrl ?? null);
+    setSendEmail("");
+    setSendMessage(
+      mode === "signature"
+        ? `Bonjour,\n\nVeuillez trouver ci-joint le devis "${doc.nom}" pour signature électronique.\n\nMerci de bien vouloir le signer en cliquant sur le lien ci-dessous.\n\nCordialement`
+        : `Bonjour,\n\nVeuillez trouver ci-joint la facture "${doc.nom}".\n\nVous pouvez effectuer votre règlement en toute sécurité via le lien ci-dessous.\n\nCordialement`
+    );
+    setSendDialog({ doc, mode });
+  };
+
+  const handleSend = async () => {
+    if (!sendDialog || !sendEmail.trim()) {
+      toast.error("Veuillez saisir l'adresse email du destinataire");
+      return;
+    }
+    setSendLoading(true);
+
+    // Refresh signed URL at send time (1h validity)
+    const { data, error } = await supabase.storage
+      .from("artisan-documents")
+      .createSignedUrl(sendDialog.doc.storage_path, 3600);
+
+    if (error || !data?.signedUrl) {
+      toast.error("Impossible de générer le lien sécurisé");
+      setSendLoading(false);
+      return;
+    }
+
+    const subject =
+      sendDialog.mode === "signature"
+        ? `Signature électronique — ${sendDialog.doc.nom}`
+        : `Lien de paiement — ${sendDialog.doc.nom}`;
+
+    const body = `${sendMessage}\n\n${sendDialog.mode === "signature" ? "Lien de signature" : "Lien de paiement"} : ${data.signedUrl}`;
+
+    window.open(
+      `mailto:${sendEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      "_blank"
+    );
+
+    toast.success("Email ouvert dans votre client mail");
+    setSendLoading(false);
+    setSendDialog(null);
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between animate-fade-up">
@@ -339,6 +398,16 @@ export default function MesDocuments() {
                   {(doc.type_fichier === "plan" || doc.type_fichier === "cctp") && (
                     <Button size="sm" variant="ghost" onClick={() => handleAnalyzeAI(doc)} className="h-8 px-2 text-accent"><Bot className="w-3.5 h-3.5" /></Button>
                   )}
+                  {doc.type_fichier === "devis" && (
+                    <Button size="sm" variant="ghost" onClick={() => openSend(doc, "signature")} className="h-8 px-2 text-violet-600" title="Envoyer en signature électronique">
+                      <PenLine className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {doc.type_fichier === "facture" && (
+                    <Button size="sm" variant="ghost" onClick={() => openSend(doc, "paiement")} className="h-8 px-2 text-emerald-600" title="Lien paiement sécurisé">
+                      <CreditCard className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => handleDelete(doc)} className="h-8 px-2 text-destructive ml-auto"><Trash2 className="w-3.5 h-3.5" /></Button>
                 </div>
               </div>
@@ -369,6 +438,16 @@ export default function MesDocuments() {
                 <div className="flex gap-1 shrink-0">
                   <Button size="sm" variant="ghost" onClick={() => handleDownload(doc)} className="h-8 px-2"><Download className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => openEdit(doc)} className="h-8 px-2"><Edit2 className="w-3.5 h-3.5" /></Button>
+                  {doc.type_fichier === "devis" && (
+                    <Button size="sm" variant="ghost" onClick={() => openSend(doc, "signature")} className="h-8 px-2 text-violet-600" title="Envoyer en signature électronique">
+                      <PenLine className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                  {doc.type_fichier === "facture" && (
+                    <Button size="sm" variant="ghost" onClick={() => openSend(doc, "paiement")} className="h-8 px-2 text-emerald-600" title="Lien paiement sécurisé">
+                      <CreditCard className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => handleDelete(doc)} className="h-8 px-2 text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button>
                 </div>
               </div>
@@ -376,6 +455,81 @@ export default function MesDocuments() {
           })}
         </div>
       )}
+
+      {/* Send Dialog — signature électronique / lien paiement */}
+      <Dialog open={!!sendDialog} onOpenChange={(o) => !o && setSendDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              {sendDialog?.mode === "signature" ? (
+                <><PenLine className="w-5 h-5 text-violet-600" /> Envoyer en signature électronique</>
+              ) : (
+                <><CreditCard className="w-5 h-5 text-emerald-600" /> Envoyer le lien de paiement</>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {sendDialog?.doc.nom}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Preview */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <FileText className="w-8 h-8 text-primary shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{sendDialog?.doc.nom}</p>
+                <p className="text-xs text-muted-foreground">{sendDialog?.doc.type_fichier === "devis" ? "Devis" : "Facture"}</p>
+              </div>
+              {previewUrl && (
+                <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, "_blank")} className="shrink-0 gap-1.5">
+                  <Eye className="w-3.5 h-3.5" /> Prévisualiser
+                </Button>
+              )}
+            </div>
+
+            {/* Email */}
+            <div className="space-y-1.5">
+              <Label>Email du destinataire <span className="text-destructive">*</span></Label>
+              <Input
+                type="email"
+                value={sendEmail}
+                onChange={(e) => setSendEmail(e.target.value)}
+                placeholder="client@exemple.fr"
+                className="touch-target"
+              />
+            </div>
+
+            {/* Message */}
+            <div className="space-y-1.5">
+              <Label>Message</Label>
+              <Textarea
+                value={sendMessage}
+                onChange={(e) => setSendMessage(e.target.value)}
+                rows={5}
+                className="text-sm"
+              />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Un lien d'accès sécurisé (valable 1h) sera automatiquement ajouté au message.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendDialog(null)}>Annuler</Button>
+            <Button
+              onClick={handleSend}
+              disabled={sendLoading || !sendEmail.trim()}
+              className={sendDialog?.mode === "signature"
+                ? "bg-violet-600 hover:bg-violet-700 text-white gap-2"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white gap-2"}
+            >
+              <Send className="w-4 h-4" />
+              {sendLoading ? "Préparation…" : sendDialog?.mode === "signature" ? "Envoyer pour signature" : "Envoyer le lien de paiement"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editDoc} onOpenChange={(o) => !o && setEditDoc(null)}>

@@ -17,7 +17,8 @@ const baseTabs = [
   { path: "/contacts", icon: BookUser, label: "Contacts" },
   { path: "/messagerie", icon: MessageSquare, label: "Messagerie" },
   { path: "/assistant", icon: Bot, label: "Assistants" },
-  { path: "/mes-documents", icon: FolderOpen, label: "Devis / Factures" },
+  { path: "/documents", icon: FileText, label: "Devis / Factures" },
+  { path: "/mes-documents", icon: FolderOpen, label: "Mes Fichiers" },
   { path: "/parametres", icon: Settings, label: "Réglages" },
 ];
 
@@ -25,7 +26,7 @@ const adminTab = { path: "/admin", icon: Shield, label: "Admin" };
 const testerTab = { path: "/testing", icon: FlaskConical, label: "Tests" };
 
 // Mobile: show primary 5 tabs, rest in "more" expandable
-const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/assistant", "/mes-documents"];
+const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/assistant", "/documents"];
 
 
 export default function AppLayout() {
