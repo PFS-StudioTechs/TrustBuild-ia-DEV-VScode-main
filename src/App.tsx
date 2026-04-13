@@ -8,13 +8,10 @@ import AppLayout from "@/components/layout/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Chantiers from "@/pages/Chantiers";
-import Documents from "@/pages/Documents";
 import MesDocuments from "@/pages/MesDocuments";
 import Assistant from "@/pages/Assistant";
 import Parametres from "@/pages/Parametres";
 import Admin from "@/pages/Admin";
-import RobertB from "@/pages/RobertB";
-import AugusteP from "@/pages/AugusteP";
 import Finances from "@/pages/Finances";
 import ResetPassword from "@/pages/ResetPassword";
 import Knowledge from "@/pages/Knowledge";
@@ -61,17 +58,6 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Réserve une route aux artisans avec un plan actif (non "gratuit").
- *  À adapter quand la notion de plan sera finalisée. */
-function PremiumRoute({ children }: { children: React.ReactNode }) {
-  const { roles, loading } = useRole();
-  if (loading) return null;
-  if (!roles.includes("artisan") && !roles.includes("admin")) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  return <>{children}</>;
-}
-
 /** Réserve une route aux testeurs et admins. */
 function TesterRoute({ children }: { children: React.ReactNode }) {
   const { isTester, isAdmin, loading } = useRole();
@@ -93,14 +79,10 @@ const App = () => (
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<ProductionRoute><Dashboard /></ProductionRoute>} />
               <Route path="/chantiers" element={<ProductionRoute><Chantiers /></ProductionRoute>} />
-              <Route path="/documents" element={<ProductionRoute><Documents /></ProductionRoute>} />
               <Route path="/mes-documents" element={<ProductionRoute><MesDocuments /></ProductionRoute>} />
               <Route path="/assistant" element={<ProductionRoute><Assistant /></ProductionRoute>} />
               <Route path="/parametres" element={<ProductionRoute><Parametres /></ProductionRoute>} />
               <Route path="/finances" element={<ProductionRoute><Finances /></ProductionRoute>} />
-              {/* Agents IA — réservés aux artisans et admins */}
-              <Route path="/robert-b" element={<ProductionRoute><PremiumRoute><RobertB /></PremiumRoute></ProductionRoute>} />
-              <Route path="/auguste-p" element={<ProductionRoute><PremiumRoute><AugusteP /></PremiumRoute></ProductionRoute>} />
               <Route path="/knowledge" element={<ProductionRoute><Knowledge /></ProductionRoute>} />
               <Route path="/testing" element={<TesterRoute><Testing /></TesterRoute>} />
               {/* Administration — admins uniquement */}

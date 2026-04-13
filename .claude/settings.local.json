@@ -4,7 +4,10 @@
       "Bash(npm run:*)",
       "Bash(export PATH=\"$PATH:$HOME/scoop/shims\")",
       "Bash(supabase functions:*)",
-      "Bash(supabase db:*)"
+      "Bash(supabase db:*)",
+      "Bash(npx supabase:*)",
+      "Bash(mkdir -p \"c:\\\\Users\\\\kstee\\\\OneDrive\\\\Bureau\\\\Formations\\\\Formation IA\\\\Projet Trust Build-IA\\\\trust-builder-hub-corrected\\\\trust-builder-hub-main\\\\src\\\\archived\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\kstee\\\\OneDrive\\\\Bureau\\\\Formations\\\\Formation IA\\\\Projet Trust Build-IA\\\\trust-builder-hub-corrected\\\\trust-builder-hub-main\\\\supabase\\\\functions\\\\_archived\")"
     ]
   }
 }
