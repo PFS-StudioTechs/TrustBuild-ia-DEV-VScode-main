@@ -350,15 +350,13 @@ export default function Documents() {
   const openTemplatePdf = async (type: "devis" | "facture", id: string) => {
     setPdfLoading(true);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pdf-html`,
-        { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify(type === "devis" ? { type, devis_id: id } : { type, facture_id: id }) }
-      );
-      const data = await resp.json();
-      if (!resp.ok || !data.html) throw new Error(data.error ?? "Erreur génération");
+      // Utilise supabase.functions.invoke() pour que le client gère
+      // automatiquement le refresh de session (fiable sur mobile)
+      const { data, error } = await supabase.functions.invoke("generate-pdf-html", {
+        body: type === "devis" ? { type, devis_id: id } : { type, facture_id: id },
+      });
+      if (error) throw new Error(error.message ?? "Erreur génération");
+      if (!data?.html) throw new Error("Réponse vide de l'edge function");
       const item = type === "devis" ? devis.find((d) => d.id === id) : factures.find((f) => f.id === id);
       setPdfPreviewTitle(type === "devis" ? `Devis ${item?.numero ?? ""}` : `Facture ${item?.numero ?? ""}`);
       setPdfPreviewHtml(data.html);
