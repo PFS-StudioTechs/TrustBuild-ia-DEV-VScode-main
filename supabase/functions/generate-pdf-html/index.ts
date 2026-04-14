@@ -284,9 +284,19 @@ serve(async (req) => {
         ? await db.from("clients").select("nom, adresse, email, telephone").eq("id", clientId).single()
         : { data: null };
 
-      // Lignes from knowledge chunks (metadata) or fallback empty
-      const lignes: Array<{ description: string; quantite: number; unite: string; prix_unitaire: number }> =
-        (devis as any).lignes ?? [];
+      // Lignes depuis la table lignes_devis
+      const { data: lignesData } = await db
+        .from("lignes_devis")
+        .select("*")
+        .eq("devis_id", devis_id)
+        .order("ordre");
+      const lignes = (lignesData ?? []).map((l: any) => ({
+        description:   l.designation ?? "",
+        quantite:      Number(l.quantite) || 0,
+        unite:         l.unite ?? "u",
+        prix_unitaire: Number(l.prix_unitaire) || 0,
+        tva_taux:      Number(l.tva) || 20,
+      }));
 
       html = buildHtml({
         type: "devis",
@@ -328,6 +338,20 @@ serve(async (req) => {
         }
       }
 
+      // Lignes depuis la table lignes_facture
+      const { data: lignesFacture } = await db
+        .from("lignes_facture")
+        .select("*")
+        .eq("facture_id", facture_id)
+        .order("ordre");
+      const lignesF = (lignesFacture ?? []).map((l: any) => ({
+        description:   l.designation ?? "",
+        quantite:      Number(l.quantite) || 0,
+        unite:         l.unite ?? "u",
+        prix_unitaire: Number(l.prix_unitaire) || 0,
+        tva_taux:      Number(l.tva) || 20,
+      }));
+
       html = buildHtml({
         type: "facture",
         numero: facture.numero,
@@ -336,7 +360,7 @@ serve(async (req) => {
         artisan,
         client: { nom: client?.nom ?? "Client", adresse: client?.adresse, email: client?.email, telephone: client?.telephone },
         chantier: chantier ? { nom: chantier.nom, adresse: chantier.adresse_chantier } : undefined,
-        lignes: (facture as any).lignes ?? [],
+        lignes: lignesF,
         montant_ht: Number(facture.montant_ht),
         tva: Number(facture.tva),
         statut: facture.statut,

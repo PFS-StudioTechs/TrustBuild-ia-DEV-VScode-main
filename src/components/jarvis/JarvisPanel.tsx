@@ -42,6 +42,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
   const [lastTranscription, setLastTranscription] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const mimeTypeRef = useRef<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const location = useLocation();
@@ -105,12 +106,18 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      // Detect supported MIME type — iOS Safari doesn't support audio/webm
+      const MIME_TYPES = ["audio/webm", "audio/mp4", "audio/ogg"];
+      const mimeType = MIME_TYPES.find((t) => {
+        try { return MediaRecorder.isTypeSupported(t); } catch { return false; }
+      }) ?? "";
+      mimeTypeRef.current = mimeType;
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current || "audio/webm" });
         await transcribeAudio(blob);
       };
       mediaRecorder.start();
@@ -132,7 +139,9 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
     setTranscribing(true);
     try {
       const formData = new FormData();
-      formData.append("audio", blob, "recording.webm");
+      const mt = mimeTypeRef.current;
+      const ext = mt.includes("mp4") ? "m4a" : mt.includes("ogg") ? "ogg" : "webm";
+      formData.append("audio", blob, `recording.${ext}`);
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
         method: "POST",
         headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },

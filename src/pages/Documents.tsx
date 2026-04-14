@@ -8,12 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Bot, FileText, Receipt, Trash2, Download, PenLine, CreditCard,
-  Send, Eye, Phone, Mail, MapPin, Wrench, FileX, Edit2, Sparkles,
+  Send, Eye, Phone, Mail, MapPin, Wrench, FileX, Edit2, Sparkles, Printer, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
@@ -275,6 +276,12 @@ export default function Documents() {
   // ── Delete ──
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; table: string; label: string } | null>(null);
 
+  // ── PDF preview (A4 sheet) ──
+  const [pdfPreviewOpen, setPdfPreviewOpen]   = useState(false);
+  const [pdfPreviewHtml, setPdfPreviewHtml]   = useState<string | null>(null);
+  const [pdfPreviewTitle, setPdfPreviewTitle] = useState("");
+  const [pdfLoading, setPdfLoading]           = useState(false);
+
   // ── Send (signature / paiement) ──
   const [sendDialog, setSendDialog]   = useState<{ mode: "signature" | "paiement"; docId: string; docType: "devis" | "facture"; docNum: string } | null>(null);
   const [sendEmail, setSendEmail]     = useState("");
@@ -335,8 +342,9 @@ export default function Documents() {
     return getClientForDevis(ts.devis_id);
   };
 
-  // ── PDF ───────────────────────────────────────────────────────────────────
+  // ── PDF — ouvre dans la Sheet A4 intégrée (pas de popup) ─────────────────
   const openTemplatePdf = async (type: "devis" | "facture", id: string) => {
+    setPdfLoading(true);
     try {
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -347,10 +355,12 @@ export default function Documents() {
       );
       const data = await resp.json();
       if (!resp.ok || !data.html) throw new Error(data.error ?? "Erreur génération");
-      const win = window.open("", "_blank");
-      if (win) { win.document.write(data.html); win.document.close(); }
-      else toast.error("Autorisez les popups pour ouvrir le PDF");
+      const item = type === "devis" ? devis.find((d) => d.id === id) : factures.find((f) => f.id === id);
+      setPdfPreviewTitle(type === "devis" ? `Devis ${item?.numero ?? ""}` : `Facture ${item?.numero ?? ""}`);
+      setPdfPreviewHtml(data.html);
+      setPdfPreviewOpen(true);
     } catch (e: any) { toast.error("Erreur PDF : " + e.message); }
+    finally { setPdfLoading(false); }
   };
 
   // ── Lignes helpers ────────────────────────────────────────────────────────
@@ -721,12 +731,13 @@ export default function Documents() {
               const client = getClientForDevis(d.id);
               const chantier = chantiers.find((c) => c.id === d.chantier_id);
               return (
-                <div key={d.id} className="forge-card !p-4 cursor-pointer hover:ring-1 hover:ring-primary/20 transition-all" onClick={() => openDetail("devis", d)}>
+                <div key={d.id} className="forge-card !p-4 cursor-pointer hover:ring-1 hover:ring-primary/20 transition-all" onClick={() => openTemplatePdf("devis", d.id)}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold">{d.numero}</p>
                         <StatutBadge statut={d.statut} styles={DEVIS_STYLES} labels={DEVIS_STATUTS} />
+                        {pdfLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                       </div>
                       <ClientInfo client={client} />
                       <div className="mt-1 space-y-0.5">
@@ -736,9 +747,8 @@ export default function Documents() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={stopProp}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Télécharger PDF" onClick={() => openTemplatePdf("devis", d.id)}><Download className="w-4 h-4 text-primary" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-violet-600" title="Envoyer en signature électronique" onClick={() => openSend("signature", "devis", d.id)}><PenLine className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier" onClick={() => openEdit("devis", d)}><Edit2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier les lignes / détail" onClick={() => openDetail("devis", d)}><Edit2 className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Supprimer" onClick={() => setDeleteDialog({ id: d.id, table: "devis", label: "Devis" })}><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </div>
@@ -831,12 +841,13 @@ export default function Documents() {
               const client = getClientForFacture(f.id);
               const linkedDevis = devis.find((d) => d.id === f.devis_id);
               return (
-                <div key={f.id} className="forge-card !p-4 cursor-pointer hover:ring-1 hover:ring-primary/20 transition-all" onClick={() => openDetail("facture", f)}>
+                <div key={f.id} className="forge-card !p-4 cursor-pointer hover:ring-1 hover:ring-primary/20 transition-all" onClick={() => openTemplatePdf("facture", f.id)}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold">{f.numero}</p>
                         <StatutBadge statut={f.statut} styles={FACTURE_STYLES} labels={FACTURE_STATUTS} />
+                        {pdfLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                       </div>
                       <ClientInfo client={client} />
                       <div className="mt-1 space-y-0.5">
@@ -846,9 +857,8 @@ export default function Documents() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={stopProp}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Télécharger PDF" onClick={() => openTemplatePdf("facture", f.id)}><Download className="w-4 h-4 text-primary" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title="Envoyer lien paiement sécurisé" onClick={() => openSend("paiement", "facture", f.id)}><CreditCard className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier" onClick={() => openEdit("facture", f)}><Edit2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier les lignes / détail" onClick={() => openDetail("facture", f)}><Edit2 className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Supprimer" onClick={() => setDeleteDialog({ id: f.id, table: "factures", label: "Facture" })}><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </div>
@@ -1275,11 +1285,10 @@ export default function Documents() {
           )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDetailOpen(false)}>Fermer</Button>
-            {detailType === "devis" && detailItem && (
-              <Button variant="outline" onClick={() => openTemplatePdf("devis", detailItem.id)}><Eye className="w-4 h-4 mr-1" /> PDF</Button>
-            )}
-            {detailType === "facture" && detailItem && (
-              <Button variant="outline" onClick={() => openTemplatePdf("facture", detailItem.id)}><Eye className="w-4 h-4 mr-1" /> PDF</Button>
+            {detailItem && (
+              <Button variant="outline" disabled={pdfLoading} onClick={() => openTemplatePdf(detailType, detailItem.id)}>
+                {pdfLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Eye className="w-4 h-4 mr-1" />} Aperçu A4
+              </Button>
             )}
             <Button onClick={handleSaveDetail} disabled={saving} className="bg-primary text-primary-foreground">{saving ? "Enregistrement…" : "Enregistrer"}</Button>
           </DialogFooter>
@@ -1346,6 +1355,41 @@ export default function Documents() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── A4 PDF Preview Sheet ── */}
+      <Sheet open={pdfPreviewOpen} onOpenChange={setPdfPreviewOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
+            <SheetTitle className="font-display text-base">{pdfPreviewTitle}</SheetTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => {
+                const iframe = document.getElementById("pdf-preview-iframe") as HTMLIFrameElement | null;
+                iframe?.contentWindow?.print();
+              }}
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimer / PDF
+            </Button>
+          </SheetHeader>
+          <div className="flex-1 overflow-auto bg-gray-100 p-4">
+            {pdfPreviewHtml ? (
+              <iframe
+                id="pdf-preview-iframe"
+                srcDoc={pdfPreviewHtml}
+                className="w-full bg-white shadow-lg rounded-lg border"
+                style={{ minHeight: "1123px" }}
+                title="Aperçu A4"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
