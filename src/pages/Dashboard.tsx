@@ -53,7 +53,8 @@ export default function Dashboard() {
       ]);
       if (profileRes.data) setProfile(profileRes.data);
       const chantiersActifs = chantiersRes.data?.filter((c) => c.statut === "en_cours").length ?? 0;
-      const devisEnAttente = devisRes.data?.filter((d) => d.statut === "envoye").length ?? 0;
+      // "À traiter" = brouillon (à envoyer) + envoye (en attente de signature)
+      const devisEnAttente = devisRes.data?.filter((d) => d.statut === "brouillon" || d.statut === "envoye").length ?? 0;
       const facturePayees = facturesRes.data?.filter((f) => f.statut === "payee") ?? [];
       const caMois = facturePayees.reduce((sum, f) => sum + Number(f.montant_ht), 0);
       const impayes = facturesRes.data?.filter((f) => f.statut === "impayee").length ?? 0;
@@ -75,7 +76,7 @@ export default function Dashboard() {
 
   const kpiCards = [
     { label: "CA du mois", value: kpis.caMois, icon: TrendingUp, iconBg: "bg-success/10", iconColor: "text-success", suffix: " €", link: "/finances?tab=tresorerie" },
-    { label: "Devis en attente", value: kpis.devisEnAttente, icon: FileText, iconBg: "bg-warning/10", iconColor: "text-warning", link: "/documents?tab=devis" },
+    { label: "Devis à traiter", value: kpis.devisEnAttente, icon: FileText, iconBg: "bg-warning/10", iconColor: "text-warning", link: "/documents?tab=devis" },
     { label: "Factures impayées", value: kpis.impayes, icon: AlertTriangle, iconBg: "bg-destructive/10", iconColor: "text-destructive", link: "/finances?tab=impayes" },
     { label: "Chantiers actifs", value: kpis.chantiersActifs, icon: HardHat, iconBg: "bg-primary/10", iconColor: "text-primary", link: "/chantiers" },
   ];

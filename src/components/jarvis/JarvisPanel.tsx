@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Bot, User, Scale, Wrench, Mic, MicOff, Smartphone, Monitor, FilePlus } from "lucide-react";
+import { X, Send, Bot, User, Scale, Wrench, Mic, MicOff, Smartphone, Monitor, FilePlus, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -157,6 +157,73 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
 
   const toggleRecording = () => { recording ? stopRecording() : startRecording(); };
 
+  // ── Sauvegarder la conversation dans "Mes Fichiers" ───────────────────────
+  const saveConversation = async () => {
+    if (!user || messages.length === 0) {
+      toast.error("Aucun message à sauvegarder");
+      return;
+    }
+    try {
+      const now = new Date();
+      const dateLabel = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      const filename = `Conversation-Jarvis-${now.toISOString().slice(0, 16).replace(/:/g, "-")}.html`;
+
+      // Build HTML
+      const messagesHtml = messages.map((m) => {
+        const persona = m.persona ?? "jarvis";
+        const label = persona === "robert_b" ? "Robert B" : persona === "auguste_p" ? "Auguste P" : "Jarvis";
+        const bg = m.role === "user" ? "#2563eb" : "#f9fafb";
+        const color = m.role === "user" ? "#fff" : "#111827";
+        const align = m.role === "user" ? "right" : "left";
+        const content = stripDevisData(m.content).replace(/\n/g, "<br>");
+        return `
+          <div style="display:flex;justify-content:${align};margin-bottom:12px;">
+            <div style="max-width:75%;background:${bg};color:${color};border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;">
+              <div style="font-size:10px;font-weight:700;margin-bottom:4px;opacity:.7;text-transform:uppercase;">${m.role === "user" ? "Vous" : label}</div>
+              ${content}
+            </div>
+          </div>`;
+      }).join("");
+
+      const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Conversation Jarvis — ${dateLabel}</title>
+      <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111827;padding:32px 40px;max-width:700px;margin:0 auto}
+      @media print{body{padding:16px}@page{margin:12mm 14mm;size:A4}}</style></head>
+      <body>
+        <div style="background:linear-gradient(135deg,#2563eb,#1e40af);border-radius:12px;padding:20px 24px;margin-bottom:24px;">
+          <div style="font-size:22px;font-weight:700;color:#fff;">Conversation avec Maître Jarvis</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:4px;">${dateLabel} · ${messages.length} message(s)</div>
+        </div>
+        ${messagesHtml}
+        <div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:12px;font-size:10px;color:#9ca3af;">Trust Build-IA — Généré automatiquement</div>
+        <div class="no-print" style="margin-top:20px;text-align:center;">
+          <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer;">Imprimer / Enregistrer en PDF</button>
+        </div>
+      </body></html>`;
+
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const path = `${user.id}/conversations/${filename}`;
+
+      const { error: uploadErr } = await supabase.storage.from("artisan-documents").upload(path, blob, { upsert: true, contentType: "text/html" });
+      if (uploadErr) throw uploadErr;
+
+      const { error: dbErr } = await supabase.from("documents").insert({
+        artisan_id: user.id,
+        nom: filename,
+        description: `Conversation Jarvis du ${dateLabel}`,
+        type_fichier: "autre",
+        taille_octets: blob.size,
+        mime_type: "text/html",
+        storage_path: path,
+        tags: ["conversation", "jarvis"],
+      } as any);
+      if (dbErr) throw dbErr;
+
+      toast.success("Conversation sauvegardée dans Mes Fichiers ✓");
+    } catch (e: any) {
+      toast.error("Erreur sauvegarde : " + e.message);
+    }
+  };
+
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
     const userMsg: Message = { role: "user", content: text.trim(), source: "app" };
@@ -235,7 +302,10 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={startNewDocument} className="w-8 h-8" title="Nouveau document">
+          <Button variant="ghost" size="icon" onClick={saveConversation} className="w-8 h-8" title="Sauvegarder la conversation dans Mes Fichiers" disabled={messages.length === 0}>
+            <Save className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={startNewDocument} className="w-8 h-8" title="Nouvelle conversation">
             <FilePlus className="w-4 h-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={onClose} className="w-8 h-8">

@@ -482,19 +482,24 @@ export default function Documents() {
       let chantierId = devisForm.chantier_id;
       if (!devisForm.use_existing_chantier) {
         let clientId = "";
-        if (devisForm.client_nom.trim()) {
+        // Lookup by email first (avoid unique constraint), then by name
+        if (devisForm.client_email?.trim()) {
+          const { data: ex } = await supabase.from("clients").select("id").eq("artisan_id", user.id).eq("email", devisForm.client_email.trim()).maybeSingle();
+          if (ex) clientId = ex.id;
+        }
+        if (!clientId && devisForm.client_nom.trim()) {
           const { data: ex } = await supabase.from("clients").select("id").eq("artisan_id", user.id).eq("nom", devisForm.client_nom.trim()).maybeSingle();
-          if (ex) { clientId = ex.id; }
-          else {
-            const { data: nc, error: ce } = await supabase.from("clients").insert({
-              artisan_id: user.id, nom: devisForm.client_nom.trim(),
-              type: devisForm.client_type as "particulier" | "pro",
-              email: devisForm.client_email || null, telephone: devisForm.client_telephone || null, adresse: devisForm.client_adresse || null,
-            }).select("id").single();
-            if (ce) throw ce;
-            clientId = nc.id;
-            toast.success(`Client "${devisForm.client_nom}" créé`);
-          }
+          if (ex) clientId = ex.id;
+        }
+        if (!clientId && devisForm.client_nom.trim()) {
+          const { data: nc, error: ce } = await supabase.from("clients").insert({
+            artisan_id: user.id, nom: devisForm.client_nom.trim(),
+            type: devisForm.client_type as "particulier" | "pro",
+            email: devisForm.client_email || null, telephone: devisForm.client_telephone || null, adresse: devisForm.client_adresse || null,
+          }).select("id").single();
+          if (ce) throw ce;
+          clientId = nc.id;
+          toast.success(`Client "${devisForm.client_nom}" créé`);
         }
         if (!clientId) { toast.error("Un client est requis"); setSaving(false); return; }
         const { data: nc, error: che } = await supabase.from("chantiers").insert({

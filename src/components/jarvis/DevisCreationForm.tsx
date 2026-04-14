@@ -82,21 +82,54 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
 
     setSaving(true);
     try {
-      // 1. Create client
-      const { data: newClient, error: clientErr } = await supabase
-        .from("clients")
-        .insert({
-          artisan_id: user.id,
-          nom: client.nom.trim(),
+      // 1. Upsert client — lookup by email first, then by name, then insert
+      let clientId: string | null = null;
+
+      if (client.email?.trim()) {
+        const { data: existing } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("artisan_id", user.id)
+          .eq("email", client.email.trim())
+          .maybeSingle();
+        if (existing) clientId = existing.id;
+      }
+
+      if (!clientId && client.nom.trim()) {
+        const { data: existing } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("artisan_id", user.id)
+          .eq("nom", client.nom.trim())
+          .maybeSingle();
+        if (existing) clientId = existing.id;
+      }
+
+      if (!clientId) {
+        const { data: newClient, error: clientErr } = await supabase
+          .from("clients")
+          .insert({
+            artisan_id: user.id,
+            nom: client.nom.trim(),
+            adresse: client.adresse || null,
+            email: client.email || null,
+            telephone: client.telephone || null,
+            type: client.type,
+          })
+          .select("id")
+          .single();
+        if (clientErr) throw new Error(`Client: ${clientErr.message}`);
+        clientId = newClient.id;
+      } else {
+        // Update contact info on existing client
+        await supabase.from("clients").update({
           adresse: client.adresse || null,
           email: client.email || null,
           telephone: client.telephone || null,
-          type: client.type,
-        })
-        .select()
-        .single();
+        }).eq("id", clientId);
+      }
 
-      if (clientErr) throw new Error(`Client: ${clientErr.message}`);
+      const newClient = { id: clientId };
 
       // 2. Create chantier
       const { data: newChantier, error: chantierErr } = await supabase
