@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Bot, FileText, Receipt, Trash2, Download, PenLine, CreditCard,
@@ -256,6 +257,9 @@ export default function Documents() {
   // ── Create Facture ──
   const [createFactureOpen, setCreateFactureOpen] = useState(false);
   const [factureForm, setFactureForm] = useState({ devis_id: "", numero: "", montant_ht: "", tva: "20", statut: "brouillon", date_echeance: "", solde_restant: "" });
+
+  // ── "Même adresse que client" ──
+  const [sameAddressAsClient, setSameAddressAsClient] = useState(false);
 
   // ── Create Avoir ──
   const [createAvoirOpen, setCreateAvoirOpen] = useState(false);
@@ -528,6 +532,7 @@ export default function Documents() {
       toast.success(`Devis ${numero} créé`);
       setCreateDevisOpen(false);
       setCreateLignesDevis([newLigne()]);
+      setSameAddressAsClient(false);
       setDevisForm({ chantier_id: "", numero: "", montant_ht: "", tva: "20", statut: "brouillon", date_validite: "", client_nom: "", client_prenom: "", client_email: "", client_telephone: "", client_adresse: "", client_type: "particulier", chantier_nom: "", chantier_adresse: "", chantier_date_debut: "", chantier_date_fin_prevue: "", use_existing_chantier: true });
       setAiResult(null); setAiDesc("");
       fetchData();
@@ -564,6 +569,19 @@ export default function Documents() {
     else { toast.success(`TS ${numero} créé`); setCreateTsOpen(false); setTsForm({ devis_id: "", numero: "", description: "", montant_ht: "", tva: "20", statut: "brouillon", date: "" }); fetchData(); }
     setSaving(false);
   };
+
+  const onFactureDevisChange = useCallback(async (devisId: string) => {
+    // Find devis to prefill montant
+    const d = devis.find((dv) => dv.id === devisId);
+    const montant = d ? String(d.montant_ht) : "";
+    setFactureForm((p) => ({ ...p, devis_id: devisId, montant_ht: montant, solde_restant: montant }));
+    if (!devisId) { setCreateLignesFacture([newLigne()]); return; }
+    // Copy lignes from the selected devis
+    const { data } = await (supabase as any).from("lignes_devis").select("*").eq("devis_id", devisId).order("ordre");
+    if (data && data.length > 0) {
+      setCreateLignesFacture(data.map(dbToLigneForm));
+    }
+  }, [devis]);
 
   const handleCreateFacture = async () => {
     if (!user) return;
@@ -958,7 +976,21 @@ export default function Documents() {
                 <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
                   <p className="text-sm font-medium">Informations chantier</p>
                   <div className="space-y-1"><Label>Nom du chantier</Label><Input value={devisForm.chantier_nom} onChange={(e) => setDevisForm((p) => ({ ...p, chantier_nom: e.target.value }))} placeholder="Rénovation salle de bain" /></div>
-                  <div className="space-y-1"><Label>Adresse du chantier *</Label><AddressFields value={devisForm.chantier_adresse} onChange={(v) => setDevisForm((p) => ({ ...p, chantier_adresse: v }))} required /></div>
+                  <div className="flex items-center gap-2 py-1">
+                    <Checkbox
+                      id="same-addr"
+                      checked={sameAddressAsClient}
+                      onCheckedChange={(checked) => {
+                        const v = checked === true;
+                        setSameAddressAsClient(v);
+                        if (v) setDevisForm((p) => ({ ...p, chantier_adresse: p.client_adresse }));
+                      }}
+                    />
+                    <label htmlFor="same-addr" className="text-xs text-muted-foreground cursor-pointer select-none">
+                      Même adresse que le client
+                    </label>
+                  </div>
+                  <div className="space-y-1"><Label>Adresse du chantier *</Label><AddressFields value={devisForm.chantier_adresse} onChange={(v) => { setSameAddressAsClient(false); setDevisForm((p) => ({ ...p, chantier_adresse: v })); }} required /></div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1"><Label>Date début</Label><Input type="date" value={devisForm.chantier_date_debut} onChange={(e) => setDevisForm((p) => ({ ...p, chantier_date_debut: e.target.value }))} /></div>
                     <div className="space-y-1"><Label>Date fin prévue</Label><Input type="date" value={devisForm.chantier_date_fin_prevue} onChange={(e) => setDevisForm((p) => ({ ...p, chantier_date_fin_prevue: e.target.value }))} /></div>
@@ -1091,7 +1123,7 @@ export default function Documents() {
           <DialogHeader><DialogTitle className="font-display">Nouvelle facture</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1"><Label>Devis associé *</Label>
-              <Select value={factureForm.devis_id} onValueChange={(v) => setFactureForm((p) => ({ ...p, devis_id: v }))}>
+              <Select value={factureForm.devis_id} onValueChange={onFactureDevisChange}>
                 <SelectTrigger><SelectValue placeholder="Sélectionner un devis" /></SelectTrigger>
                 <SelectContent>{devis.map((d) => <SelectItem key={d.id} value={d.id}>{d.numero} — {Number(d.montant_ht).toLocaleString("fr-FR")} €</SelectItem>)}</SelectContent>
               </Select>

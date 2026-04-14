@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserPlus, Building2, FileText, Trash2, Plus, Check, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -57,6 +58,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
   const [chantier, setChantier] = useState(data.chantier);
   const [lignes, setLignes] = useState(data.lignes);
   const [saving, setSaving] = useState(false);
+  const [sameAddress, setSameAddress] = useState(false);
 
   const updateLigne = (i: number, field: string, value: string | number) => {
     setLignes((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
@@ -253,11 +255,25 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
               className="h-8 text-xs"
             />
           </div>
+          <div className="flex items-center gap-2 py-1">
+            <Checkbox
+              id="same-addr-jarvis"
+              checked={sameAddress}
+              onCheckedChange={(checked) => {
+                const v = checked === true;
+                setSameAddress(v);
+                if (v) setChantier((c) => ({ ...c, adresse: client.adresse }));
+              }}
+            />
+            <label htmlFor="same-addr-jarvis" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+              Même adresse que le client
+            </label>
+          </div>
           <div>
             <Label className="text-[10px]">Adresse du chantier *</Label>
             <AddressFields
               value={chantier.adresse}
-              onChange={(v) => setChantier((c) => ({ ...c, adresse: v }))}
+              onChange={(v) => { setSameAddress(false); setChantier((c) => ({ ...c, adresse: v })); }}
               required
               compact
             />
