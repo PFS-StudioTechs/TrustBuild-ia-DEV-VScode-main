@@ -157,7 +157,7 @@ export default function TemplatePanel() {
     setUploadingLogo(true);
     try {
       const ext = file.name.split(".").pop();
-      const path = `logos/${user.id}/logo.${ext}`;
+      const path = `${user.id}/logos/logo.${ext}`;
       const { error: uploadErr } = await supabase.storage
         .from("documents")
         .upload(path, file, { upsert: true, contentType: file.type });
