@@ -153,10 +153,12 @@ export default function AgentChat({
     setInput("");
     setLoading(true);
 
+    let finalContent = "";
     try {
       await streamChat({
         body: { messages: updated, persona },
         onChunk: (accumulated) => {
+          finalContent = accumulated;
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant") {
@@ -168,6 +170,10 @@ export default function AgentChat({
           });
         },
       });
+      // Auto-création du devis si Jarvis a inclus un bloc DEVIS_DATA
+      if (persona === "jarvis" && finalContent.includes("<!--DEVIS_DATA")) {
+        await createDevisFromJarvis(finalContent);
+      }
     } catch (err: any) {
       toast.error(err.message || "Erreur");
     } finally {
@@ -322,7 +328,110 @@ export default function AgentChat({
     doc.save(filename);
   };
 
-  const cleanContent = (content: string) => content.replace(/^\[(Robert B|Auguste P|Jarvis)\]\s*/i, "");
+  const cleanContent = (content: string) =>
+    content
+      .replace(/<!--DEVIS_DATA[\s\S]*?DEVIS_DATA-->/g, "")
+      .replace(/^\[(Robert B|Auguste P|Jarvis)\]\s*/i, "")
+      .trim();
+
+  // ── Création automatique du devis depuis le bloc DEVIS_DATA de Jarvis ────────
+  const createDevisFromJarvis = async (rawContent: string) => {
+    if (!user) return;
+    const match = rawContent.match(/<!--DEVIS_DATA\s*([\s\S]*?)\s*DEVIS_DATA-->/);
+    if (!match) return;
+    let parsed: { client: any; chantier: any; lignes: any[] };
+    try { parsed = JSON.parse(match[1]); } catch { return; }
+
+    try {
+      // 1. Client : cherche par nom exact (insensible à la casse), sinon crée
+      const clientNom = (parsed.client?.nom || "Client").trim();
+      const { data: existingClient } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("artisan_id", user.id)
+        .ilike("nom", clientNom)
+        .limit(1)
+        .maybeSingle();
+
+      let clientId: string;
+      if (existingClient) {
+        clientId = existingClient.id;
+      } else {
+        const { data: newClient, error: ce } = await supabase
+          .from("clients")
+          .insert({
+            artisan_id: user.id,
+            nom: clientNom,
+            adresse: parsed.client?.adresse || null,
+            email: parsed.client?.email || null,
+            telephone: parsed.client?.telephone || null,
+            type: parsed.client?.type === "pro" ? "pro" : "particulier",
+          })
+          .select("id")
+          .single();
+        if (ce) throw ce;
+        clientId = newClient.id;
+      }
+
+      // 2. Chantier
+      const { data: newChantier, error: che } = await supabase
+        .from("chantiers")
+        .insert({
+          artisan_id: user.id,
+          client_id: clientId,
+          nom: parsed.chantier?.nom || "Chantier",
+          adresse_chantier: parsed.chantier?.adresse || null,
+          date_debut: parsed.chantier?.date_debut || null,
+          date_fin_prevue: parsed.chantier?.date_fin_prevue || null,
+          statut: "prospect",
+        })
+        .select("id")
+        .single();
+      if (che) throw che;
+
+      // 3. Devis
+      const lignes: any[] = parsed.lignes ?? [];
+      const montantHt = lignes.reduce(
+        (s: number, l: any) => s + (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0),
+        0
+      );
+      const numero = `DEV-${Date.now().toString(36).toUpperCase()}`;
+      const { data: newDevis, error: de } = await supabase
+        .from("devis")
+        .insert({
+          artisan_id: user.id,
+          chantier_id: newChantier.id,
+          numero,
+          montant_ht: montantHt,
+          tva: 20,
+          statut: "brouillon",
+        })
+        .select("id")
+        .single();
+      if (de) throw de;
+
+      // 4. Lignes devis
+      if (lignes.length > 0) {
+        const { error: le } = await supabase.from("lignes_devis").insert(
+          lignes.map((l: any, i: number) => ({
+            artisan_id: user.id,
+            devis_id: newDevis.id,
+            designation: l.description || l.designation || "",
+            quantite: Number(l.quantite) || 1,
+            unite: l.unite || "u",
+            prix_unitaire: Number(l.prix_unitaire) || 0,
+            tva: 20,
+            ordre: i,
+          }))
+        );
+        if (le) throw le;
+      }
+
+      toast.success(`Devis ${numero} créé avec ${lignes.length} ligne(s) — consultez l'onglet Documents`);
+    } catch (e: any) {
+      toast.error("Impossible de créer le devis : " + (e.message || "erreur inconnue"));
+    }
+  };
 
 // ── Markdown → HTML (pour sauvegarde des conversations) ──────────────────────
 function inlineFormat(text: string): string {
