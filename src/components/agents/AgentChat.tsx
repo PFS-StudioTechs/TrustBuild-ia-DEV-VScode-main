@@ -358,51 +358,24 @@ export default function AgentChat({
     try { parsed = JSON.parse(match[1]); } catch { return; }
 
     try {
-      // 1. Client : cherche par email d'abord, puis par nom exact, sinon crée
+      // 1. Client : toujours créer un nouveau client depuis les infos Jarvis
+      // (pas de recherche par email — Jarvis peut mettre l'email artisan par erreur)
       const clientNom = (parsed.client?.nom || "Client").trim();
       const clientEmail = parsed.client?.email?.trim() || null;
-      let existingClient: { id: string } | null = null;
-
-      if (clientEmail) {
-        const { data } = await (supabase as any)
-          .from("clients")
-          .select("id")
-          .eq("artisan_id", user.id)
-          .eq("email", clientEmail)
-          .limit(1)
-          .maybeSingle();
-        existingClient = data;
-      }
-      if (!existingClient) {
-        const { data } = await (supabase as any)
-          .from("clients")
-          .select("id")
-          .eq("artisan_id", user.id)
-          .eq("nom", clientNom)
-          .limit(1)
-          .maybeSingle();
-        existingClient = data;
-      }
-
-      let clientId: string;
-      if (existingClient) {
-        clientId = existingClient.id;
-      } else {
-        const { data: newClient, error: ce } = await (supabase as any)
-          .from("clients")
-          .insert({
-            artisan_id: user.id,
-            nom: clientNom,
-            adresse: parsed.client?.adresse || null,
-            email: clientEmail,
-            telephone: parsed.client?.telephone || null,
-            type: parsed.client?.type === "pro" ? "pro" : "particulier",
-          })
-          .select("id")
-          .single();
-        if (ce) throw ce;
-        clientId = newClient.id;
-      }
+      const { data: newClient, error: ce } = await (supabase as any)
+        .from("clients")
+        .insert({
+          artisan_id: user.id,
+          nom: clientNom,
+          adresse: parsed.client?.adresse || null,
+          email: clientEmail,
+          telephone: parsed.client?.telephone || null,
+          type: parsed.client?.type === "pro" ? "pro" : "particulier",
+        })
+        .select("id")
+        .single();
+      if (ce) throw ce;
+      const clientId: string = newClient.id;
 
       // 2. Chantier
       const { data: newChantier, error: che } = await (supabase as any)
