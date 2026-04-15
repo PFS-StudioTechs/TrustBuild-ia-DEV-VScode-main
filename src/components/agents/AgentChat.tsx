@@ -153,10 +153,17 @@ export default function AgentChat({
     setInput("");
     setLoading(true);
 
+    // Strip DEVIS_DATA blocks from history before sending to API (évite confusion Jarvis)
+    const stripDevisData = (content: string) =>
+      content.replace(/<!--DEVIS_DATA[\s\S]*?DEVIS_DATA-->/g, "").trim();
+
     let finalContent = "";
     try {
       await streamChat({
-        body: { messages: updated, persona },
+        body: {
+          messages: updated.map((m) => ({ ...m, content: stripDevisData(m.content) })),
+          persona,
+        },
         onChunk: (accumulated) => {
           finalContent = accumulated;
           setMessages((prev) => {
@@ -173,6 +180,14 @@ export default function AgentChat({
       // Auto-création du devis si Jarvis a inclus un bloc DEVIS_DATA
       if (persona === "jarvis" && finalContent.includes("<!--DEVIS_DATA")) {
         await createDevisFromJarvis(finalContent);
+        // Nettoie le DEVIS_DATA du message stocké pour les futurs échanges
+        setMessages((prev) =>
+          prev.map((m, i) =>
+            i === prev.length - 1 && m.role === "assistant"
+              ? { ...m, content: stripDevisData(m.content) }
+              : m
+          )
+        );
       }
     } catch (err: any) {
       toast.error(err.message || "Erreur");
@@ -343,27 +358,43 @@ export default function AgentChat({
     try { parsed = JSON.parse(match[1]); } catch { return; }
 
     try {
-      // 1. Client : cherche par nom exact (insensible à la casse), sinon crée
+      // 1. Client : cherche par email d'abord, puis par nom exact, sinon crée
       const clientNom = (parsed.client?.nom || "Client").trim();
-      const { data: existingClient } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("artisan_id", user.id)
-        .ilike("nom", clientNom)
-        .limit(1)
-        .maybeSingle();
+      const clientEmail = parsed.client?.email?.trim() || null;
+      let existingClient: { id: string } | null = null;
+
+      if (clientEmail) {
+        const { data } = await (supabase as any)
+          .from("clients")
+          .select("id")
+          .eq("artisan_id", user.id)
+          .eq("email", clientEmail)
+          .limit(1)
+          .maybeSingle();
+        existingClient = data;
+      }
+      if (!existingClient) {
+        const { data } = await (supabase as any)
+          .from("clients")
+          .select("id")
+          .eq("artisan_id", user.id)
+          .eq("nom", clientNom)
+          .limit(1)
+          .maybeSingle();
+        existingClient = data;
+      }
 
       let clientId: string;
       if (existingClient) {
         clientId = existingClient.id;
       } else {
-        const { data: newClient, error: ce } = await supabase
+        const { data: newClient, error: ce } = await (supabase as any)
           .from("clients")
           .insert({
             artisan_id: user.id,
             nom: clientNom,
             adresse: parsed.client?.adresse || null,
-            email: parsed.client?.email || null,
+            email: clientEmail,
             telephone: parsed.client?.telephone || null,
             type: parsed.client?.type === "pro" ? "pro" : "particulier",
           })
@@ -374,7 +405,7 @@ export default function AgentChat({
       }
 
       // 2. Chantier
-      const { data: newChantier, error: che } = await supabase
+      const { data: newChantier, error: che } = await (supabase as any)
         .from("chantiers")
         .insert({
           artisan_id: user.id,
@@ -396,7 +427,7 @@ export default function AgentChat({
         0
       );
       const numero = `DEV-${Date.now().toString(36).toUpperCase()}`;
-      const { data: newDevis, error: de } = await supabase
+      const { data: newDevis, error: de } = await (supabase as any)
         .from("devis")
         .insert({
           artisan_id: user.id,
@@ -412,7 +443,7 @@ export default function AgentChat({
 
       // 4. Lignes devis
       if (lignes.length > 0) {
-        const { error: le } = await supabase.from("lignes_devis").insert(
+        const { error: le } = await (supabase as any).from("lignes_devis").insert(
           lignes.map((l: any, i: number) => ({
             artisan_id: user.id,
             devis_id: newDevis.id,
