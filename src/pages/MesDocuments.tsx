@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Upload, Search, Grid3X3, List, Download, Trash2, Tag, Link2, Archive,
   FileText, Image, File, Bot, X, FolderOpen, Plus, Edit2, Filter,
-  PenLine, CreditCard, Send, Eye,
+  PenLine, CreditCard, Send, Eye, Printer, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -80,6 +81,12 @@ export default function MesDocuments() {
   const [sendMessage, setSendMessage] = useState("");
   const [sendLoading, setSendLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // HTML preview Sheet (conversations IA)
+  const [htmlPreviewOpen, setHtmlPreviewOpen]       = useState(false);
+  const [htmlPreviewHtml, setHtmlPreviewHtml]       = useState<string | null>(null);
+  const [htmlPreviewTitle, setHtmlPreviewTitle]     = useState("");
+  const [htmlPreviewLoading, setHtmlPreviewLoading] = useState(false);
 
   // Edit dialog
   const [editDoc, setEditDoc] = useState<Document | null>(null);
@@ -179,11 +186,31 @@ export default function MesDocuments() {
   const handleDownload = async (doc: Document) => {
     const { data, error } = await supabase.storage
       .from("artisan-documents")
-      .createSignedUrl(doc.storage_path, 60);
+      .createSignedUrl(doc.storage_path, 300);
     if (error || !data?.signedUrl) {
       toast.error("Erreur de téléchargement");
       return;
     }
+
+    // Fichiers HTML (conversations IA) : afficher dans Sheet pour impression PDF
+    if (doc.mime_type === "text/html") {
+      setHtmlPreviewLoading(true);
+      try {
+        const resp = await fetch(data.signedUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const html = await resp.text();
+        setHtmlPreviewTitle(doc.nom.replace(/\.html$/i, ""));
+        setHtmlPreviewHtml(html);
+        setHtmlPreviewOpen(true);
+      } catch (e: any) {
+        toast.error("Impossible d'afficher le document : " + e.message);
+      } finally {
+        setHtmlPreviewLoading(false);
+      }
+      return;
+    }
+
+    // Autres fichiers (PDF, images…) : téléchargement direct
     window.open(data.signedUrl, "_blank");
   };
 
@@ -530,6 +557,41 @@ export default function MesDocuments() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── HTML Preview Sheet (conversations IA) ── */}
+      <Sheet open={htmlPreviewOpen} onOpenChange={setHtmlPreviewOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
+            <SheetTitle className="font-display text-base truncate">{htmlPreviewTitle}</SheetTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={() => {
+                const iframe = document.getElementById("html-preview-iframe") as HTMLIFrameElement | null;
+                iframe?.contentWindow?.print();
+              }}
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimer / PDF
+            </Button>
+          </SheetHeader>
+          <div className="flex-1 overflow-auto bg-gray-100 p-4">
+            {htmlPreviewLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : htmlPreviewHtml ? (
+              <iframe
+                id="html-preview-iframe"
+                srcDoc={htmlPreviewHtml}
+                className="w-full bg-white shadow-lg rounded-lg border"
+                style={{ minHeight: "1123px" }}
+                title="Aperçu document"
+              />
+            ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Edit Dialog */}
       <Dialog open={!!editDoc} onOpenChange={(o) => !o && setEditDoc(null)}>

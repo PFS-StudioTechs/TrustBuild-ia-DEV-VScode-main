@@ -181,28 +181,46 @@ export default function AgentChat({
     if (!msg || msg.role !== "assistant") return;
     setSavingIdx(msgIndex);
     try {
-      const nom = `${title} — ${new Date().toLocaleDateString("fr-FR")}`;
+      const now = new Date();
+      const dateLabel = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      const nom = `${title} — ${now.toLocaleDateString("fr-FR")}`;
       const contenu = cleanContent(msg.content);
-      const type_fichier = persona === "robert_b" ? "courrier" : "note_technique";
+      const question = msgIndex > 0 ? messages[msgIndex - 1]?.content ?? null : null;
 
-      // Upload le contenu texte dans le bucket artisan-documents
-      const blob = new Blob([contenu], { type: "text/plain;charset=utf-8" });
+      // Couleurs par persona
+      const colors: Record<string, [string, string]> = {
+        robert_b:  ["#1d4ed8", "#1e3a5f"],
+        auguste_p: ["#ca8a04", "#78350f"],
+      };
+      const [primary, secondary] = colors[persona] ?? ["#374151", "#111827"];
+
+      const html = buildConversationHtml({
+        title,
+        personaLabel: title,
+        primaryColor: primary,
+        secondaryColor: secondary,
+        dateLabel,
+        question,
+        content: contenu,
+      });
+
+      const type_fichier = "autre";
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const safeName = nom.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storagePath = `${user.id}/${Date.now()}-${safeName}.txt`;
+      const storagePath = `${user.id}/${Date.now()}-${safeName}.html`;
 
       const { error: uploadErr } = await supabase.storage
         .from("artisan-documents")
-        .upload(storagePath, blob);
+        .upload(storagePath, blob, { contentType: "text/html" });
       if (uploadErr) throw uploadErr;
 
-      // Crée l'enregistrement dans la table documents
       const { error: dbErr } = await supabase.from("documents").insert({
         artisan_id: user.id,
         nom,
         description: `Conversation avec ${title}`,
         type_fichier,
         taille_octets: blob.size,
-        mime_type: "text/plain",
+        mime_type: "text/html",
         storage_path: storagePath,
         tags: [persona, "ia"],
       });
@@ -305,6 +323,184 @@ export default function AgentChat({
   };
 
   const cleanContent = (content: string) => content.replace(/^\[(Robert B|Auguste P|Jarvis)\]\s*/i, "");
+
+// ── Markdown → HTML (pour sauvegarde des conversations) ──────────────────────
+function inlineFormat(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(/`(.*?)`/g, "<code>$1</code>");
+}
+
+function markdownToHtml(md: string): string {
+  const lines = md.split("\n");
+  const out: string[] = [];
+  let inUl = false;
+  let inOl = false;
+  let inTable = false;
+  let tableHeaderDone = false;
+  let inBlockquote = false;
+
+  const closeAll = () => {
+    if (inUl)         { out.push("</ul>"); inUl = false; }
+    if (inOl)         { out.push("</ol>"); inOl = false; }
+    if (inBlockquote) { out.push("</blockquote>"); inBlockquote = false; }
+    if (inTable)      { out.push("</tbody></table>"); inTable = false; tableHeaderDone = false; }
+  };
+
+  for (const raw of lines) {
+    const line = raw;
+
+    // ── Table ──
+    if (line.trim().startsWith("|")) {
+      if (!inUl && !inOl && !inBlockquote && !inTable) {
+        out.push('<table class="md-table">');
+        inTable = true;
+        tableHeaderDone = false;
+      }
+      if (/^\|[\s\-:|]+\|/.test(line.trim())) { // separator row
+        out.push("<tbody>");
+        tableHeaderDone = true;
+        continue;
+      }
+      const cells = line.split("|").slice(1, -1).map(c => c.trim());
+      if (!tableHeaderDone) {
+        out.push("<thead><tr>" + cells.map(c => `<th>${inlineFormat(c)}</th>`).join("") + "</tr></thead>");
+      } else {
+        out.push("<tr>" + cells.map(c => `<td>${inlineFormat(c)}</td>`).join("") + "</tr>");
+      }
+      continue;
+    } else if (inTable) {
+      out.push("</tbody></table>"); inTable = false; tableHeaderDone = false;
+    }
+
+    // ── Empty line ──
+    if (!line.trim()) {
+      if (inUl)         { out.push("</ul>"); inUl = false; }
+      if (inOl)         { out.push("</ol>"); inOl = false; }
+      if (inBlockquote) { out.push("</blockquote>"); inBlockquote = false; }
+      out.push('<div class="md-space"></div>');
+      continue;
+    }
+
+    // ── Headers ──
+    if (line.startsWith("#### ")) { closeAll(); out.push(`<h4>${inlineFormat(line.slice(5))}</h4>`); continue; }
+    if (line.startsWith("### "))  { closeAll(); out.push(`<h3>${inlineFormat(line.slice(4))}</h3>`); continue; }
+    if (line.startsWith("## "))   { closeAll(); out.push(`<h2>${inlineFormat(line.slice(3))}</h2>`); continue; }
+    if (line.startsWith("# "))    { closeAll(); out.push(`<h1>${inlineFormat(line.slice(2))}</h1>`); continue; }
+
+    // ── HR ──
+    if (/^[-*_]{3,}\s*$/.test(line.trim())) { closeAll(); out.push("<hr>"); continue; }
+
+    // ── Blockquote ──
+    if (line.startsWith("> ")) {
+      if (inUl) { out.push("</ul>"); inUl = false; }
+      if (inOl) { out.push("</ol>"); inOl = false; }
+      if (!inBlockquote) { out.push("<blockquote>"); inBlockquote = true; }
+      out.push(`<p>${inlineFormat(line.slice(2))}</p>`);
+      continue;
+    } else if (inBlockquote) { out.push("</blockquote>"); inBlockquote = false; }
+
+    // ── Unordered list ──
+    if (/^[-*•]\s/.test(line)) {
+      if (inOl) { out.push("</ol>"); inOl = false; }
+      if (!inUl) { out.push("<ul>"); inUl = true; }
+      out.push(`<li>${inlineFormat(line.replace(/^[-*•]\s/, ""))}</li>`);
+      continue;
+    } else if (inUl && /^\s{2,}[-*•]\s/.test(line)) {
+      out.push(`<li>${inlineFormat(line.trim().replace(/^[-*•]\s/, ""))}</li>`);
+      continue;
+    } else if (inUl) { out.push("</ul>"); inUl = false; }
+
+    // ── Ordered list ──
+    if (/^\d+\.\s/.test(line)) {
+      if (inUl) { out.push("</ul>"); inUl = false; }
+      if (!inOl) { out.push("<ol>"); inOl = true; }
+      out.push(`<li>${inlineFormat(line.replace(/^\d+\.\s/, ""))}</li>`);
+      continue;
+    } else if (inOl) { out.push("</ol>"); inOl = false; }
+
+    // ── Paragraph ──
+    out.push(`<p>${inlineFormat(line)}</p>`);
+  }
+
+  closeAll();
+  return out.join("\n");
+}
+
+function buildConversationHtml(params: {
+  title: string;
+  personaLabel: string;
+  primaryColor: string;
+  secondaryColor: string;
+  dateLabel: string;
+  question: string | null;
+  content: string;
+}): string {
+  const { title, personaLabel, primaryColor, secondaryColor, dateLabel, question, content } = params;
+  const bodyHtml = markdownToHtml(content);
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${title} — ${dateLabel}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, 'Helvetica Neue', sans-serif; background: #fff; color: #111827; font-size: 13px; }
+    .page { max-width: 720px; margin: 0 auto; padding: 32px 40px; }
+    .header { background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}); border-radius: 10px; padding: 20px 24px; margin-bottom: 28px; }
+    .header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+    .header p  { font-size: 11px; color: rgba(255,255,255,.75); margin-top: 4px; }
+    .question-box { background: #f3f4f6; border-left: 3px solid ${primaryColor}; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; color: #374151; }
+    .question-label { font-size: 10px; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .content { line-height: 1.7; }
+    .content h1 { font-size: 18px; font-weight: 700; color: #111827; margin: 20px 0 10px; }
+    .content h2 { font-size: 15px; font-weight: 700; color: #111827; margin: 18px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+    .content h3 { font-size: 13px; font-weight: 700; color: #374151; margin: 14px 0 6px; }
+    .content h4 { font-size: 13px; font-weight: 600; color: #374151; margin: 10px 0 4px; }
+    .content p { margin-bottom: 8px; color: #374151; }
+    .content ul, .content ol { margin: 6px 0 10px 20px; }
+    .content li { margin-bottom: 4px; color: #374151; }
+    .content hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
+    .content strong { font-weight: 700; color: #111827; }
+    .content em { font-style: italic; }
+    .content code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 12px; }
+    .content blockquote { border-left: 3px solid ${primaryColor}; padding: 8px 14px; background: #f9fafb; margin: 10px 0; border-radius: 0 6px 6px 0; color: #6b7280; }
+    .content .md-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+    .content .md-table th { background: ${primaryColor}; color: #fff; padding: 8px 10px; text-align: left; font-weight: 600; }
+    .content .md-table td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+    .content .md-table tr:nth-child(even) td { background: #f9fafb; }
+    .content .md-space { height: 4px; }
+    .footer { margin-top: 28px; border-top: 1px solid #e5e7eb; padding-top: 12px; font-size: 10px; color: #9ca3af; }
+    .print-btn { margin-top: 20px; text-align: center; }
+    .print-btn button { background: ${primaryColor}; color: #fff; border: none; border-radius: 8px; padding: 10px 28px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    @media print {
+      .page { padding: 0; }
+      .print-btn { display: none; }
+      @page { margin: 14mm 16mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <h1>${title}</h1>
+      <p>${personaLabel} &nbsp;·&nbsp; ${dateLabel}</p>
+    </div>
+    ${question ? `<div class="question-box"><div class="question-label">Votre question</div>${inlineFormat(question)}</div>` : ""}
+    <div class="content">${bodyHtml}</div>
+    <div class="footer">Trust Build-IA — Document généré automatiquement</div>
+    <div class="print-btn"><button onclick="window.print()">Imprimer / Enregistrer en PDF</button></div>
+  </div>
+</body>
+</html>`;
+}
 
   const SourceBadge = ({ source }: { source?: string }) => {
     if (!source) return null;
