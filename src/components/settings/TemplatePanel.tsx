@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Palette, Upload, CheckCircle2, Loader2, FileText,
   Wrench, Zap, Brush, Trees, Building2, HardHat,
@@ -29,6 +30,7 @@ interface Template {
   couleur_secondaire: string;
   couleur_accent: string;
   logo_url: string | null;
+  entete_texte: string | null;
   is_active: boolean;
   metadata: Record<string, unknown>;
 }
@@ -47,6 +49,8 @@ export default function TemplatePanel() {
   const [couleurAccent, setCouleurAccent]         = useState("#f59e0b");
   const [logoUrl, setLogoUrl]                     = useState<string | null>(null);
   const [selectedSector, setSelectedSector]       = useState<string | null>(null);
+
+  const [enteteTexte, setEnteteTexte] = useState("");
 
   const fileInputRef    = useRef<HTMLInputElement>(null);
   const logoInputRef    = useRef<HTMLInputElement>(null);
@@ -74,6 +78,7 @@ export default function TemplatePanel() {
       setCouleurSecondaire(data.couleur_secondaire);
       setCouleurAccent(data.couleur_accent);
       setLogoUrl(data.logo_url);
+      setEnteteTexte(data.entete_texte ?? "");
       setSelectedSector(data.secteur);
     }
     setLoading(false);
@@ -95,6 +100,7 @@ export default function TemplatePanel() {
         couleur_secondaire: sector.secondary,
         couleur_accent:     sector.accent,
         logo_url:           logoUrl,
+        entete_texte:       enteteTexte || null,
         is_active:          true,
         metadata:           {},
       }).select().single();
@@ -124,6 +130,7 @@ export default function TemplatePanel() {
           couleur_secondaire: couleurSecondaire,
           couleur_accent:     couleurAccent,
           logo_url:           logoUrl,
+          entete_texte:       enteteTexte || null,
         }).eq("id", template.id);
         if (error) throw error;
       } else {
@@ -137,6 +144,7 @@ export default function TemplatePanel() {
           couleur_secondaire: couleurSecondaire,
           couleur_accent:     couleurAccent,
           logo_url:           logoUrl,
+          entete_texte:       enteteTexte || null,
           is_active:          true,
           metadata:           {},
         });
@@ -389,6 +397,19 @@ export default function TemplatePanel() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* En-tête document */}
+        <div className="space-y-1.5 mb-4">
+          <Label className="text-xs">En-tête des documents (RIB, certifications, mentions…)</Label>
+          <Textarea
+            value={enteteTexte}
+            onChange={e => setEnteteTexte(e.target.value)}
+            placeholder={"RIB : FR76 1234 5678 9012 3456 7890 123 — BIC : BNPAFRPP\nRGE Qualibat n°1234 · Décennale AXA n°POL-56789"}
+            rows={3}
+            className="text-xs resize-none"
+          />
+          <p className="text-[10px] text-muted-foreground">Affiché dans l'en-tête de vos devis et factures PDF, sous vos coordonnées.</p>
         </div>
 
         <Button onClick={saveCustomization} disabled={saving} className="w-full gap-2 bg-primary text-primary-foreground" size="sm">

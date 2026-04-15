@@ -332,6 +332,7 @@ export default function Fournisseurs() {
 
       {/* Dialog ajout / édition */}
       <FournisseurDialog
+        key={editTarget?.id ?? "new"}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         initial={initialForm}

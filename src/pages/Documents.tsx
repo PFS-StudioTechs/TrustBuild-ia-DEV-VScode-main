@@ -347,18 +347,21 @@ export default function Documents() {
   };
 
   // ── PDF — ouvre dans la Sheet A4 intégrée (pas de popup) ─────────────────
-  const openTemplatePdf = async (type: "devis" | "facture", id: string) => {
+  const openTemplatePdf = async (type: "devis" | "facture" | "avenant", id: string) => {
     setPdfLoading(true);
     try {
-      // Utilise supabase.functions.invoke() pour que le client gère
-      // automatiquement le refresh de session (fiable sur mobile)
-      const { data, error } = await supabase.functions.invoke("generate-pdf-html", {
-        body: type === "devis" ? { type, devis_id: id } : { type, facture_id: id },
-      });
+      const bodyMap: Record<string, unknown> = { type };
+      if (type === "devis")    bodyMap.devis_id    = id;
+      if (type === "facture")  bodyMap.facture_id  = id;
+      if (type === "avenant")  bodyMap.avenant_id  = id;
+      const { data, error } = await supabase.functions.invoke("generate-pdf-html", { body: bodyMap });
       if (error) throw new Error(error.message ?? "Erreur génération");
       if (!data?.html) throw new Error("Réponse vide de l'edge function");
-      const item = type === "devis" ? devis.find((d) => d.id === id) : factures.find((f) => f.id === id);
-      setPdfPreviewTitle(type === "devis" ? `Devis ${item?.numero ?? ""}` : `Facture ${item?.numero ?? ""}`);
+      let title = "";
+      if (type === "devis")   { const item = devis.find((d) => d.id === id);    title = `Devis ${item?.numero ?? ""}`; }
+      if (type === "facture") { const item = factures.find((f) => f.id === id); title = `Facture ${item?.numero ?? ""}`; }
+      if (type === "avenant") { const item = avenants.find((a) => a.id === id); title = `Avenant ${item?.numero ?? ""}`; }
+      setPdfPreviewTitle(title);
       setPdfPreviewHtml(data.html);
       setPdfPreviewOpen(true);
     } catch (e: any) { toast.error("Erreur PDF : " + e.message); }
@@ -790,12 +793,13 @@ export default function Documents() {
               const client = getClientForAvenant(av.id);
               const parentDevis = devis.find((d) => d.id === av.devis_id);
               return (
-                <div key={av.id} className="forge-card !p-4">
+                <div key={av.id} className="forge-card !p-4 cursor-pointer hover:ring-1 hover:ring-primary/20 transition-all" onClick={() => openTemplatePdf("avenant", av.id)}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold">{av.numero || `Avenant du ${new Date(av.date).toLocaleDateString("fr-FR")}`}</p>
                         <StatutBadge statut={av.statut} styles={DEVIS_STYLES} labels={DEVIS_STATUTS} />
+                        {pdfLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
                       </div>
                       <ClientInfo client={client} />
                       <div className="mt-1 space-y-0.5">
@@ -804,9 +808,9 @@ export default function Documents() {
                         {av.description && <p className="text-xs text-muted-foreground truncate">{av.description}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit("avenant", av)}><Edit2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteDialog({ id: av.id, table: "avenants", label: "Avenant" })}><Trash2 className="w-4 h-4" /></Button>
+                    <div className="flex items-center gap-1 shrink-0" onClick={stopProp}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier" onClick={() => openEdit("avenant", av)}><Edit2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Supprimer" onClick={() => setDeleteDialog({ id: av.id, table: "avenants", label: "Avenant" })}><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </div>
                 </div>

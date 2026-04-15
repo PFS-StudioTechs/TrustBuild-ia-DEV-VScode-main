@@ -18,11 +18,12 @@ const SECTOR_DEFAULTS: Record<string, { primary: string; secondary: string; acce
 
 // ─── HTML template builder ────────────────────────────────────────────────────
 function buildHtml(params: {
-  type: "devis" | "facture";
+  type: "devis" | "facture" | "avenant";
   numero: string;
   date: string;
   date_validite?: string | null;
   date_echeance?: string | null;
+  parent_numero?: string | null;
   artisan: { nom: string; prenom: string; siret?: string | null; adresse?: string | null; telephone?: string | null; email?: string | null; logo_url?: string | null };
   client: { nom: string; adresse?: string | null; email?: string | null; telephone?: string | null };
   chantier?: { nom?: string | null; adresse?: string | null };
@@ -35,6 +36,7 @@ function buildHtml(params: {
   couleur_accent: string;
   logo_url?: string | null;
   secteur: string;
+  entete_texte?: string | null;
   mentions?: string[];
   custom_html?: string | null;
   custom_css?: string | null;
@@ -43,35 +45,47 @@ function buildHtml(params: {
   const sector = SECTOR_DEFAULTS[params.secteur] ?? SECTOR_DEFAULTS.general;
   const montantTTC = params.montant_ht * (1 + params.tva / 100);
   const montantTVA = params.montant_ht * (params.tva / 100);
-  const docLabel = params.type === "devis" ? "DEVIS" : "FACTURE";
+  const docLabel = params.type === "devis" ? "DEVIS" : params.type === "avenant" ? "AVENANT" : "FACTURE";
   const logoHtml = params.logo_url
     ? `<img src="${params.logo_url}" alt="Logo" style="max-height:70px;max-width:160px;object-fit:contain;" />`
-    : `<div style="width:60px;height:60px;border-radius:12px;background:${cp};display:flex;align-items:center;justify-content:center;font-size:28px;">${sector.emoji}</div>`;
+    : `<div style="width:60px;height:60px;border-radius:12px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:28px;">${sector.emoji}</div>`;
+
+  const enteteHtml = params.entete_texte
+    ? params.entete_texte.split("\n").map(line => `<div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px;">${line}</div>`).join("")
+    : "";
 
   const lignesHtml = (params.lignes ?? []).map((l, i) => {
     const total = (l.quantite ?? 0) * (l.prix_unitaire ?? 0);
     return `
     <tr style="background:${i % 2 === 0 ? "#f9fafb" : "#ffffff"}">
-      <td style="padding:10px 12px;font-size:13px;color:#374151;">${l.description || "—"}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:13px;color:#374151;">${l.quantite ?? 0}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:13px;color:#6b7280;">${l.unite || "u"}</td>
-      <td style="padding:10px 12px;text-align:right;font-size:13px;color:#374151;">${fmt(l.prix_unitaire ?? 0)}</td>
-      <td style="padding:10px 12px;text-align:right;font-size:13px;font-weight:600;color:#111827;">${fmt(total)}</td>
+      <td style="padding:10px 14px;font-size:13px;color:#374151;">${l.description || "—"}</td>
+      <td style="padding:10px 10px;text-align:center;font-size:13px;color:#374151;">${l.quantite ?? 0}</td>
+      <td style="padding:10px 10px;text-align:center;font-size:13px;color:#6b7280;">${l.unite || "u"}</td>
+      <td style="padding:10px 10px;text-align:right;font-size:13px;color:#374151;">${fmt(l.prix_unitaire ?? 0)}</td>
+      <td style="padding:10px 14px;text-align:right;font-size:13px;font-weight:600;color:#111827;">${fmt(total)}</td>
     </tr>`;
   }).join("");
 
   const statut = params.statut;
   const statutColor: Record<string, string> = {
-    brouillon: "#6b7280", envoye: "#2563eb", accepte: "#16a34a",
+    brouillon: "#6b7280", envoye: "#2563eb", signe: "#16a34a", accepte: "#16a34a",
     refuse: "#dc2626", facture: "#7c3aed", annule: "#dc2626",
-    paye: "#16a34a", partiel: "#d97706", en_retard: "#dc2626",
+    paye: "#16a34a", payee: "#16a34a", partiel: "#d97706", en_retard: "#dc2626",
+    en_cours: "#2563eb", chantier_en_cours: "#d97706", termine: "#16a34a",
+  };
+  const statutLabels: Record<string, string> = {
+    brouillon: "Brouillon", envoye: "Envoyé", signe: "Signé", accepte: "Accepté",
+    refuse: "Refusé", facture: "Facturé", annule: "Annulé",
+    paye: "Payé", payee: "Payée", partiel: "Partiel", en_retard: "En retard",
+    en_cours: "En cours", chantier_en_cours: "Chantier en cours", termine: "Terminé",
+    envoyee: "Envoyée", en_attente_paiement: "En attente", a_modifier: "À modifier", impayee: "Impayée",
   };
 
   const mentionsHtml = (params.mentions ?? [
-    "TVA non applicable, article 293 B du CGI (si micro-entreprise)",
+    "TVA non applicable, article 293 B du CGI (si micro-entreprise).",
     "Règlement à réception de facture. Tout retard entraîne des pénalités de 3× le taux d'intérêt légal.",
     "Garantie décennale — assurance RCP professionnelle souscrite.",
-  ]).map(m => `<li style="font-size:10px;color:#9ca3af;margin-bottom:2px;">${m}</li>`).join("");
+  ]).map(m => `<li>${m}</li>`).join("");
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -82,106 +96,126 @@ function buildHtml(params: {
 <style>
   ${params.custom_css ?? ""}
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111827; }
+  body { font-family: Arial, 'Helvetica Neue', sans-serif; background: #f3f4f6; color: #111827; font-size: 13px; }
   @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
     .no-print { display: none !important; }
-    @page { margin: 10mm 14mm; size: A4; }
+    @page { margin: 8mm 10mm; size: A4; }
   }
-  .page { max-width: 794px; margin: 0 auto; padding: 32px 40px; }
+  .page { max-width: 794px; margin: 0 auto; background: #fff; padding: 0; }
+  table { border-collapse: collapse; }
 </style>
 </head>
 <body>
 <div class="page">
 
-  <!-- Header band -->
-  <div style="background:linear-gradient(135deg,${cp},${cs});border-radius:12px;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
-    <div style="display:flex;align-items:center;gap:16px;">
-      ${logoHtml}
-      <div>
-        <div style="font-size:20px;font-weight:700;color:#fff;">${params.artisan.prenom} ${params.artisan.nom}</div>
-        ${params.artisan.siret ? `<div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:2px;">SIRET : ${params.artisan.siret}</div>` : ""}
-        ${params.artisan.adresse ? `<div style="font-size:11px;color:rgba(255,255,255,0.75);">${params.artisan.adresse}</div>` : ""}
-        ${params.artisan.telephone ? `<div style="font-size:11px;color:rgba(255,255,255,0.75);">${params.artisan.telephone}</div>` : ""}
-        ${params.artisan.email ? `<div style="font-size:11px;color:rgba(255,255,255,0.75);">${params.artisan.email}</div>` : ""}
+  <!-- ═══ HEADER ═══ -->
+  <div style="background:linear-gradient(135deg,${cp} 0%,${cs} 100%);padding:28px 32px 24px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
+
+      <!-- Artisan info -->
+      <div style="display:flex;align-items:flex-start;gap:16px;">
+        ${logoHtml}
+        <div>
+          <div style="font-size:18px;font-weight:700;color:#fff;line-height:1.2;">${params.artisan.prenom} ${params.artisan.nom}</div>
+          ${params.artisan.siret ? `<div style="font-size:11px;color:rgba(255,255,255,0.8);margin-top:3px;">SIRET : ${params.artisan.siret}</div>` : ""}
+          ${params.artisan.adresse ? `<div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:1px;">${params.artisan.adresse}</div>` : ""}
+          ${params.artisan.telephone ? `<div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:1px;">Tél. : ${params.artisan.telephone}</div>` : ""}
+          ${params.artisan.email ? `<div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:1px;">${params.artisan.email}</div>` : ""}
+          ${enteteHtml}
+        </div>
       </div>
-    </div>
-    <div style="text-align:right;">
-      <div style="font-size:32px;font-weight:800;color:#fff;letter-spacing:-1px;">${docLabel}</div>
-      <div style="font-size:14px;color:rgba(255,255,255,0.9);margin-top:4px;">N° ${params.numero}</div>
-      <div style="display:inline-block;margin-top:8px;background:${statutColor[statut] ?? ca};color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px;">${statut}</div>
+
+      <!-- Doc type + numero -->
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-0.5px;line-height:1;">${docLabel}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.9);margin-top:6px;font-weight:600;">N° ${params.numero}</div>
+        ${params.parent_numero ? `<div style="font-size:11px;color:rgba(255,255,255,0.7);margin-top:3px;">Rattaché au devis ${params.parent_numero}</div>` : ""}
+        <div style="margin-top:10px;">
+          <span style="background:${statutColor[statut] ?? ca};color:#fff;font-size:10px;font-weight:700;padding:4px 12px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px;">${statutLabels[statut] ?? statut}</span>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- Dates + client -->
-  <div style="display:flex;gap:20px;margin-bottom:24px;">
+  <!-- ═══ INFO ROW (dates + client + chantier) ═══ -->
+  <div style="display:flex;gap:0;border-bottom:2px solid ${cp};">
+
     <!-- Dates -->
-    <div style="flex:1;background:#f9fafb;border-radius:8px;padding:14px 16px;">
-      <div style="font-size:11px;font-weight:600;color:${cp};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Dates</div>
-      <div style="font-size:12px;color:#374151;">Date d'émission : <strong>${params.date}</strong></div>
-      ${params.date_validite ? `<div style="font-size:12px;color:#374151;margin-top:4px;">Validité : <strong>${params.date_validite}</strong></div>` : ""}
-      ${params.date_echeance ? `<div style="font-size:12px;color:#374151;margin-top:4px;">Échéance : <strong>${params.date_echeance}</strong></div>` : ""}
+    <div style="flex:1;padding:16px 20px;border-right:1px solid #e5e7eb;">
+      <div style="font-size:10px;font-weight:700;color:${cp};text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Informations</div>
+      <div style="font-size:12px;color:#374151;margin-bottom:3px;">Date d'émission : <strong>${params.date}</strong></div>
+      ${params.date_validite ? `<div style="font-size:12px;color:#374151;margin-bottom:3px;">Validité jusqu'au : <strong>${params.date_validite}</strong></div>` : ""}
+      ${params.date_echeance ? `<div style="font-size:12px;color:#374151;margin-bottom:3px;">Échéance : <strong>${params.date_echeance}</strong></div>` : ""}
     </div>
+
     <!-- Client -->
-    <div style="flex:1;background:#f9fafb;border-radius:8px;padding:14px 16px;">
-      <div style="font-size:11px;font-weight:600;color:${cp};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Client</div>
-      <div style="font-size:13px;font-weight:700;color:#111827;">${params.client.nom}</div>
-      ${params.client.adresse ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">${params.client.adresse}</div>` : ""}
-      ${params.client.telephone ? `<div style="font-size:11px;color:#6b7280;">${params.client.telephone}</div>` : ""}
+    <div style="flex:1.2;padding:16px 20px;${params.chantier?.nom ? "border-right:1px solid #e5e7eb;" : ""}">
+      <div style="font-size:10px;font-weight:700;color:${cp};text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Client</div>
+      <div style="font-size:13px;font-weight:700;color:#111827;margin-bottom:3px;">${params.client.nom}</div>
+      ${params.client.adresse ? `<div style="font-size:11px;color:#6b7280;margin-bottom:2px;">${params.client.adresse}</div>` : ""}
+      ${params.client.telephone ? `<div style="font-size:11px;color:#6b7280;margin-bottom:2px;">Tél. : ${params.client.telephone}</div>` : ""}
       ${params.client.email ? `<div style="font-size:11px;color:#6b7280;">${params.client.email}</div>` : ""}
     </div>
+
     ${params.chantier?.nom ? `
     <!-- Chantier -->
-    <div style="flex:1;background:#f9fafb;border-radius:8px;padding:14px 16px;">
-      <div style="font-size:11px;font-weight:600;color:${cp};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Chantier</div>
-      <div style="font-size:13px;font-weight:700;color:#111827;">${params.chantier.nom}</div>
-      ${params.chantier.adresse ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">${params.chantier.adresse}</div>` : ""}
+    <div style="flex:1;padding:16px 20px;">
+      <div style="font-size:10px;font-weight:700;color:${cp};text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Chantier</div>
+      <div style="font-size:13px;font-weight:700;color:#111827;margin-bottom:3px;">${params.chantier.nom}</div>
+      ${params.chantier.adresse ? `<div style="font-size:11px;color:#6b7280;">${params.chantier.adresse}</div>` : ""}
     </div>` : ""}
+
   </div>
 
-  <!-- Lignes -->
-  <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;margin-bottom:20px;">
-    <thead>
-      <tr style="background:${cp};">
-        <th style="padding:11px 12px;text-align:left;font-size:12px;color:#fff;font-weight:600;">Description</th>
-        <th style="padding:11px 12px;text-align:center;font-size:12px;color:#fff;font-weight:600;width:70px;">Qté</th>
-        <th style="padding:11px 12px;text-align:center;font-size:12px;color:#fff;font-weight:600;width:60px;">Unité</th>
-        <th style="padding:11px 12px;text-align:right;font-size:12px;color:#fff;font-weight:600;width:100px;">P.U. HT</th>
-        <th style="padding:11px 12px;text-align:right;font-size:12px;color:#fff;font-weight:600;width:110px;">Total HT</th>
+  <!-- ═══ LIGNES ═══ -->
+  <div style="padding:0 0 0 0;">
+    <table style="width:100%;">
+      <thead>
+        <tr style="background:${cp};">
+          <th style="padding:11px 14px;text-align:left;font-size:11px;color:#fff;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Désignation</th>
+          <th style="padding:11px 10px;text-align:center;font-size:11px;color:#fff;font-weight:700;width:60px;">Qté</th>
+          <th style="padding:11px 10px;text-align:center;font-size:11px;color:#fff;font-weight:700;width:55px;">Unité</th>
+          <th style="padding:11px 10px;text-align:right;font-size:11px;color:#fff;font-weight:700;width:105px;">P.U. HT</th>
+          <th style="padding:11px 14px;text-align:right;font-size:11px;color:#fff;font-weight:700;width:115px;">Total HT</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lignesHtml || `<tr><td colspan="5" style="padding:20px;text-align:center;font-size:13px;color:#9ca3af;font-style:italic;">Aucune prestation renseignée</td></tr>`}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ TOTAUX ═══ -->
+  <div style="padding:20px 32px 24px;display:flex;justify-content:flex-end;">
+    <table style="min-width:260px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+      <tr style="background:#f9fafb;">
+        <td style="padding:10px 16px;font-size:13px;color:#374151;border-bottom:1px solid #e5e7eb;">Montant HT</td>
+        <td style="padding:10px 16px;font-size:13px;font-weight:600;color:#111827;text-align:right;border-bottom:1px solid #e5e7eb;">${fmt(params.montant_ht)}</td>
       </tr>
-    </thead>
-    <tbody>
-      ${lignesHtml || `<tr><td colspan="5" style="padding:16px;text-align:center;font-size:13px;color:#9ca3af;">Aucune prestation renseignée</td></tr>`}
-    </tbody>
-  </table>
-
-  <!-- Totaux -->
-  <div style="display:flex;justify-content:flex-end;margin-bottom:28px;">
-    <div style="min-width:240px;background:#f9fafb;border-radius:8px;overflow:hidden;">
-      <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;color:#374151;border-bottom:1px solid #e5e7eb;">
-        <span>Total HT</span><span style="font-weight:600;">${fmt(params.montant_ht)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:10px 16px;font-size:13px;color:#374151;border-bottom:1px solid #e5e7eb;">
-        <span>TVA (${params.tva}%)</span><span>${fmt(montantTVA)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:12px 16px;background:${cp};">
-        <span style="font-size:15px;font-weight:700;color:#fff;">Total TTC</span>
-        <span style="font-size:15px;font-weight:700;color:#fff;">${fmt(montantTTC)}</span>
-      </div>
-    </div>
+      <tr style="background:#f9fafb;">
+        <td style="padding:10px 16px;font-size:13px;color:#374151;border-bottom:1px solid #e5e7eb;">TVA (${params.tva} %)</td>
+        <td style="padding:10px 16px;font-size:13px;color:#6b7280;text-align:right;border-bottom:1px solid #e5e7eb;">${fmt(montantTVA)}</td>
+      </tr>
+      <tr style="background:${cp};">
+        <td style="padding:13px 16px;font-size:15px;font-weight:700;color:#fff;">NET À PAYER TTC</td>
+        <td style="padding:13px 16px;font-size:15px;font-weight:700;color:#fff;text-align:right;">${fmt(montantTTC)}</td>
+      </tr>
+    </table>
   </div>
 
-  <!-- Mentions légales -->
-  <div style="border-top:1px solid #e5e7eb;padding-top:16px;">
-    <div style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Mentions légales</div>
-    <ul style="list-style:none;padding:0;">
-      ${mentionsHtml}
+  <!-- ═══ MENTIONS LÉGALES ═══ -->
+  <div style="padding:16px 32px 28px;border-top:1px solid #e5e7eb;">
+    <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;">Mentions légales</div>
+    <ul style="list-style:none;padding:0;margin:0;">
+      ${mentionsHtml.replace(/<li>/g, '<li style="font-size:10px;color:#9ca3af;margin-bottom:3px;padding-left:10px;position:relative;"><span style="position:absolute;left:0;">·</span>')}
     </ul>
   </div>
 
   <!-- Print button (hidden when printing) -->
-  <div class="no-print" style="margin-top:28px;text-align:center;">
-    <button onclick="window.print()" style="background:${cp};color:#fff;border:none;border-radius:8px;padding:12px 32px;font-size:15px;font-weight:600;cursor:pointer;">
+  <div class="no-print" style="padding:20px 32px;text-align:center;border-top:1px solid #e5e7eb;">
+    <button onclick="window.print()" style="background:${cp};color:#fff;border:none;border-radius:8px;padding:12px 36px;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.3px;">
       Imprimer / Enregistrer en PDF
     </button>
   </div>
@@ -217,7 +251,7 @@ serve(async (req) => {
 
     const db = createClient(supabaseUrl, serviceKey);
     const body = await req.json();
-    const { type, devis_id, facture_id } = body;
+    const { type, devis_id, facture_id, avenant_id } = body;
 
     // ── Fetch profile ──────────────────────────────────────────────────────
     const { data: profile } = await db.from("profiles")
@@ -256,6 +290,7 @@ serve(async (req) => {
     const couleur_secondaire = tpl?.couleur_secondaire ?? sectorDef.secondary;
     const couleur_accent     = tpl?.couleur_accent     ?? sectorDef.accent;
     const logo_url           = tpl?.logo_url ?? artisan.logo_url;
+    const entete_texte       = tpl?.entete_texte ?? null;
 
     // Fetch mentions from template_elements
     let mentions: string[] | undefined;
@@ -315,6 +350,7 @@ serve(async (req) => {
         couleur_accent,
         logo_url,
         secteur,
+        entete_texte,
         mentions,
         custom_html: tpl?.html_template,
         custom_css: tpl?.css_template,
@@ -369,12 +405,60 @@ serve(async (req) => {
         couleur_accent,
         logo_url,
         secteur,
+        entete_texte,
+        mentions,
+        custom_html: tpl?.html_template,
+        custom_css: tpl?.css_template,
+      });
+    } else if (type === "avenant" && avenant_id) {
+      // ── AVENANT ──────────────────────────────────────────────────────────
+      const { data: avenant } = await db.from("avenants").select("*").eq("id", avenant_id).single();
+      if (!avenant) return new Response(JSON.stringify({ error: "Avenant introuvable" }), { status: 404, headers: cors });
+
+      // Fetch parent devis → chantier → client
+      const { data: parentDevis } = avenant.devis_id
+        ? await db.from("devis").select("chantier_id, numero").eq("id", avenant.devis_id).single()
+        : { data: null };
+
+      let chantier = null, client = null;
+      if (parentDevis) {
+        const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", parentDevis.chantier_id).single();
+        chantier = ch;
+        if (ch?.client_id) {
+          const { data: cl } = await db.from("clients").select("nom, adresse, email, telephone").eq("id", ch.client_id).single();
+          client = cl;
+        }
+      }
+
+      // Build avenant as a single-line document
+      const ligneAvenant = avenant.description
+        ? [{ description: avenant.description, quantite: 1, unite: "forfait", prix_unitaire: Number(avenant.montant_ht) }]
+        : [];
+
+      html = buildHtml({
+        type: "avenant",
+        numero: (avenant as any).numero || `AV-${avenant_id.slice(-6).toUpperCase()}`,
+        date: fmtDate((avenant as any).date ?? (avenant as any).created_at),
+        parent_numero: parentDevis?.numero ?? null,
+        artisan,
+        client: { nom: client?.nom ?? "Client", adresse: client?.adresse, email: client?.email, telephone: client?.telephone },
+        chantier: chantier ? { nom: chantier.nom, adresse: chantier.adresse_chantier } : undefined,
+        lignes: ligneAvenant,
+        montant_ht: Number(avenant.montant_ht),
+        tva: Number(avenant.tva),
+        statut: avenant.statut,
+        couleur_primaire,
+        couleur_secondaire,
+        couleur_accent,
+        logo_url,
+        secteur,
+        entete_texte,
         mentions,
         custom_html: tpl?.html_template,
         custom_css: tpl?.css_template,
       });
     } else {
-      return new Response(JSON.stringify({ error: "type (devis|facture) + id requis" }), { status: 400, headers: cors });
+      return new Response(JSON.stringify({ error: "type (devis|facture|avenant) + id requis" }), { status: 400, headers: cors });
     }
 
     return new Response(JSON.stringify({ html }), {

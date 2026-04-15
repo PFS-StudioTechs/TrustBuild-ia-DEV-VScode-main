@@ -402,6 +402,7 @@ export default function Contacts() {
 
       {/* Dialog ajout / édition */}
       <ContactDialog
+        key={editTarget?.id ?? "new"}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         initial={initialForm}
