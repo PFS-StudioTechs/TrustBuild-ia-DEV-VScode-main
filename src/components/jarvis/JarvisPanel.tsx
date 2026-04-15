@@ -168,37 +168,68 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       const dateLabel = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
       const filename = `Conversation-Jarvis-${now.toISOString().slice(0, 16).replace(/:/g, "-")}.html`;
 
-      // Build HTML
-      const messagesHtml = messages.map((m) => {
+      // Build HTML — chaque message sur une ligne claire pour l'impression A4
+      const messagesHtml = messages.map((m, idx) => {
         const persona = m.persona ?? "jarvis";
         const label = persona === "robert_b" ? "Robert B" : persona === "auguste_p" ? "Auguste P" : "Jarvis";
-        const bg = m.role === "user" ? "#2563eb" : "#f9fafb";
-        const color = m.role === "user" ? "#fff" : "#111827";
-        const align = m.role === "user" ? "right" : "left";
-        const content = stripDevisData(m.content).replace(/\n/g, "<br>");
+        const isUser = m.role === "user";
+        const content = stripDevisData(m.content).replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
         return `
-          <div style="display:flex;justify-content:${align};margin-bottom:12px;">
-            <div style="max-width:75%;background:${bg};color:${color};border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;">
-              <div style="font-size:10px;font-weight:700;margin-bottom:4px;opacity:.7;text-transform:uppercase;">${m.role === "user" ? "Vous" : label}</div>
+          <tr style="page-break-inside:avoid;">
+            <td style="width:80px;padding:10px 12px 10px 0;vertical-align:top;white-space:nowrap;">
+              <span style="display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+                background:${isUser ? "#dbeafe" : "#f0fdf4"};color:${isUser ? "#1d4ed8" : "#15803d"};">
+                ${isUser ? "Vous" : label}
+              </span>
+            </td>
+            <td style="padding:10px 0;vertical-align:top;font-size:13px;line-height:1.65;color:#1f2937;border-bottom:1px solid #f3f4f6;">
               ${content}
-            </div>
-          </div>`;
+            </td>
+          </tr>`;
       }).join("");
 
-      const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Conversation Jarvis — ${dateLabel}</title>
-      <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111827;padding:32px 40px;max-width:700px;margin:0 auto}
-      @media print{body{padding:16px}@page{margin:12mm 14mm;size:A4}}</style></head>
-      <body>
-        <div style="background:linear-gradient(135deg,#2563eb,#1e40af);border-radius:12px;padding:20px 24px;margin-bottom:24px;">
-          <div style="font-size:22px;font-weight:700;color:#fff;">Conversation avec Maître Jarvis</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:4px;">${dateLabel} · ${messages.length} message(s)</div>
-        </div>
+      const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Conversation Jarvis — ${dateLabel}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111827; }
+    .page { max-width: 720px; margin: 0 auto; padding: 32px 40px; }
+    .header { background: linear-gradient(135deg, #1d4ed8, #1e40af); border-radius: 10px; padding: 20px 24px; margin-bottom: 28px; }
+    .header h1 { font-size: 20px; font-weight: 700; color: #fff; }
+    .header p  { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    .footer { margin-top: 28px; border-top: 1px solid #e5e7eb; padding-top: 12px; font-size: 10px; color: #9ca3af; }
+    .print-btn { margin-top: 20px; text-align: center; }
+    .print-btn button { background: #1d4ed8; color: #fff; border: none; border-radius: 8px; padding: 10px 28px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    @media print {
+      .page { padding: 0; }
+      .print-btn { display: none; }
+      @page { margin: 14mm 16mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <h1>Conversation avec ${messages.some(m => m.persona === "robert_b") ? "Robert B" : messages.some(m => m.persona === "auguste_p") ? "Auguste P" : "Jarvis"}</h1>
+      <p>${dateLabel} &nbsp;·&nbsp; ${messages.length} message(s)</p>
+    </div>
+    <table>
+      <tbody>
         ${messagesHtml}
-        <div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:12px;font-size:10px;color:#9ca3af;">Trust Build-IA — Généré automatiquement</div>
-        <div class="no-print" style="margin-top:20px;text-align:center;">
-          <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:14px;font-weight:600;cursor:pointer;">Imprimer / Enregistrer en PDF</button>
-        </div>
-      </body></html>`;
+      </tbody>
+    </table>
+    <div class="footer">Trust Build-IA — Document généré automatiquement</div>
+    <div class="print-btn">
+      <button onclick="window.print()">Imprimer / Enregistrer en PDF</button>
+    </div>
+  </div>
+</body>
+</html>`;
 
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const path = `${user.id}/conversations/${filename}`;

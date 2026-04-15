@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -293,11 +294,11 @@ function ClientDetail({
               {/* Compteurs */}
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: "Devis",    value: stats.nbDevis,    icon: FileText },
-                  { label: "Avenants / TS", value: stats.nbAvenants, icon: FileText },
-                  { label: "Factures", value: stats.nbFactures, icon: Receipt },
-                ].map(({ label, value, icon: Icon }) => (
-                  <div key={label} className="forge-card !p-3 text-center">
+                  { label: "Devis",    value: stats.nbDevis,    icon: FileText, tab: "devis" },
+                  { label: "Avenants / TS", value: stats.nbAvenants, icon: FileText, tab: "avenants" },
+                  { label: "Factures", value: stats.nbFactures, icon: Receipt, tab: "factures" },
+                ].map(({ label, value, icon: Icon, tab }) => (
+                  <div key={label} className="forge-card !p-3 text-center cursor-pointer hover:border-primary/30 transition-all" onClick={() => navigate(`/documents?tab=${tab}`)}>
                     <p className="text-2xl font-bold font-mono text-foreground">{value}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
                   </div>
@@ -519,6 +520,7 @@ function ClientCard({
 
 export default function Clients() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [clients, setClients]   = useState<Client[]>([]);
   const [chantiers, setChantiers] = useState<Chantier[]>([]);

@@ -1,14 +1,16 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users, FileText, Receipt, Download, Loader2, Mic, MicOff, Pencil } from "lucide-react";
+import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users, FileText, Receipt, Download, Loader2, Mic, MicOff, Pencil, Eye, Printer, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import AddressFields from "@/components/ui/AddressFields";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -113,8 +115,27 @@ function KanbanColumn({ statut, chantiers: items, onCardClick }: { statut: Chant
 
 export default function Chantiers() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const [chantiers, setChantiers] = useState<Chantier[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+
+  // PDF Sheet preview
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [pdfPreviewHtml, setPdfPreviewHtml] = useState("");
+  const [pdfPreviewTitle, setPdfPreviewTitle] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  // Nouvelle facture depuis chantier
+  const [addFactureOpen, setAddFactureOpen] = useState(false);
+  const [newFactureForm, setNewFactureForm] = useState({ devis_id: "", date_echeance: "", tva: "20" });
+  const [newFactureSaving, setNewFactureSaving] = useState(false);
+
+  // Lignes pour nouveau devis depuis chantier
+  type LigneDevis = { _key: string; designation: string; quantite: string; prix_unitaire: string; unite: string };
+  const [newDevisLignes, setNewDevisLignes] = useState<LigneDevis[]>([]);
+  const mkLigne = (): LigneDevis => ({ _key: String(Date.now() + Math.random()), designation: "", quantite: "1", prix_unitaire: "0", unite: "u" });
   const [activeChantier, setActiveChantier] = useState<Chantier | null>(null);
 
   // Detail dialog
@@ -231,40 +252,89 @@ export default function Chantiers() {
     if (!user) return;
     setLoading(true);
     const numero = newDevisForm.numero || `DEV-${Date.now().toString(36).toUpperCase()}`;
-    const { error } = await supabase.from("devis").insert({
+    const lignesValides = newDevisLignes.filter(l => l.designation.trim() || parseFloat(l.prix_unitaire) > 0);
+    const montantHt = lignesValides.length > 0
+      ? lignesValides.reduce((s, l) => s + (parseFloat(l.quantite) || 0) * (parseFloat(l.prix_unitaire) || 0), 0)
+      : parseFloat(newDevisForm.montant_ht) || 0;
+    const { data: newDevis, error } = await supabase.from("devis").insert({
       artisan_id: user.id,
       chantier_id: chantierId,
       numero,
-      montant_ht: parseFloat(newDevisForm.montant_ht) || 0,
+      montant_ht: montantHt,
       tva: parseFloat(newDevisForm.tva) || 20,
       statut: newDevisForm.statut as any,
       date_validite: newDevisForm.date_validite || null,
-    });
+    }).select("id").single();
     if (error) { toast.error(error.message); }
     else {
+      // Sauvegarde des lignes dans lignes_devis
+      if (lignesValides.length > 0) {
+        await (supabase as any).from("lignes_devis").insert(
+          lignesValides.map((l, i) => ({
+            devis_id: newDevis.id,
+            designation: l.designation,
+            quantite: parseFloat(l.quantite) || 1,
+            unite: l.unite || "u",
+            prix_unitaire: parseFloat(l.prix_unitaire) || 0,
+            tva: parseFloat(newDevisForm.tva) || 20,
+            ordre: i + 1,
+          }))
+        );
+      }
       toast.success(`Devis ${numero} créé`);
       setAddDevisOpen(false);
       setNewDevisForm({ numero: "", montant_ht: "", tva: "20", statut: "brouillon", date_validite: "" });
+      setNewDevisLignes([]);
       loadChantierDocs(chantierId);
     }
     setLoading(false);
   };
 
+  const handleAddFacture = async (chantierId: string) => {
+    if (!user || !newFactureForm.devis_id || !newFactureForm.date_echeance) {
+      toast.error("Sélectionnez un devis et une date d'échéance");
+      return;
+    }
+    setNewFactureSaving(true);
+    const linkedDevis = chantierDevis.find(d => d.id === newFactureForm.devis_id);
+    const montant = linkedDevis ? Number(linkedDevis.montant_ht) : 0;
+    const numero = `FAC-${Date.now().toString(36).toUpperCase()}`;
+    const { error } = await supabase.from("factures").insert({
+      artisan_id: user.id,
+      devis_id: newFactureForm.devis_id,
+      numero,
+      montant_ht: montant,
+      tva: parseFloat(newFactureForm.tva) || 20,
+      statut: "brouillon" as any,
+      date_echeance: newFactureForm.date_echeance,
+      solde_restant: montant,
+    });
+    if (error) { toast.error(error.message); }
+    else {
+      toast.success(`Facture ${numero} créée`);
+      setAddFactureOpen(false);
+      setNewFactureForm({ devis_id: "", date_echeance: "", tva: "20" });
+      loadChantierDocs(chantierId);
+    }
+    setNewFactureSaving(false);
+  };
+
   const openTemplatePdf = async (type: "devis" | "facture", id: string) => {
+    setPdfLoading(true);
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const token = session?.session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pdf-html`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(type === "devis" ? { type, devis_id: id } : { type, facture_id: id }),
+      const { data, error } = await supabase.functions.invoke("generate-pdf-html", {
+        body: type === "devis" ? { type, devis_id: id } : { type, facture_id: id },
       });
-      const data = await resp.json();
-      if (!resp.ok || !data.html) throw new Error(data.error ?? "Erreur génération");
-      const win = window.open("", "_blank");
-      if (win) { win.document.write(data.html); win.document.close(); }
-      else toast.error("Autorisez les popups pour ouvrir le PDF");
+      if (error) throw new Error(error.message ?? "Erreur génération");
+      if (!data?.html) throw new Error("Réponse vide");
+      const item = type === "devis"
+        ? chantierDevis.find(d => d.id === id)
+        : chantierFactures.find(f => f.id === id);
+      setPdfPreviewTitle(type === "devis" ? `Devis ${item?.numero ?? ""}` : `Facture ${item?.numero ?? ""}`);
+      setPdfPreviewHtml(data.html);
+      setPdfPreviewOpen(true);
     } catch (e: any) { toast.error("Erreur PDF : " + e.message); }
+    finally { setPdfLoading(false); }
   };
 
   const devisStatutStyles: Record<string, string> = {
@@ -292,6 +362,15 @@ export default function Chantiers() {
   };
 
   useEffect(() => { fetchData(); }, [user]);
+
+  // Ouvre automatiquement le formulaire "Nouveau chantier" si ?new=1
+  useEffect(() => {
+    if (searchParams.get("new") === "1" && user) {
+      openNewChantier();
+      // Nettoie le paramètre sans recharger
+      navigate("/chantiers", { replace: true });
+    }
+  }, [searchParams, user]);
 
   // Chantier CRUD
   const openNewChantier = () => {
@@ -893,8 +972,11 @@ export default function Chantiers() {
 
               {/* Onglet Factures */}
               <TabsContent value="factures" className="flex-1 overflow-y-auto px-6 mt-0 pb-4">
-                <div className="py-3">
+                <div className="flex justify-between items-center py-3">
                   <p className="text-sm font-medium">Factures liées à ce chantier</p>
+                  <Button size="sm" onClick={() => { setNewFactureForm({ devis_id: chantierDevis[0]?.id || "", date_echeance: "", tva: "20" }); setAddFactureOpen(true); }} className="h-8 text-xs gap-1">
+                    <Plus className="w-3 h-3" /> Nouvelle facture
+                  </Button>
                 </div>
                 {chantierDocsLoading ? (
                   <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
@@ -940,35 +1022,91 @@ export default function Chantiers() {
       </Dialog>
 
       {/* Nouveau devis depuis chantier */}
-      <Dialog open={addDevisOpen} onOpenChange={setAddDevisOpen}>
-        <DialogContent className="max-w-sm">
+      <Dialog open={addDevisOpen} onOpenChange={(o) => { setAddDevisOpen(o); if (!o) setNewDevisLignes([]); }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">Nouveau devis</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Numéro (auto si vide)</Label>
-              <Input value={newDevisForm.numero} onChange={e => setNewDevisForm(p => ({ ...p, numero: e.target.value }))} placeholder="DEV-001" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Numéro (auto si vide)</Label>
+                <Input value={newDevisForm.numero} onChange={e => setNewDevisForm(p => ({ ...p, numero: e.target.value }))} placeholder="DEV-001" />
+              </div>
+              <div className="space-y-1">
+                <Label>Date de validité</Label>
+                <Input type="date" value={newDevisForm.date_validite} onChange={e => setNewDevisForm(p => ({ ...p, date_validite: e.target.value }))} />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label>Montant HT (€)</Label>
-              <Input type="number" value={newDevisForm.montant_ht} onChange={e => setNewDevisForm(p => ({ ...p, montant_ht: e.target.value }))} placeholder="0" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>TVA (%)</Label>
+                <Select value={newDevisForm.tva} onValueChange={v => setNewDevisForm(p => ({ ...p, tva: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0%</SelectItem>
+                    <SelectItem value="5.5">5,5%</SelectItem>
+                    <SelectItem value="10">10%</SelectItem>
+                    <SelectItem value="20">20%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Statut</Label>
+                <Select value={newDevisForm.statut} onValueChange={v => setNewDevisForm(p => ({ ...p, statut: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="brouillon">Brouillon</SelectItem>
+                    <SelectItem value="envoye">Envoyé</SelectItem>
+                    <SelectItem value="signe">Signé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label>TVA (%)</Label>
-              <Select value={newDevisForm.tva} onValueChange={v => setNewDevisForm(p => ({ ...p, tva: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">0%</SelectItem>
-                  <SelectItem value="5.5">5,5%</SelectItem>
-                  <SelectItem value="10">10%</SelectItem>
-                  <SelectItem value="20">20%</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Date de validité</Label>
-              <Input type="date" value={newDevisForm.date_validite} onChange={e => setNewDevisForm(p => ({ ...p, date_validite: e.target.value }))} />
+
+            {/* Lignes du devis */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Prestations</Label>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => setNewDevisLignes(p => [...p, mkLigne()])}>
+                  <Plus className="w-3 h-3 mr-1" /> Ajouter
+                </Button>
+              </div>
+              {newDevisLignes.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-2 text-center">Aucune prestation — ou renseignez un montant HT global ci-dessous</p>
+              ) : (
+                <div className="space-y-2">
+                  {newDevisLignes.map((l, i) => (
+                    <div key={l._key} className="grid grid-cols-[1fr_auto_auto_auto] gap-1.5 items-end">
+                      <div>
+                        <Label className="text-[10px]">Désignation</Label>
+                        <Input value={l.designation} onChange={e => setNewDevisLignes(p => p.map((x, j) => j === i ? { ...x, designation: e.target.value } : x))} className="h-7 text-xs" placeholder="Pose carrelage…" />
+                      </div>
+                      <div className="w-14">
+                        <Label className="text-[10px]">Qté</Label>
+                        <Input type="number" value={l.quantite} onChange={e => setNewDevisLignes(p => p.map((x, j) => j === i ? { ...x, quantite: e.target.value } : x))} className="h-7 text-xs" />
+                      </div>
+                      <div className="w-20">
+                        <Label className="text-[10px]">P.U. €</Label>
+                        <Input type="number" value={l.prix_unitaire} onChange={e => setNewDevisLignes(p => p.map((x, j) => j === i ? { ...x, prix_unitaire: e.target.value } : x))} className="h-7 text-xs" />
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive self-end" onClick={() => setNewDevisLignes(p => p.filter((_, j) => j !== i))}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-xs font-semibold border-t pt-2">
+                    <span>Total HT</span>
+                    <span>{newDevisLignes.reduce((s, l) => s + (parseFloat(l.quantite) || 0) * (parseFloat(l.prix_unitaire) || 0), 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}</span>
+                  </div>
+                </div>
+              )}
+              {newDevisLignes.length === 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Montant HT global (si pas de lignes)</Label>
+                  <Input type="number" value={newDevisForm.montant_ht} onChange={e => setNewDevisForm(p => ({ ...p, montant_ht: e.target.value }))} placeholder="0" />
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -979,6 +1117,66 @@ export default function Chantiers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Nouvelle facture depuis chantier */}
+      <Dialog open={addFactureOpen} onOpenChange={setAddFactureOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Nouvelle facture</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Devis associé *</Label>
+              <Select value={newFactureForm.devis_id} onValueChange={v => setNewFactureForm(p => ({ ...p, devis_id: v }))}>
+                <SelectTrigger><SelectValue placeholder="Sélectionner un devis" /></SelectTrigger>
+                <SelectContent>{chantierDevis.map(d => <SelectItem key={d.id} value={d.id}>{d.numero} — {Number(d.montant_ht).toLocaleString("fr-FR")} €</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Date d'échéance *</Label>
+              <Input type="date" value={newFactureForm.date_echeance} onChange={e => setNewFactureForm(p => ({ ...p, date_echeance: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>TVA (%)</Label>
+              <Select value={newFactureForm.tva} onValueChange={v => setNewFactureForm(p => ({ ...p, tva: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0%</SelectItem>
+                  <SelectItem value="5.5">5,5%</SelectItem>
+                  <SelectItem value="10">10%</SelectItem>
+                  <SelectItem value="20">20%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">Le montant HT sera repris du devis sélectionné.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddFactureOpen(false)}>Annuler</Button>
+            <Button onClick={() => detailChantier && handleAddFacture(detailChantier.id)} disabled={newFactureSaving || !newFactureForm.devis_id || !newFactureForm.date_echeance}>
+              {newFactureSaving ? "Création…" : "Créer la facture"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sheet PDF preview */}
+      <Sheet open={pdfPreviewOpen} onOpenChange={setPdfPreviewOpen}>
+        <SheetContent side="bottom" className="h-[95vh] flex flex-col p-0">
+          <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between shrink-0">
+            <SheetTitle className="font-display text-sm">{pdfPreviewTitle}</SheetTitle>
+            <div className="flex items-center gap-2">
+              {pdfLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs"
+                onClick={() => { const iframe = document.getElementById("ch-pdf-iframe") as HTMLIFrameElement; iframe?.contentWindow?.print(); }}>
+                <Printer className="w-3.5 h-3.5" /> Imprimer / PDF
+              </Button>
+            </div>
+          </SheetHeader>
+          <div className="flex-1 overflow-auto bg-gray-100">
+            <iframe id="ch-pdf-iframe" srcDoc={pdfPreviewHtml} className="w-full border-0" style={{ minHeight: "1123px" }} title={pdfPreviewTitle} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

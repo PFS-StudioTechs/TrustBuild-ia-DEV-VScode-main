@@ -123,7 +123,7 @@ export default function Dashboard() {
           <h2 className="text-small font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Devis en brouillon</h2>
           <div className="space-y-2">
             {devisBrouillon.map(d => (
-              <div key={d.id} className="forge-card !p-3 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-all" onClick={() => navigate("/chantiers")}>
+              <div key={d.id} className="forge-card !p-3 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-all" onClick={() => navigate("/documents?tab=devis")}>
                 <div>
                   <p className="text-sm font-medium">{d.numero}</p>
                   {d.chantier_nom && <p className="text-xs text-muted-foreground">{d.chantier_nom}</p>}
