@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Bot, FileText, Receipt, Trash2, Download, PenLine, CreditCard,
-  Send, Eye, Phone, Mail, MapPin, Wrench, FileX, Edit2, Sparkles, Printer, Loader2,
+  Send, Eye, Phone, Mail, MapPin, Wrench, FileX, Edit2, Sparkles, Printer, Loader2, FilePlus, Percent,
 } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
@@ -248,7 +248,7 @@ export default function Documents() {
 
   // ── Create Avenant ──
   const [createAvenantOpen, setCreateAvenantOpen] = useState(false);
-  const [avenantForm, setAvenantForm] = useState({ devis_id: "", numero: "", description: "", montant_ht: "", tva: "20", statut: "brouillon", date: "" });
+  const [avenantForm, setAvenantForm] = useState({ devis_id: "", numero: "", description: "", montant_ht: "", tva: "20", statut: "brouillon", date: "", mode: "montant" as "montant" | "pourcentage", pourcentage: "" });
 
   // ── Create TS ──
   const [createTsOpen, setCreateTsOpen] = useState(false);
@@ -541,19 +541,41 @@ export default function Documents() {
     setSaving(false);
   };
 
+  const resetAvenantForm = () => setAvenantForm({ devis_id: "", numero: "", description: "", montant_ht: "", tva: "20", statut: "brouillon", date: "", mode: "montant", pourcentage: "" });
+
+  const computeAvenantMontant = () => {
+    if (avenantForm.mode === "pourcentage") {
+      const parentDevis = devis.find(d => d.id === avenantForm.devis_id);
+      return parentDevis ? Number(parentDevis.montant_ht) * (parseFloat(avenantForm.pourcentage) || 0) / 100 : 0;
+    }
+    return parseFloat(avenantForm.montant_ht) || 0;
+  };
+
   const handleCreateAvenant = async () => {
     if (!user || !avenantForm.devis_id) { toast.error("Sélectionnez un devis"); return; }
     setSaving(true);
     const numero = avenantForm.numero || `AV-${Date.now().toString(36).toUpperCase()}`;
+    const montant = computeAvenantMontant();
     const { error } = await (supabase as any).from("avenants").insert({
       artisan_id: user.id, devis_id: avenantForm.devis_id, numero,
-      description: avenantForm.description, montant_ht: parseFloat(avenantForm.montant_ht) || 0,
+      description: avenantForm.description, montant_ht: montant,
       tva: parseFloat(avenantForm.tva) || 20, statut: avenantForm.statut,
       date: avenantForm.date || new Date().toISOString().split("T")[0],
     });
     if (error) toast.error(error.message);
-    else { toast.success(`Avenant ${numero} créé`); setCreateAvenantOpen(false); setAvenantForm({ devis_id: "", numero: "", description: "", montant_ht: "", tva: "20", statut: "brouillon", date: "" }); fetchData(); }
+    else { toast.success(`Avenant ${numero} créé`); setCreateAvenantOpen(false); resetAvenantForm(); fetchData(); }
     setSaving(false);
+  };
+
+  const openCreateAvenantForDevis = (devisId: string) => {
+    resetAvenantForm();
+    setAvenantForm(p => ({ ...p, devis_id: devisId }));
+    setCreateAvenantOpen(true);
+  };
+
+  const openCreateFactureForDevis = (devisId: string) => {
+    onFactureDevisChange(devisId);
+    setCreateFactureOpen(true);
   };
 
   const handleCreateTs = async () => {
@@ -772,6 +794,8 @@ export default function Documents() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={stopProp}>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-violet-600" title="Envoyer en signature électronique" onClick={() => openSend("signature", "devis", d.id)}><PenLine className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" title="Nouvel avenant sur ce devis" onClick={() => openCreateAvenantForDevis(d.id)}><FilePlus className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title="Nouvelle facture sur ce devis" onClick={() => openCreateFactureForDevis(d.id)}><Receipt className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier les lignes / détail" onClick={() => openDetail("devis", d)}><Edit2 className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Supprimer" onClick={() => setDeleteDialog({ id: d.id, table: "devis", label: "Devis" })}><Trash2 className="w-4 h-4" /></Button>
                     </div>
@@ -1052,7 +1076,7 @@ export default function Documents() {
       </Dialog>
 
       {/* ── Create Avenant ── */}
-      <Dialog open={createAvenantOpen} onOpenChange={setCreateAvenantOpen}>
+      <Dialog open={createAvenantOpen} onOpenChange={(open) => { if (!open) resetAvenantForm(); setCreateAvenantOpen(open); }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle className="font-display">Nouvel avenant</DialogTitle></DialogHeader>
           <div className="space-y-3">
@@ -1067,10 +1091,36 @@ export default function Documents() {
               <div className="space-y-1"><Label>Date</Label><Input type="date" value={avenantForm.date} onChange={(e) => setAvenantForm((p) => ({ ...p, date: e.target.value }))} /></div>
             </div>
             <div className="space-y-1"><Label>Description</Label><Textarea value={avenantForm.description} onChange={(e) => setAvenantForm((p) => ({ ...p, description: e.target.value }))} rows={2} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Montant HT (€)</Label><Input type="number" value={avenantForm.montant_ht} onChange={(e) => setAvenantForm((p) => ({ ...p, montant_ht: e.target.value }))} /></div>
-              <div className="space-y-1"><Label>TVA (%)</Label><Input type="number" value={avenantForm.tva} onChange={(e) => setAvenantForm((p) => ({ ...p, tva: e.target.value }))} /></div>
+            <div className="space-y-1">
+              <Label>Type de montant</Label>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={avenantForm.mode === "montant" ? "default" : "outline"} onClick={() => setAvenantForm(p => ({ ...p, mode: "montant" }))}>
+                  Montant fixe (€)
+                </Button>
+                <Button type="button" size="sm" variant={avenantForm.mode === "pourcentage" ? "default" : "outline"} onClick={() => setAvenantForm(p => ({ ...p, mode: "pourcentage" }))}>
+                  <Percent className="w-3 h-3 mr-1" /> % du devis
+                </Button>
+              </div>
             </div>
+            {avenantForm.mode === "montant" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>Montant HT (€)</Label><Input type="number" value={avenantForm.montant_ht} onChange={(e) => setAvenantForm((p) => ({ ...p, montant_ht: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>TVA (%)</Label><Input type="number" value={avenantForm.tva} onChange={(e) => setAvenantForm((p) => ({ ...p, tva: e.target.value }))} /></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Pourcentage (%)</Label>
+                  <Input type="number" min="0" max="100" value={avenantForm.pourcentage} onChange={(e) => setAvenantForm(p => ({ ...p, pourcentage: e.target.value }))} placeholder="ex: 10" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Montant HT calculé</Label>
+                  <div className="flex items-center h-10 px-3 rounded-md border bg-muted text-sm font-mono">
+                    {computeAvenantMontant().toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-1"><Label>Statut</Label>
               <Select value={avenantForm.statut} onValueChange={(v) => setAvenantForm((p) => ({ ...p, statut: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1079,7 +1129,7 @@ export default function Documents() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateAvenantOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => { resetAvenantForm(); setCreateAvenantOpen(false); }}>Annuler</Button>
             <Button onClick={handleCreateAvenant} disabled={saving} className="bg-primary text-primary-foreground">{saving ? "Création…" : "Créer"}</Button>
           </DialogFooter>
         </DialogContent>

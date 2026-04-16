@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users, FileText, Receipt, Download, Loader2, Mic, MicOff, Pencil, Eye, Printer, X } from "lucide-react";
+import { Plus, MapPin, Calendar, LayoutGrid, List, Trash2, Edit, Users, FileText, Receipt, Download, Loader2, Mic, MicOff, Pencil, Eye, Printer, X, FilePlus, Percent } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import AddressFields from "@/components/ui/AddressFields";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -131,6 +131,11 @@ export default function Chantiers() {
   const [addFactureOpen, setAddFactureOpen] = useState(false);
   const [newFactureForm, setNewFactureForm] = useState({ devis_id: "", date_echeance: "", tva: "20" });
   const [newFactureSaving, setNewFactureSaving] = useState(false);
+
+  // Nouvel avenant depuis chantier
+  const [addAvenantOpen, setAddAvenantOpen] = useState(false);
+  const [newAvenantForm, setNewAvenantForm] = useState({ devis_id: "", description: "", montant_ht: "", tva: "20", date: "", mode: "montant" as "montant" | "pourcentage", pourcentage: "" });
+  const [newAvenantSaving, setNewAvenantSaving] = useState(false);
 
   // Lignes pour nouveau devis depuis chantier
   type LigneDevis = { _key: string; designation: string; quantite: string; prix_unitaire: string; unite: string };
@@ -317,6 +322,34 @@ export default function Chantiers() {
       loadChantierDocs(chantierId);
     }
     setNewFactureSaving(false);
+  };
+
+  const computeAvenantMontantChantier = () => {
+    if (newAvenantForm.mode === "pourcentage") {
+      const d = chantierDevis.find(dv => dv.id === newAvenantForm.devis_id);
+      return d ? Number(d.montant_ht) * (parseFloat(newAvenantForm.pourcentage) || 0) / 100 : 0;
+    }
+    return parseFloat(newAvenantForm.montant_ht) || 0;
+  };
+
+  const handleAddAvenant = async () => {
+    if (!user || !newAvenantForm.devis_id) { toast.error("Sélectionnez un devis"); return; }
+    setNewAvenantSaving(true);
+    const numero = `AV-${Date.now().toString(36).toUpperCase()}`;
+    const montant = computeAvenantMontantChantier();
+    const { error } = await (supabase as any).from("avenants").insert({
+      artisan_id: user.id, devis_id: newAvenantForm.devis_id, numero,
+      description: newAvenantForm.description, montant_ht: montant,
+      tva: parseFloat(newAvenantForm.tva) || 20, statut: "brouillon",
+      date: newAvenantForm.date || new Date().toISOString().split("T")[0],
+    });
+    if (error) { toast.error(error.message); }
+    else {
+      toast.success(`Avenant ${numero} créé`);
+      setAddAvenantOpen(false);
+      setNewAvenantForm({ devis_id: "", description: "", montant_ht: "", tva: "20", date: "", mode: "montant", pourcentage: "" });
+    }
+    setNewAvenantSaving(false);
   };
 
   const openTemplatePdf = async (type: "devis" | "facture", id: string) => {
@@ -960,6 +993,9 @@ export default function Chantiers() {
                         </div>
                         <div className="flex items-center gap-1">
                           <Badge variant="secondary" className={`text-[10px] ${devisStatutStyles[d.statut] || ""}`}>{d.statut}</Badge>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" title="Nouvel avenant" onClick={() => { setNewAvenantForm(p => ({ ...p, devis_id: d.id })); setAddAvenantOpen(true); }}>
+                            <FilePlus className="w-3.5 h-3.5" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openTemplatePdf("devis", d.id)}>
                             <Download className="w-3.5 h-3.5 text-primary" />
                           </Button>
@@ -1154,6 +1190,72 @@ export default function Chantiers() {
             <Button variant="outline" onClick={() => setAddFactureOpen(false)}>Annuler</Button>
             <Button onClick={() => detailChantier && handleAddFacture(detailChantier.id)} disabled={newFactureSaving || !newFactureForm.devis_id || !newFactureForm.date_echeance}>
               {newFactureSaving ? "Création…" : "Créer la facture"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nouvel avenant depuis chantier */}
+      <Dialog open={addAvenantOpen} onOpenChange={(open) => { if (!open) setNewAvenantForm({ devis_id: "", description: "", montant_ht: "", tva: "20", date: "", mode: "montant", pourcentage: "" }); setAddAvenantOpen(open); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Nouvel avenant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Devis associé *</Label>
+              <Select value={newAvenantForm.devis_id} onValueChange={v => setNewAvenantForm(p => ({ ...p, devis_id: v }))}>
+                <SelectTrigger><SelectValue placeholder="Sélectionner un devis" /></SelectTrigger>
+                <SelectContent>{chantierDevis.map(d => <SelectItem key={d.id} value={d.id}>{d.numero} — {Number(d.montant_ht).toLocaleString("fr-FR")} €</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1"><Label>Date</Label><Input type="date" value={newAvenantForm.date} onChange={e => setNewAvenantForm(p => ({ ...p, date: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>TVA (%)</Label>
+                <Select value={newAvenantForm.tva} onValueChange={v => setNewAvenantForm(p => ({ ...p, tva: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0%</SelectItem>
+                    <SelectItem value="5.5">5,5%</SelectItem>
+                    <SelectItem value="10">10%</SelectItem>
+                    <SelectItem value="20">20%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1"><Label>Description</Label><Textarea value={newAvenantForm.description} onChange={e => setNewAvenantForm(p => ({ ...p, description: e.target.value }))} rows={2} /></div>
+            <div className="space-y-1">
+              <Label>Type de montant</Label>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={newAvenantForm.mode === "montant" ? "default" : "outline"} onClick={() => setNewAvenantForm(p => ({ ...p, mode: "montant" }))}>
+                  Montant fixe (€)
+                </Button>
+                <Button type="button" size="sm" variant={newAvenantForm.mode === "pourcentage" ? "default" : "outline"} onClick={() => setNewAvenantForm(p => ({ ...p, mode: "pourcentage" }))}>
+                  <Percent className="w-3 h-3 mr-1" /> % du devis
+                </Button>
+              </div>
+            </div>
+            {newAvenantForm.mode === "montant" ? (
+              <div className="space-y-1"><Label>Montant HT (€)</Label><Input type="number" value={newAvenantForm.montant_ht} onChange={e => setNewAvenantForm(p => ({ ...p, montant_ht: e.target.value }))} /></div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Pourcentage (%)</Label>
+                  <Input type="number" min="0" max="100" value={newAvenantForm.pourcentage} onChange={e => setNewAvenantForm(p => ({ ...p, pourcentage: e.target.value }))} placeholder="ex: 10" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Montant HT calculé</Label>
+                  <div className="flex items-center h-10 px-3 rounded-md border bg-muted text-sm font-mono">
+                    {computeAvenantMontantChantier().toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddAvenantOpen(false)}>Annuler</Button>
+            <Button onClick={handleAddAvenant} disabled={newAvenantSaving || !newAvenantForm.devis_id}>
+              {newAvenantSaving ? "Création…" : "Créer l'avenant"}
             </Button>
           </DialogFooter>
         </DialogContent>
