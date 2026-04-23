@@ -68,12 +68,12 @@ serve(async (req) => {
     }
 
     // Pour le plan OAuth2 : Authorization: Bearer {token}
-    // Pour le plan "api key" WSO2 : header "apikey: {key}"
+    // Pour le plan "api key" public INSEE : header X-INSEE-Api-Key-Integration
     const inseeHeaders: Record<string, string> = { Accept: "application/json" };
     if (consumerKey && consumerSecret) {
       inseeHeaders["Authorization"] = `Bearer ${bearerToken}`;
     } else {
-      inseeHeaders["apikey"] = bearerToken;
+      inseeHeaders["X-INSEE-Api-Key-Integration"] = bearerToken;
     }
 
     const inseeRes = await fetch(
