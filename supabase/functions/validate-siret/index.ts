@@ -67,14 +67,18 @@ serve(async (req) => {
       );
     }
 
+    // Pour le plan OAuth2 : Authorization: Bearer {token}
+    // Pour le plan "api key" WSO2 : header "apikey: {key}"
+    const inseeHeaders: Record<string, string> = { Accept: "application/json" };
+    if (consumerKey && consumerSecret) {
+      inseeHeaders["Authorization"] = `Bearer ${bearerToken}`;
+    } else {
+      inseeHeaders["apikey"] = bearerToken;
+    }
+
     const inseeRes = await fetch(
       `https://api.insee.fr/api-sirene/3.11/siret/${siretClean}`,
-      {
-        headers: {
-          Authorization: `Bearer ${bearerToken}`,
-          Accept: "application/json",
-        },
-      }
+      { headers: inseeHeaders }
     );
 
     if (inseeRes.status === 404) {
