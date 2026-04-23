@@ -10,14 +10,14 @@ import JarvisBubble from "@/components/jarvis/JarvisBubble";
 
 const baseTabs = [
   { path: "/dashboard", icon: LayoutDashboard, label: "Tableau" },
-  { path: "/chantiers", icon: Building2, label: "Chantiers" },
+  { path: "/devis", icon: FileText, label: "Devis & Factures" },
+  { path: "/chantiers", icon: Building2, label: "Suivi des chantiers" },
   { path: "/finances", icon: Wallet, label: "Comptabilité" },
   { path: "/clients", icon: Users, label: "Clients" },
   { path: "/fournisseurs", icon: Truck, label: "Fournisseurs" },
   { path: "/contacts", icon: BookUser, label: "Contacts" },
   { path: "/messagerie", icon: MessageSquare, label: "Messagerie" },
   { path: "/assistant", icon: Bot, label: "Assistants" },
-  { path: "/documents", icon: FileText, label: "Devis / Factures" },
   { path: "/mes-documents", icon: FolderOpen, label: "Mes Fichiers" },
   { path: "/parametres", icon: Settings, label: "Réglages" },
 ];
@@ -26,7 +26,7 @@ const adminTab = { path: "/admin", icon: Shield, label: "Admin" };
 const testerTab = { path: "/testing", icon: FlaskConical, label: "Tests" };
 
 // Mobile: show primary 5 tabs, rest in "more" expandable
-const primaryMobilePaths = ["/dashboard", "/chantiers", "/finances", "/assistant", "/documents"];
+const primaryMobilePaths = ["/dashboard", "/devis", "/chantiers", "/finances", "/assistant"];
 
 
 export default function AppLayout() {

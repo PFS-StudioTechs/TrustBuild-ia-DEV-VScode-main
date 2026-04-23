@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Key, Save, Shield, Users, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2 } from "lucide-react";
+import { User, Key, Save, Shield, Users, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash } from "lucide-react";
 import { toast } from "sonner";
 import MfaSetup from "@/components/security/MfaSetup";
 import IntegrationsPanel from "@/components/integrations/IntegrationsPanel";
@@ -40,6 +40,11 @@ export default function Parametres() {
   const [siretError, setSiretError] = useState("");
   const [siretData, setSiretData] = useState<SiretData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [devisPrefix, setDevisPrefix] = useState("DEV");
+  const [facturePrefix, setFacturePrefix] = useState("FAC");
+  const [avenantPrefix, setAvenantPrefix] = useState("AVN");
+  const [acomptePrefix, setAcomptePrefix] = useState("ACP");
+  const [savingPrefixes, setSavingPrefixes] = useState(false);
   const [apiConfigs, setApiConfigs] = useState<{ service_name: string; is_active: boolean }[]>([]);
   const [allUsers, setAllUsers] = useState<{ user_id: string; role: string; email?: string }[]>([]);
   const [telegramChatId, setTelegramChatId] = useState("");
@@ -76,6 +81,15 @@ export default function Parametres() {
             actif: true,
           });
         }
+      });
+    supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix").eq("user_id", user.id).single()
+      .then(({ data }) => {
+        if (!data) return;
+        const d = data as any;
+        if (d.devis_prefix) setDevisPrefix(d.devis_prefix);
+        if (d.facture_prefix) setFacturePrefix(d.facture_prefix);
+        if (d.avenant_prefix) setAvenantPrefix(d.avenant_prefix);
+        if (d.acompte_prefix) setAcomptePrefix(d.acompte_prefix);
       });
     supabase.from("api_configurations").select("service_name, is_active")
       .then(({ data }) => { if (data) setApiConfigs(data); });
@@ -174,6 +188,18 @@ export default function Parametres() {
       setSiretStatus("error");
       setSiretError(err.message || "Impossible de vérifier le SIRET");
     }
+  };
+
+  const handleSavePrefixes = async () => {
+    if (!user) return;
+    setSavingPrefixes(true);
+    const { error } = await supabase
+      .from("artisan_settings")
+      .update({ devis_prefix: devisPrefix.trim() || "DEV", facture_prefix: facturePrefix.trim() || "FAC", avenant_prefix: avenantPrefix.trim() || "AVN", acompte_prefix: acomptePrefix.trim() || "ACP" })
+      .eq("user_id", user.id);
+    if (error) toast.error(error.message);
+    else toast.success("Préfixes enregistrés");
+    setSavingPrefixes(false);
   };
 
   const handleLinkTelegram = async () => {
@@ -383,7 +409,46 @@ export default function Parametres() {
         </TabsContent>
 
         {/* ── Mon template ── */}
-        <TabsContent value="template">
+        <TabsContent value="template" className="space-y-4">
+          {/* Nomenclature */}
+          <div className="forge-card">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Hash className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-h3 font-display">Nomenclature</h2>
+                <p className="text-xs text-muted-foreground">Préfixes de numérotation de vos documents</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-small">Préfixe devis</Label>
+                <Input value={devisPrefix} onChange={(e) => setDevisPrefix(e.target.value.toUpperCase())} placeholder="DEV" className="font-mono" maxLength={8} />
+                <p className="text-xs text-muted-foreground">{devisPrefix || "DEV"}-2026-001</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-small">Préfixe facture</Label>
+                <Input value={facturePrefix} onChange={(e) => setFacturePrefix(e.target.value.toUpperCase())} placeholder="FAC" className="font-mono" maxLength={8} />
+                <p className="text-xs text-muted-foreground">{facturePrefix || "FAC"}-2026-001</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-small">Préfixe avenant</Label>
+                <Input value={avenantPrefix} onChange={(e) => setAvenantPrefix(e.target.value.toUpperCase())} placeholder="AVN" className="font-mono" maxLength={8} />
+                <p className="text-xs text-muted-foreground">{avenantPrefix || "AVN"}-001</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-small">Préfixe acompte</Label>
+                <Input value={acomptePrefix} onChange={(e) => setAcomptePrefix(e.target.value.toUpperCase())} placeholder="ACP" className="font-mono" maxLength={8} />
+                <p className="text-xs text-muted-foreground">{acomptePrefix || "ACP"}-001</p>
+              </div>
+            </div>
+            <Button onClick={handleSavePrefixes} disabled={savingPrefixes} className="w-full mt-4 touch-target">
+              <Save className="w-4 h-4 mr-2" /> {savingPrefixes ? "Enregistrement…" : "Enregistrer les préfixes"}
+            </Button>
+          </div>
+
+          {/* Template visuel */}
           <div className="forge-card">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">

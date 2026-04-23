@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/layout/AppLayout";
 import Auth from "@/pages/Auth";
 import CompleteProfile from "@/pages/CompleteProfile";
+import UploadKbis from "@/pages/UploadKbis";
+import Devis from "@/pages/Devis";
 import Dashboard from "@/pages/Dashboard";
 import Chantiers from "@/pages/Chantiers";
 import MesDocuments from "@/pages/MesDocuments";
@@ -83,6 +85,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/complete-profile" replace />;
   }
 
+  // Compte bloqué : KBIS manquant après la deadline → accès restreint à /upload-kbis
+  if (
+    profile !== null &&
+    profile.profile_completed &&
+    !profile.kbis_url &&
+    profile.kbis_deadline &&
+    new Date() > new Date(profile.kbis_deadline)
+  ) {
+    return <Navigate to="/upload-kbis" replace />;
+  }
+
   return <>{children}</>;
 }
 
@@ -135,10 +148,12 @@ const App = () => (
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/complete-profile" element={<AuthRequiredRoute><CompleteProfile /></AuthRequiredRoute>} />
+            <Route path="/upload-kbis" element={<AuthRequiredRoute><UploadKbis /></AuthRequiredRoute>} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<ProductionRoute><Dashboard /></ProductionRoute>} />
               <Route path="/chantiers" element={<ProductionRoute><Chantiers /></ProductionRoute>} />
+              <Route path="/devis" element={<ProductionRoute><Devis /></ProductionRoute>} />
               <Route path="/documents" element={<ProductionRoute><Documents /></ProductionRoute>} />
               <Route path="/mes-documents" element={<ProductionRoute><MesDocuments /></ProductionRoute>} />
               <Route path="/assistant" element={<ProductionRoute><Assistant /></ProductionRoute>} />

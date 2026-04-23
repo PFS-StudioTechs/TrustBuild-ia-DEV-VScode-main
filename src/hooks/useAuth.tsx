@@ -19,6 +19,9 @@ export interface ProfileData {
   activite: string | null;
   forme_juridique: string | null;
   profile_completed: boolean;
+  kbis_url: string | null;
+  kbis_uploaded_at: string | null;
+  kbis_deadline: string | null;
   created_at: string;
   updated_at: string;
 }
