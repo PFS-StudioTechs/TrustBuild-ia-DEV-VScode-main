@@ -5,6 +5,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/**
+ * Obtient un Bearer token INSEE via OAuth2 client_credentials.
+ * INSEE fournit une consumer key + consumer secret après souscription sur api.insee.fr.
+ * Le token est demandé à chaque appel (durée de vie 7 jours, mais les Edge Functions
+ * sont stateless donc on ne peut pas le mettre en cache entre invocations).
+ */
+async function getInseeToken(consumerKey: string, consumerSecret: string): Promise<string> {
+  const credentials = btoa(`${consumerKey}:${consumerSecret}`);
+  const res = await fetch("https://api.insee.fr/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Authentification INSEE échouée (${res.status}): ${text}`);
+  }
+  const json = await res.json();
+  return json.access_token as string;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -21,10 +45,24 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get("INSEE_API_KEY");
-    if (!apiKey) {
+    // Priorité 1 : consumer key + secret (OAuth2 — recommandé)
+    // Priorité 2 : bearer token direct (INSEE_API_KEY)
+    const consumerKey = Deno.env.get("INSEE_CONSUMER_KEY");
+    const consumerSecret = Deno.env.get("INSEE_CONSUMER_SECRET");
+    const directToken = Deno.env.get("INSEE_API_KEY");
+
+    let bearerToken: string;
+    if (consumerKey && consumerSecret) {
+      bearerToken = await getInseeToken(consumerKey, consumerSecret);
+    } else if (directToken) {
+      bearerToken = directToken;
+    } else {
       return new Response(
-        JSON.stringify({ error: "INSEE_API_KEY non configurée sur le serveur" }),
+        JSON.stringify({
+          error:
+            "INSEE_CONSUMER_KEY + INSEE_CONSUMER_SECRET (ou INSEE_API_KEY) non configurés. " +
+            "Souscrivez sur api.insee.fr puis ajoutez les variables dans Supabase → Settings → Edge Functions.",
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -33,7 +71,7 @@ serve(async (req) => {
       `https://api.insee.fr/api-sirene/3.11/siret/${siretClean}`,
       {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${bearerToken}`,
           Accept: "application/json",
         },
       }
