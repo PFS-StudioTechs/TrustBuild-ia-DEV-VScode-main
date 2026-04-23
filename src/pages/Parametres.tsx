@@ -259,31 +259,34 @@ export default function Parametres() {
               <Input value={nom} onChange={(e) => setNom(e.target.value)} className="touch-target" />
             </div>
           </div>
-          {/* SIRET avec vérification INSEE */}
+          {/* SIRET avec vérification INSEE (modification réservée aux admins) */}
           <div className="space-y-2">
             <Label className="text-small">SIRET</Label>
             <div className="flex gap-2">
               <Input
                 value={siretInput}
-                onChange={handleSiretChange}
+                onChange={isAdmin ? handleSiretChange : undefined}
                 placeholder="123 456 789 00012"
-                className="touch-target font-mono"
+                className={`touch-target font-mono${!isAdmin ? " bg-muted/40 text-muted-foreground cursor-not-allowed" : ""}`}
                 maxLength={17}
-                onKeyDown={(e) => { if (e.key === "Enter") validateSiret(); }}
+                disabled={!isAdmin}
+                onKeyDown={(e) => { if (isAdmin && e.key === "Enter") validateSiret(); }}
               />
-              <Button
-                type="button"
-                onClick={validateSiret}
-                disabled={siretInput.replace(/\s/g, "").length !== 14 || siretStatus === "loading"}
-                variant="outline"
-                className="shrink-0"
-              >
-                {siretStatus === "loading" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Vérifier"
-                )}
-              </Button>
+              {isAdmin && (
+                <Button
+                  type="button"
+                  onClick={validateSiret}
+                  disabled={siretInput.replace(/\s/g, "").length !== 14 || siretStatus === "loading"}
+                  variant="outline"
+                  className="shrink-0"
+                >
+                  {siretStatus === "loading" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Vérifier"
+                  )}
+                </Button>
+              )}
             </div>
             {siretStatus === "valid" && siretData && (
               <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
