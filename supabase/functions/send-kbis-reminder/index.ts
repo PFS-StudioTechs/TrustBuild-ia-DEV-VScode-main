@@ -7,11 +7,12 @@
  *   - kbis_deadline est dans moins de 30 jours (rappel 5 mois)
  *   - kbis_deadline n'est PAS encore dépassée
  *
- * Envoie un email via Resend (RESEND_API_KEY requis dans les secrets Supabase).
+ * Envoie un email via SendGrid (SENDGRID_API_KEY requis dans les secrets Supabase).
  *
  * Variables d'environnement requises :
- *   RESEND_API_KEY     — clé API Resend (resend.com, gratuit jusqu'à 3000 emails/mois)
- *   RESEND_FROM_EMAIL  — adresse expéditeur (ex : "Trust Build-IA <noreply@trustbuild.fr>")
+ *   SENDGRID_API_KEY   — clé API SendGrid
+ *   SENDGRID_FROM_EMAIL — adresse expéditeur vérifiée (ex : "noreply@trustbuild.fr")
+ *   SENDGRID_FROM_NAME  — nom expéditeur (ex : "Trust Build-IA") — optionnel
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  */
@@ -26,14 +27,15 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const resendApiKey = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "Trust Build-IA <noreply@trustbuild.ia>";
+  const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
+  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
+  const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "Trust Build-IA";
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  if (!resendApiKey) {
+  if (!sendgridApiKey) {
     return new Response(
-      JSON.stringify({ error: "RESEND_API_KEY non configuré" }),
+      JSON.stringify({ error: "SENDGRID_API_KEY non configuré" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -43,7 +45,6 @@ serve(async (req) => {
   const now = new Date();
   const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  // Utilisateurs dont la deadline est dans < 30 jours, pas encore dépassée, KBIS absent
   const { data: profiles, error } = await admin
     .from("profiles")
     .select("user_id, nom, prenom, kbis_deadline")
@@ -61,7 +62,6 @@ serve(async (req) => {
   const results: { user_id: string; status: string }[] = [];
 
   for (const profile of profiles ?? []) {
-    // Récupérer l'email depuis auth.users via l'admin API
     const { data: userData } = await admin.auth.admin.getUserById(profile.user_id);
     const email = userData?.user?.email;
     if (!email) continue;
@@ -87,17 +87,17 @@ serve(async (req) => {
       </div>
     `;
 
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${resendApiKey}`,
+        Authorization: `Bearer ${sendgridApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: fromEmail,
-        to: [email],
+        personalizations: [{ to: [{ email }] }],
+        from: { email: fromEmail, name: fromName },
         subject: `⚠️ Rappel : déposez votre KBIS dans ${daysLeft} jour${daysLeft > 1 ? "s" : ""}`,
-        html: emailBody,
+        content: [{ type: "text/html", value: emailBody }],
       }),
     });
 
