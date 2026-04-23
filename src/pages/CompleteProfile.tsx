@@ -73,7 +73,15 @@ export default function CompleteProfile() {
         body: { siret: siretClean },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Extraire le vrai message d'erreur depuis le corps de la réponse
+        let errMsg = "Impossible de vérifier le SIRET";
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) errMsg = body.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
       if (data?.error) throw new Error(data.error);
 
       if (!data.actif) {
