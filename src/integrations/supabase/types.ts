@@ -574,6 +574,15 @@ export type Database = {
           siret: string | null
           updated_at: string
           user_id: string
+          raison_sociale: string | null
+          nom_commercial: string | null
+          adresse: string | null
+          code_postal: string | null
+          ville: string | null
+          pays: string | null
+          activite: string | null
+          forme_juridique: string | null
+          profile_completed: boolean
         }
         Insert: {
           created_at?: string
@@ -585,6 +594,15 @@ export type Database = {
           siret?: string | null
           updated_at?: string
           user_id: string
+          raison_sociale?: string | null
+          nom_commercial?: string | null
+          adresse?: string | null
+          code_postal?: string | null
+          ville?: string | null
+          pays?: string | null
+          activite?: string | null
+          forme_juridique?: string | null
+          profile_completed?: boolean
         }
         Update: {
           created_at?: string
@@ -596,6 +614,15 @@ export type Database = {
           siret?: string | null
           updated_at?: string
           user_id?: string
+          raison_sociale?: string | null
+          nom_commercial?: string | null
+          adresse?: string | null
+          code_postal?: string | null
+          ville?: string | null
+          pays?: string | null
+          activite?: string | null
+          forme_juridique?: string | null
+          profile_completed?: boolean
         }
         Relationships: []
       }

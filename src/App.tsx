@@ -4,8 +4,10 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
+import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/layout/AppLayout";
 import Auth from "@/pages/Auth";
+import CompleteProfile from "@/pages/CompleteProfile";
 import Dashboard from "@/pages/Dashboard";
 import Chantiers from "@/pages/Chantiers";
 import MesDocuments from "@/pages/MesDocuments";
@@ -22,19 +24,72 @@ import Clients from "@/pages/Clients";
 import Fournisseurs from "@/pages/Fournisseurs";
 import Contacts from "@/pages/Contacts";
 import Messagerie from "@/pages/Messagerie";
+import { Button } from "@/components/ui/button";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return (
-    <div className="flex items-center justify-center h-[100dvh] bg-background">
-      <div className="space-y-3 w-48">
-        <div className="skeleton-shimmer h-6 rounded-lg" />
-        <div className="skeleton-shimmer h-4 rounded-lg w-3/4" />
+const loadingSkeleton = (
+  <div className="flex items-center justify-center h-[100dvh] bg-background">
+    <div className="space-y-3 w-48">
+      <div className="skeleton-shimmer h-6 rounded-lg" />
+      <div className="skeleton-shimmer h-4 rounded-lg w-3/4" />
+    </div>
+  </div>
+);
+
+/** Email non confirmé — écran d'attente de confirmation */
+function EmailUnverifiedScreen({ email }: { email: string }) {
+  return (
+    <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
+      <div className="w-full max-w-md forge-card animate-fade-up text-center space-y-4">
+        <div className="text-4xl">📧</div>
+        <h2 className="text-h2 font-display">Confirmez votre email</h2>
+        <p className="text-muted-foreground text-sm">
+          Un lien de confirmation a été envoyé à{" "}
+          <strong className="text-foreground">{email}</strong>.<br />
+          Cliquez sur ce lien pour activer votre compte et compléter votre profil.
+        </p>
+        <Button
+          variant="outline"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            window.location.href = "/auth";
+          }}
+        >
+          Retour à la connexion
+        </Button>
       </div>
     </div>
   );
+}
+
+/**
+ * Route protégée complète :
+ * 1. Requiert une session active
+ * 2. Requiert que l'email soit confirmé
+ * 3. Requiert que le profil soit complété (sinon → /complete-profile)
+ */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading, profile, profileLoading } = useAuth();
+
+  if (loading || profileLoading) return loadingSkeleton;
+  if (!user) return <Navigate to="/auth" replace />;
+
+  if (!user.email_confirmed_at) {
+    return <EmailUnverifiedScreen email={user.email ?? ""} />;
+  }
+
+  if (profile !== null && !profile.profile_completed) {
+    return <Navigate to="/complete-profile" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+/** Route accessible dès qu'une session existe (utilisée pour /complete-profile) */
+function AuthRequiredRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return loadingSkeleton;
   if (!user) return <Navigate to="/auth" replace />;
   return <>{children}</>;
 }
@@ -50,7 +105,6 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function ProductionRoute({ children }: { children: React.ReactNode }) {
   const { isTester, isAdmin, isArtisan, loading } = useRole();
   if (loading) return null;
-  // Pur testeur = tester sans artisan ni admin
   if (isTester && !isArtisan && !isAdmin) return <Navigate to="/testing" replace />;
   return <>{children}</>;
 }
@@ -80,6 +134,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/complete-profile" element={<AuthRequiredRoute><CompleteProfile /></AuthRequiredRoute>} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<ProductionRoute><Dashboard /></ProductionRoute>} />
@@ -95,7 +150,6 @@ const App = () => (
               <Route path="/messagerie" element={<ProductionRoute><Messagerie /></ProductionRoute>} />
               <Route path="/knowledge" element={<ProductionRoute><Knowledge /></ProductionRoute>} />
               <Route path="/testing" element={<TesterRoute><Testing /></TesterRoute>} />
-              {/* Administration — admins uniquement */}
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             </Route>
             <Route path="*" element={<NotFound />} />
