@@ -82,6 +82,19 @@ export default function CompleteProfile() {
         return;
       }
 
+      // Vérification unicité : ce SIRET est-il déjà utilisé par un autre compte ?
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("siret", data.siret)
+        .maybeSingle();
+
+      if (existing) {
+        setSiretStatus("error");
+        setSiretError("Ce SIRET est déjà associé à un autre compte Trust Build-IA");
+        return;
+      }
+
       setSiretData(data as SiretData);
       setSiretStatus("valid");
     } catch (err: any) {
