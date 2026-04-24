@@ -26,34 +26,33 @@ Sur une question mixte, consulte d'abord Auguste P pour l'analyse technique, pui
 
 RÈGLE CRITIQUE POUR LA CRÉATION DE DEVIS :
 Quand l'artisan te demande de créer un devis (par voix ou texte), tu DOIS extraire les informations de LA DEMANDE ACTUELLE UNIQUEMENT.
-IMPORTANT : N'utilise JAMAIS les informations (client, chantier, lignes) des échanges précédents de la conversation. Chaque demande de devis est indépendante. Si un champ n'est pas mentionné dans le message actuel, laisse-le vide ("").
+IMPORTANT : N'utilise JAMAIS les informations (client, lignes) des échanges précédents de la conversation. Chaque demande de devis est indépendante. Si un champ n'est pas mentionné dans le message actuel, laisse-le vide ("").
 N'invente PAS d'email ou de téléphone — laisse ces champs vides ("") s'ils ne sont pas explicitement fournis.
 
+RÈGLE CLIENT EXISTANT :
+Si une liste de clients existants est fournie dans le contexte (section "Clients existants de l'artisan"), cherche les correspondances avec le client mentionné dans la demande (par nom, prénom, initiales, similarité). Inclus dans DEVIS_DATA un tableau "client_matches" avec les clients correspondants (max 3). Si la correspondance est certaine (nom exact), mets aussi l'id du client dans "client.id".
+
 À la fin de ta réponse, ajoute OBLIGATOIREMENT un bloc JSON structuré entre les balises <!--DEVIS_DATA et DEVIS_DATA--> contenant :
-- Les informations du client (nom, adresse, email, téléphone, type particulier/pro)
-- Les informations du chantier (nom, adresse, dates)
-- Les lignes de devis (description, quantité, prix unitaire)
+- Les informations du client (nom, adresse, email, téléphone, type particulier/pro, id si client existant identifié)
+- Les lignes de devis (description, quantité, unité, prix unitaire)
+- Les correspondances clients trouvées (client_matches)
 
 Exemple de format :
 <!--DEVIS_DATA
 {
   "client": {
+    "id": "",
     "nom": "M. Dupont",
     "adresse": "12 rue des Lilas, 75001 Paris",
     "email": "",
     "telephone": "",
     "type": "particulier"
   },
-  "chantier": {
-    "nom": "Rénovation salle de bain Dupont",
-    "adresse": "12 rue des Lilas, 75001 Paris",
-    "date_debut": "",
-    "date_fin_prevue": ""
-  },
   "lignes": [
     {"description": "Dépose carrelage existant", "quantite": 15, "unite": "m²", "prix_unitaire": 25},
     {"description": "Pose carrelage neuf", "quantite": 15, "unite": "m²", "prix_unitaire": 45}
-  ]
+  ],
+  "client_matches": []
 }
 DEVIS_DATA-->
 
@@ -400,6 +399,19 @@ serve(async (req) => {
 
           if (knowledgeContext) {
             systemContent += `\n\n---\n## Informations de ta base de connaissances personnelle\nUtilise en priorité les extraits suivants pour répondre à la question de l'artisan :\n\n${knowledgeContext}\n---`;
+          }
+        }
+
+        // Injection liste clients pour Jarvis
+        if (user && persona === "jarvis") {
+          const { data: clientsList } = await supabase
+            .from("clients")
+            .select("id, nom, email, telephone, type")
+            .eq("artisan_id", user.id)
+            .order("nom");
+
+          if (clientsList && clientsList.length > 0) {
+            systemContent += `\n\n---\n## Clients existants de l'artisan (${clientsList.length})\n${JSON.stringify(clientsList)}\n---`;
           }
         }
       } catch (e) {
