@@ -230,6 +230,9 @@ export default function Chantiers() {
 
   const [loading, setLoading] = useState(false);
 
+  // Préremplissage depuis un devis signé
+  const [fromDevisInfo, setFromDevisInfo] = useState<{ devisNumero: string; devisMontant: string; clientNom: string } | null>(null);
+
   // Devis/Factures dans la fiche chantier
   type DevisRow = { id: string; numero: string; montant_ht: number; tva: number; statut: string; date_validite: string | null; created_at: string };
   type FactureRow = { id: string; numero: string; montant_ht: number; tva: number; statut: string; date_echeance: string; solde_restant: number };
@@ -396,11 +399,31 @@ export default function Chantiers() {
 
   useEffect(() => { fetchData(); }, [user]);
 
-  // Ouvre automatiquement le formulaire "Nouveau chantier" si ?new=1
+  // Ouvre automatiquement le formulaire depuis ?new=1 ou depuis un devis signé (?from_devis=...)
   useEffect(() => {
-    if (searchParams.get("new") === "1" && user) {
+    if (!user) return;
+    const fromDevis = searchParams.get("from_devis");
+    if (fromDevis) {
+      const clientId = searchParams.get("client_id") ?? "";
+      const clientNom = searchParams.get("client_nom") ?? "";
+      const devisNumero = searchParams.get("devis_numero") ?? "";
+      const devisMontant = searchParams.get("devis_montant") ?? "";
+      setEditChantier(null);
+      setChForm({
+        nom: devisNumero ? `Chantier ${devisNumero}` : "",
+        client_id: clientId,
+        adresse_chantier: "",
+        statut: "en_cours",
+        date_debut: new Date().toISOString().split("T")[0],
+        date_fin_prevue: "",
+      });
+      setChantierUseNewClient(false);
+      setChantierNewClient({ nom: "", email: "", telephone: "", type: "particulier", adresse: "", siret: "" });
+      setFromDevisInfo({ devisNumero, devisMontant, clientNom });
+      setChantierDialogOpen(true);
+      navigate("/chantiers", { replace: true });
+    } else if (searchParams.get("new") === "1") {
       openNewChantier();
-      // Nettoie le paramètre sans recharger
       navigate("/chantiers", { replace: true });
     }
   }, [searchParams, user]);
@@ -411,6 +434,7 @@ export default function Chantiers() {
     setChForm({ nom: "", client_id: "", adresse_chantier: "", statut: "prospect", date_debut: "", date_fin_prevue: "" });
     setChantierUseNewClient(false);
     setChantierNewClient({ nom: "", email: "", telephone: "", type: "particulier", adresse: "", siret: "" });
+    setFromDevisInfo(null);
     setChantierDialogOpen(true);
   };
 
@@ -711,11 +735,22 @@ export default function Chantiers() {
       </Tabs>
 
       {/* Chantier Dialog */}
-      <Dialog open={chantierDialogOpen} onOpenChange={setChantierDialogOpen}>
+      <Dialog open={chantierDialogOpen} onOpenChange={(o) => { setChantierDialogOpen(o); if (!o) setFromDevisInfo(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-display">{editChantier ? "Modifier le chantier" : "Nouveau chantier"}</DialogTitle>
           </DialogHeader>
+          {fromDevisInfo && (
+            <div className="flex items-start gap-2 text-sm bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+              <FileText className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-primary">Lancé depuis le devis {fromDevisInfo.devisNumero}</p>
+                <p className="text-xs text-muted-foreground">
+                  Client : {fromDevisInfo.clientNom || "—"} • Montant TTC : {Number(fromDevisInfo.devisMontant).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="space-y-4 max-h-[65vh] overflow-y-auto">
             <div className="space-y-2">
               <Label>Nom du chantier</Label>
