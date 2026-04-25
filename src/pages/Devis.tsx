@@ -95,11 +95,23 @@ interface Facture {
   date_echeance: string;
 }
 
+interface Avoir {
+  id: string;
+  devis_id: string;
+  numero: string | null;
+  description: string;
+  montant_ht: number;
+  statut: string;
+  date: string;
+  lignes?: AvenantLigne[];
+}
+
 interface Prefixes {
   devis_prefix: string;
   facture_prefix: string;
   avenant_prefix: string;
   acompte_prefix: string;
+  avoir_prefix: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -547,6 +559,233 @@ function AvenantDialog({
   );
 }
 
+// ─── Dialog avoir (note de crédit, réduction de scope) ──────
+
+function AvoirDialog({
+  open,
+  onClose,
+  onSaved,
+  devisId,
+  artisanId,
+  prefixAvoir,
+  editAvoir,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  devisId: string;
+  artisanId: string;
+  prefixAvoir: string;
+  editAvoir: Avoir | null;
+}) {
+  const [numero, setNumero] = useState(`${prefixAvoir}-${String(Date.now()).slice(-4)}`);
+  const [description, setDescription] = useState("");
+  const [lignes, setLignes] = useState<AvenantLigne[]>([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editAvoir) {
+      setNumero(editAvoir.numero ?? "");
+      setDescription(editAvoir.description);
+      setLignes(editAvoir.lignes?.length ? editAvoir.lignes : [{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
+    } else {
+      setNumero(`${prefixAvoir}-${String(Date.now()).slice(-4)}`);
+      setDescription("");
+      setLignes([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
+    }
+  }, [open, editAvoir, prefixAvoir]);
+
+  const montantHT = calcMontantHT(lignes);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (editAvoir) {
+        await supabase.from("avoirs").update({ numero, description, montant_ht: montantHT }).eq("id", editAvoir.id);
+        await (supabase as any).from("lignes_avoir").delete().eq("avoir_id", editAvoir.id);
+        if (lignes.length > 0) {
+          await (supabase as any).from("lignes_avoir").insert(
+            lignes.map((l, i) => ({ ...l, avoir_id: editAvoir.id, artisan_id: artisanId, ordre: i }))
+          );
+        }
+      } else {
+        const { data: av, error } = await (supabase as any)
+          .from("avoirs")
+          .insert({ artisan_id: artisanId, devis_id: devisId, numero, description, montant_ht: montantHT, statut: "brouillon", date: new Date().toISOString().split("T")[0] })
+          .select("id")
+          .single();
+        if (error) throw error;
+        if (lignes.length > 0) {
+          await (supabase as any).from("lignes_avoir").insert(
+            lignes.map((l, i) => ({ ...l, avoir_id: av.id, artisan_id: artisanId, ordre: i }))
+          );
+        }
+      }
+      toast.success(editAvoir ? "Avoir mis à jour" : "Avoir créé");
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editAvoir ? "Modifier l'avoir" : "Nouvel avoir"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-2 text-xs text-amber-700 dark:text-amber-400">
+            Un avoir réduit le montant total de la facture finale (ex : poste retiré, remise accordée).
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Numéro</Label>
+              <Input value={numero} onChange={(e) => setNumero(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Objet / description</Label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex : Retrait poste peinture" />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lignes à déduire</Label>
+              <span className="text-xs text-muted-foreground">Déduction HT : <strong className="text-destructive">−{montantHT.toFixed(2)} €</strong></span>
+            </div>
+            <div className="grid grid-cols-12 gap-1 text-[10px] text-muted-foreground">
+              <span className="col-span-5">Désignation</span>
+              <span className="col-span-2">Qté</span>
+              <span className="col-span-1">U.</span>
+              <span className="col-span-2">P.U. €</span>
+              <span className="col-span-2 text-right">Total</span>
+            </div>
+            <LignesEditor lignes={lignes} onChange={setLignes} />
+          </div>
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            {editAvoir ? "Enregistrer" : "Créer l'avoir"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Dialog création facture ─────────────────────────────────
+
+function FactureDialog({
+  open,
+  onClose,
+  onSaved,
+  devisId,
+  clientId,
+  montantAjusteHT,
+  tva,
+  acomptesEncaisses,
+  artisanId,
+  prefixFacture,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  devisId: string;
+  clientId: string | null;
+  montantAjusteHT: number;
+  tva: number;
+  acomptesEncaisses: number;
+  artisanId: string;
+  prefixFacture: string;
+}) {
+  const [dateEcheance, setDateEcheance] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDateEcheance("");
+  }, [open]);
+
+  const montantTTC = montantAjusteHT * (1 + tva / 100);
+  const soldeRestant = Math.max(0, montantTTC - acomptesEncaisses);
+
+  const handleSave = async () => {
+    if (!dateEcheance) { toast.error("Date d'échéance requise"); return; }
+    setSaving(true);
+    try {
+      const numero = `${prefixFacture}-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+      const { error } = await supabase.from("factures").insert({
+        artisan_id: artisanId,
+        devis_id: devisId,
+        client_id: clientId,
+        numero,
+        montant_ht: montantAjusteHT,
+        tva,
+        statut: "brouillon",
+        date_echeance: dateEcheance,
+        solde_restant: soldeRestant,
+      } as any);
+      if (error) throw error;
+      toast.success(`Facture ${numero} créée`);
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Émettre la facture</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1.5">
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Montant ajusté HT</span>
+              <span className="font-mono">{montantAjusteHT.toFixed(2)} €</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">TVA {tva}%</span>
+              <span className="font-mono">{(montantAjusteHT * tva / 100).toFixed(2)} €</span>
+            </div>
+            <div className="flex justify-between text-xs font-semibold border-t pt-1.5">
+              <span>Total TTC</span>
+              <span className="font-mono">{montantTTC.toFixed(2)} €</span>
+            </div>
+            {acomptesEncaisses > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-amber-600">
+                  <span>− Acomptes encaissés</span>
+                  <span className="font-mono">{acomptesEncaisses.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold text-primary border-t pt-1.5">
+                  <span>Solde à facturer</span>
+                  <span className="font-mono">{soldeRestant.toFixed(2)} €</span>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Date d'échéance *</Label>
+            <Input type="date" value={dateEcheance} onChange={(e) => setDateEcheance(e.target.value)} />
+          </div>
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Créer la facture
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Dialog acompte ─────────────────────────────────────────
 
 function AcompteDialog({
@@ -662,6 +901,7 @@ function AcompteDialog({
 function DevisCard({
   devis,
   avenants,
+  avoirs,
   acomptes,
   factures,
   prefixes,
@@ -670,6 +910,7 @@ function DevisCard({
 }: {
   devis: DevisRow;
   avenants: Avenant[];
+  avoirs: Avoir[];
   acomptes: Acompte[];
   factures: Facture[];
   prefixes: Prefixes;
@@ -681,17 +922,27 @@ function DevisCard({
   const [editOpen, setEditOpen] = useState(false);
   const [avenantOpen, setAvenantOpen] = useState(false);
   const [editAvenant, setEditAvenant] = useState<Avenant | null>(null);
+  const [avoirOpen, setAvoirOpen] = useState(false);
+  const [editAvoir, setEditAvoir] = useState<Avoir | null>(null);
   const [acompteOpen, setAcompteOpen] = useState(false);
+  const [factureOpen, setFactureOpen] = useState(false);
   const [allClients, setAllClients] = useState<Client[]>([]);
 
   const isLocked = devis.statut === "signe";
   const expired = isExpired(devis.date_validite) && !isLocked;
   const montantTTC = calcMontantTTC(devis.montant_ht, devis.tva);
   const devisAvenants = avenants.filter(a => a.devis_id === devis.id);
+  const devisAvoirs = avoirs.filter(a => a.devis_id === devis.id);
   const devisAcomptes = acomptes.filter(a => a.devis_id === devis.id);
   const devisFactures = factures.filter(f => f.devis_id === devis.id);
+
+  // Calculs ajustés
+  const totalAvenantHT = devisAvenants.reduce((s, a) => s + a.montant_ht, 0);
+  const totalAvoirHT = devisAvoirs.reduce((s, a) => s + a.montant_ht, 0);
+  const montantAjusteHT = devis.montant_ht + totalAvenantHT - totalAvoirHT;
+  const montantAjusteTTC = calcMontantTTC(montantAjusteHT, devis.tva);
   const totalAcomptes = devisAcomptes.reduce((s, a) => s + a.montant, 0);
-  const totalMontantTTC = montantTTC + devisAvenants.reduce((s, a) => s + calcMontantTTC(a.montant_ht, devis.tva), 0);
+  const acomptesEncaisses = devisAcomptes.filter(a => a.statut === "encaisse").reduce((s, a) => s + a.montant, 0);
 
   const handleChangeStatut = async (statut: string) => {
     await supabase.from("devis").update({ statut }).eq("id", devis.id);
@@ -740,16 +991,17 @@ function DevisCard({
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
               <span>{new Date(devis.created_at).toLocaleDateString("fr-FR")}</span>
               {devis.date_validite && <span>Valid. {new Date(devis.date_validite).toLocaleDateString("fr-FR")}</span>}
-              {devisAvenants.length > 0 && <span>{devisAvenants.length} avenant{devisAvenants.length > 1 ? "s" : ""}</span>}
+              {devisAvenants.length > 0 && <span className="text-emerald-600">+{devisAvenants.length} avenant{devisAvenants.length > 1 ? "s" : ""}</span>}
+              {devisAvoirs.length > 0 && <span className="text-amber-600">−{devisAvoirs.length} avoir{devisAvoirs.length > 1 ? "s" : ""}</span>}
               {devisAcomptes.length > 0 && <span>{devisAcomptes.length} acompte{devisAcomptes.length > 1 ? "s" : ""}</span>}
             </div>
           </div>
           <div className="text-right shrink-0">
-            <div className="font-semibold font-mono text-sm">{totalMontantTTC.toFixed(2)} €</div>
-            <div className="text-xs text-muted-foreground">TTC</div>
+            <div className="font-semibold font-mono text-sm">{montantAjusteTTC.toFixed(2)} €</div>
+            <div className="text-xs text-muted-foreground">TTC ajusté</div>
           </div>
           {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
         </div>
@@ -812,16 +1064,45 @@ function DevisCard({
               </div>
             )}
 
+            {/* Récapitulatif ajusté (si avenant ou avoir) */}
+            {(devisAvenants.length > 0 || devisAvoirs.length > 0) && (
+              <div className="rounded-lg bg-muted/30 border p-3 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Devis initial TTC</span>
+                  <span className="font-mono">{montantTTC.toFixed(2)} €</span>
+                </div>
+                {devisAvenants.length > 0 && (
+                  <div className="flex justify-between text-emerald-600">
+                    <span>+ Avenants HT ({devisAvenants.length})</span>
+                    <span className="font-mono">+{calcMontantTTC(totalAvenantHT, devis.tva).toFixed(2)} €</span>
+                  </div>
+                )}
+                {devisAvoirs.length > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>− Avoirs HT ({devisAvoirs.length})</span>
+                    <span className="font-mono">−{calcMontantTTC(totalAvoirHT, devis.tva).toFixed(2)} €</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold border-t pt-1">
+                  <span>= Total ajusté TTC</span>
+                  <span className="font-mono">{montantAjusteTTC.toFixed(2)} €</span>
+                </div>
+              </div>
+            )}
+
             <Tabs defaultValue="avenants" className="w-full">
-              <TabsList className="w-full">
-                <TabsTrigger value="avenants" className="flex-1 text-xs">
-                  <Wrench className="w-3.5 h-3.5 mr-1" /> Avenants ({devisAvenants.length})
+              <TabsList className="w-full grid grid-cols-4">
+                <TabsTrigger value="avenants" className="text-xs">
+                  <Wrench className="w-3 h-3 mr-1" /> Avenants ({devisAvenants.length})
                 </TabsTrigger>
-                <TabsTrigger value="acomptes" className="flex-1 text-xs">
-                  <CreditCard className="w-3.5 h-3.5 mr-1" /> Acomptes ({devisAcomptes.length})
+                <TabsTrigger value="avoirs" className="text-xs">
+                  <XCircle className="w-3 h-3 mr-1" /> Avoirs ({devisAvoirs.length})
                 </TabsTrigger>
-                <TabsTrigger value="factures" className="flex-1 text-xs">
-                  <FileText className="w-3.5 h-3.5 mr-1" /> Factures ({devisFactures.length})
+                <TabsTrigger value="acomptes" className="text-xs">
+                  <CreditCard className="w-3 h-3 mr-1" /> Acomptes ({devisAcomptes.length})
+                </TabsTrigger>
+                <TabsTrigger value="factures" className="text-xs">
+                  <FileText className="w-3 h-3 mr-1" /> Factures ({devisFactures.length})
                 </TabsTrigger>
               </TabsList>
 
@@ -860,12 +1141,47 @@ function DevisCard({
                 </Button>
               </TabsContent>
 
+              {/* Avoirs */}
+              <TabsContent value="avoirs" className="mt-3 space-y-2">
+                {devisAvoirs.length === 0 && <p className="text-xs text-muted-foreground italic">Aucun avoir</p>}
+                {devisAvoirs.map(av => (
+                  <div key={av.id} className="rounded-lg border border-amber-200 dark:border-amber-800 p-2 space-y-1 bg-amber-50/50 dark:bg-amber-900/5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-semibold">{av.numero || "AVO"}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-mono text-amber-600">−{calcMontantTTC(av.montant_ht, devis.tva).toFixed(2)} € TTC</span>
+                        <button onClick={() => { setEditAvoir(av); setAvoirOpen(true); }} className="text-muted-foreground hover:text-foreground p-0.5">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button onClick={async () => { await (supabase as any).from("avoirs").delete().eq("id", av.id); onRefresh(); }} className="text-destructive hover:opacity-80 p-0.5">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                    {av.description && <p className="text-xs text-muted-foreground">{av.description}</p>}
+                    {av.lignes && av.lignes.length > 0 && (
+                      <div className="space-y-0.5 pt-1 border-t border-amber-200 dark:border-amber-700">
+                        {av.lignes.map((l, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="truncate max-w-[60%]">{l.designation}</span>
+                            <span className="font-mono text-muted-foreground">−{(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <Button size="sm" variant="outline" className="w-full text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setEditAvoir(null); setAvoirOpen(true); }}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel avoir
+                </Button>
+              </TabsContent>
+
               {/* Acomptes */}
               <TabsContent value="acomptes" className="mt-3 space-y-2">
                 {devisAcomptes.length > 0 && (
                   <div className="rounded-lg bg-muted/40 p-2 text-xs flex justify-between">
                     <span className="text-muted-foreground">Total acomptes</span>
-                    <span className="font-mono font-semibold">{totalAcomptes.toFixed(2)} € / {totalMontantTTC.toFixed(2)} € TTC</span>
+                    <span className="font-mono font-semibold">{totalAcomptes.toFixed(2)} € / {montantAjusteTTC.toFixed(2)} € TTC</span>
                   </div>
                 )}
                 {devisAcomptes.length === 0 && <p className="text-xs text-muted-foreground italic">Aucun acompte</p>}
@@ -897,7 +1213,25 @@ function DevisCard({
 
               {/* Factures */}
               <TabsContent value="factures" className="mt-3 space-y-2">
-                {devisFactures.length === 0 && <p className="text-xs text-muted-foreground italic">Aucune facture</p>}
+                {/* Récap pour création facture */}
+                <div className="rounded-lg bg-muted/30 border p-2 text-xs space-y-1">
+                  <div className="flex justify-between font-medium">
+                    <span>Montant à facturer TTC</span>
+                    <span className="font-mono">{montantAjusteTTC.toFixed(2)} €</span>
+                  </div>
+                  {acomptesEncaisses > 0 && (
+                    <div className="flex justify-between text-amber-600">
+                      <span>− Acomptes encaissés</span>
+                      <span className="font-mono">{acomptesEncaisses.toFixed(2)} €</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-primary border-t pt-1">
+                    <span>Solde restant</span>
+                    <span className="font-mono">{Math.max(0, montantAjusteTTC - acomptesEncaisses).toFixed(2)} €</span>
+                  </div>
+                </div>
+
+                {devisFactures.length === 0 && <p className="text-xs text-muted-foreground italic">Aucune facture émise</p>}
                 {devisFactures.map(f => (
                   <div key={f.id} className="rounded-lg border p-2 flex items-center justify-between">
                     <div>
@@ -909,11 +1243,9 @@ function DevisCard({
                     </Badge>
                   </div>
                 ))}
-                {totalAcomptes > 0 && devisFactures.length === 0 && (
-                  <div className="rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 p-2 text-xs text-blue-700 dark:text-blue-400">
-                    Les acomptes encaissés ({totalAcomptes.toFixed(2)} €) seront déduits de la prochaine facture.
-                  </div>
-                )}
+                <Button size="sm" className="w-full text-xs" onClick={() => setFactureOpen(true)}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Émettre la facture
+                </Button>
               </TabsContent>
             </Tabs>
           </div>
@@ -944,11 +1276,32 @@ function DevisCard({
         onClose={() => setAcompteOpen(false)}
         onSaved={onRefresh}
         devisId={devis.id}
-        devisMontantHT={devis.montant_ht}
+        devisMontantHT={montantAjusteHT}
         devisTva={devis.tva}
         artisanId={artisanId}
         prefixAcompte={prefixes.acompte_prefix}
         acomptesExistants={devisAcomptes}
+      />
+      <AvoirDialog
+        open={avoirOpen}
+        onClose={() => { setAvoirOpen(false); setEditAvoir(null); }}
+        onSaved={onRefresh}
+        devisId={devis.id}
+        artisanId={artisanId}
+        prefixAvoir={prefixes.avoir_prefix}
+        editAvoir={editAvoir}
+      />
+      <FactureDialog
+        open={factureOpen}
+        onClose={() => setFactureOpen(false)}
+        onSaved={onRefresh}
+        devisId={devis.id}
+        clientId={devis.client_id}
+        montantAjusteHT={montantAjusteHT}
+        tva={devis.tva}
+        acomptesEncaisses={acomptesEncaisses}
+        artisanId={artisanId}
+        prefixFacture={prefixes.facture_prefix}
       />
     </>
   );
@@ -961,9 +1314,10 @@ export default function DevisPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [devisList, setDevisList] = useState<DevisRow[]>([]);
   const [avenants, setAvenants] = useState<Avenant[]>([]);
+  const [avoirs, setAvoirs] = useState<Avoir[]>([]);
   const [acomptes, setAcomptes] = useState<Acompte[]>([]);
   const [factures, setFactures] = useState<Facture[]>([]);
-  const [prefixes, setPrefixes] = useState<Prefixes>({ devis_prefix: "DEV", facture_prefix: "FAC", avenant_prefix: "AVN", acompte_prefix: "ACP" });
+  const [prefixes, setPrefixes] = useState<Prefixes>({ devis_prefix: "DEV", facture_prefix: "FAC", avenant_prefix: "AVN", acompte_prefix: "ACP", avoir_prefix: "AVO" });
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [statutFilter, setStatutFilter] = useState<string>("tous");
   const [createOpen, setCreateOpen] = useState(false);
@@ -976,20 +1330,24 @@ export default function DevisPage() {
       { data: cData },
       { data: dData },
       { data: avData },
+      { data: avoirData },
       { data: acData },
       { data: fData },
       { data: ldData },
       { data: laData },
+      { data: lavoirData },
       { data: settData },
     ] = await Promise.all([
       supabase.from("clients").select("id,nom,prenom,email,telephone,adresse,type").eq("artisan_id", user.id).order("nom"),
       supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at").eq("artisan_id", user.id).order("created_at", { ascending: false }),
       supabase.from("avenants").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
+      (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),
       supabase.from("factures").select("id,devis_id,numero,montant_ht,tva,statut,date_echeance").eq("artisan_id", user.id),
       supabase.from("lignes_devis").select("id,devis_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       supabase.from("lignes_avenant").select("id,avenant_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
-      supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix").eq("user_id", user.id).single(),
+      (supabase as any).from("lignes_avoir").select("id,avoir_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
+      supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix").eq("user_id", user.id).single(),
     ]);
 
     const clientsMap = new Map((cData ?? []).map(c => [c.id, c]));
@@ -1003,6 +1361,11 @@ export default function DevisPage() {
       const existing = lignesAvenantMap.get(l.avenant_id) ?? [];
       lignesAvenantMap.set(l.avenant_id, [...existing, l]);
     });
+    const lignesAvoirMap = new Map<string, AvenantLigne[]>();
+    (lavoirData ?? []).forEach((l: any) => {
+      const existing = lignesAvoirMap.get(l.avoir_id) ?? [];
+      lignesAvoirMap.set(l.avoir_id, [...existing, l]);
+    });
 
     setClients(cData ?? []);
     setDevisList((dData ?? []).map(d => ({
@@ -1011,6 +1374,7 @@ export default function DevisPage() {
       lignes: lignesMap.get(d.id) ?? [],
     })));
     setAvenants((avData ?? []).map(a => ({ ...a, lignes: lignesAvenantMap.get(a.id) ?? [] })));
+    setAvoirs((avoirData ?? []).map((a: any) => ({ ...a, lignes: lignesAvoirMap.get(a.id) ?? [] })));
     setAcomptes(acData ?? []);
     setFactures(fData ?? []);
     if (settData) {
@@ -1019,6 +1383,7 @@ export default function DevisPage() {
         facture_prefix: (settData as any).facture_prefix ?? "FAC",
         avenant_prefix: (settData as any).avenant_prefix ?? "AVN",
         acompte_prefix: (settData as any).acompte_prefix ?? "ACP",
+        avoir_prefix: (settData as any).avoir_prefix ?? "AVO",
       });
     }
     setLoading(false);
@@ -1114,6 +1479,7 @@ export default function DevisPage() {
               <DevisCard
                 devis={d}
                 avenants={avenants}
+                avoirs={avoirs}
                 acomptes={acomptes}
                 factures={factures}
                 prefixes={prefixes}

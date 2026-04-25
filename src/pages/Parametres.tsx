@@ -44,6 +44,7 @@ export default function Parametres() {
   const [facturePrefix, setFacturePrefix] = useState("FAC");
   const [avenantPrefix, setAvenantPrefix] = useState("AVN");
   const [acomptePrefix, setAcomptePrefix] = useState("ACP");
+  const [avoirPrefix, setAvoirPrefix] = useState("AVO");
   const [savingPrefixes, setSavingPrefixes] = useState(false);
   const [apiConfigs, setApiConfigs] = useState<{ service_name: string; is_active: boolean }[]>([]);
   const [allUsers, setAllUsers] = useState<{ user_id: string; role: string; email?: string }[]>([]);
@@ -82,7 +83,7 @@ export default function Parametres() {
           });
         }
       });
-    supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix").eq("user_id", user.id).single()
+    supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix").eq("user_id", user.id).single()
       .then(({ data }) => {
         if (!data) return;
         const d = data as any;
@@ -90,6 +91,7 @@ export default function Parametres() {
         if (d.facture_prefix) setFacturePrefix(d.facture_prefix);
         if (d.avenant_prefix) setAvenantPrefix(d.avenant_prefix);
         if (d.acompte_prefix) setAcomptePrefix(d.acompte_prefix);
+        if ((d as any).avoir_prefix) setAvoirPrefix((d as any).avoir_prefix);
       });
     supabase.from("api_configurations").select("service_name, is_active")
       .then(({ data }) => { if (data) setApiConfigs(data); });
@@ -195,7 +197,7 @@ export default function Parametres() {
     setSavingPrefixes(true);
     const { error } = await supabase
       .from("artisan_settings")
-      .update({ devis_prefix: devisPrefix.trim() || "DEV", facture_prefix: facturePrefix.trim() || "FAC", avenant_prefix: avenantPrefix.trim() || "AVN", acompte_prefix: acomptePrefix.trim() || "ACP" })
+      .update({ devis_prefix: devisPrefix.trim() || "DEV", facture_prefix: facturePrefix.trim() || "FAC", avenant_prefix: avenantPrefix.trim() || "AVN", acompte_prefix: acomptePrefix.trim() || "ACP", avoir_prefix: avoirPrefix.trim() || "AVO" } as any)
       .eq("user_id", user.id);
     if (error) toast.error(error.message);
     else toast.success("Préfixes enregistrés");
@@ -441,6 +443,11 @@ export default function Parametres() {
                 <Label className="text-small">Préfixe acompte</Label>
                 <Input value={acomptePrefix} onChange={(e) => setAcomptePrefix(e.target.value.toUpperCase())} placeholder="ACP" className="font-mono" maxLength={8} />
                 <p className="text-xs text-muted-foreground">{acomptePrefix || "ACP"}-001</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-small">Préfixe avoir</Label>
+                <Input value={avoirPrefix} onChange={(e) => setAvoirPrefix(e.target.value.toUpperCase())} placeholder="AVO" className="font-mono" maxLength={8} />
+                <p className="text-xs text-muted-foreground">{avoirPrefix || "AVO"}-001</p>
               </div>
             </div>
             <Button onClick={handleSavePrefixes} disabled={savingPrefixes} className="w-full mt-4 touch-target">
