@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tutoriel — VS Code + Claude Code + GitHub + Vercel</title>
+<style>
+  :root {
+    --primary: #6366f1;
+    --accent: #f59e0b;
+    --dark: #0f172a;
+    --darker: #020617;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #38bdf8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--darker);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── PROGRESS BAR ── */
+  #progress-bar {
+    height: 3px;
+    background: var(--border);
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+  }
+  #progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    transition: width .4s ease;
+  }
+
+  /* ── HEADER NAV ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--dark);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 50;
+  }
+  #topbar .logo { font-size: 13px; font-weight: 700; color: var(--primary); letter-spacing: .5px; }
+  #topbar .counter { font-size: 12px; color: var(--muted); }
+  #topbar .nav-btns { display: flex; gap: 8px; }
+  #topbar button {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all .2s;
+  }
+  #topbar button:hover { background: var(--primary); border-color: var(--primary); }
+  #topbar button:disabled { opacity: .3; cursor: default; }
+
+  /* ── TOC SIDEBAR ── */
+  #toc-toggle {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 18px; padding: 2px 6px; border-radius: 4px;
+  }
+  #toc-toggle:hover { color: var(--text); background: var(--border); }
+  #toc-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 200;
+  }
+  #toc-overlay.open { display: flex; }
+  #toc-panel {
+    width: 280px;
+    background: var(--dark);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px;
+  }
+  #toc-panel h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 1px; }
+  .toc-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background .2s;
+  }
+  .toc-item:hover { background: var(--card); }
+  .toc-item.active { background: var(--primary); color: #fff; }
+  .toc-num { font-size: 11px; color: var(--muted); min-width: 22px; }
+  .toc-item.active .toc-num { color: rgba(255,255,255,.7); }
+
+  /* ── SLIDES CONTAINER ── */
+  #slides-container {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 32px 48px;
+    animation: fadeIn .3s ease;
+  }
+  .slide.active { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── SLIDE TYPES ── */
+  .slide-cover {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: radial-gradient(ellipse at 30% 20%, rgba(99,102,241,.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(245,158,11,.1) 0%, transparent 60%),
+                var(--darker);
+  }
+  .slide-cover .eyebrow {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--primary); margin-bottom: 16px;
+  }
+  .slide-cover h1 {
+    font-size: clamp(28px, 5vw, 52px);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #fff 30%, var(--primary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .slide-cover .subtitle {
+    font-size: clamp(14px, 2vw, 18px);
+    color: var(--muted);
+    max-width: 600px;
+  }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; justify-content: center; }
+  .badge {
+    padding: 6px 16px; border-radius: 20px;
+    font-size: 13px; font-weight: 600;
+    border: 1px solid;
+  }
+  .badge-indigo { background: rgba(99,102,241,.15); border-color: rgba(99,102,241,.4); color: #a5b4fc; }
+  .badge-amber  { background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.4); color: #fcd34d; }
+  .badge-sky    { background: rgba(56,189,248,.15); border-color: rgba(56,189,248,.4); color: #7dd3fc; }
+  .badge-green  { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.4); color: #86efac; }
+  .badge-rose   { background: rgba(244,63,94,.15); border-color: rgba(244,63,94,.4); color: #fda4af; }
+
+  /* ── SECTION HEADER ── */
+  .slide-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-shrink: 0;
+  }
+  .step-badge {
+    background: linear-gradient(135deg, var(--primary), #818cf8);
+    color: #fff;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .slide h2 {
+    font-size: clamp(18px, 3vw, 28px);
+    font-weight: 700;
+    color: #fff;
+  }
+  .slide .section-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+
+  /* ── CONTENT BLOCKS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media(max-width: 700px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card-accent { border-color: rgba(99,102,241,.5); }
+  .card h3 { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: #fff; }
+  .card p, .card li { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .card ul { padding-left: 16px; }
+
+  .steps { display: flex; flex-direction: column; gap: 10px; }
+  .step {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px;
+  }
+  .step-num {
+    background: linear-gradient(135deg, var(--primary), #818cf8);
+    color: #fff; font-size: 12px; font-weight: 700;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { font-size: 14px; color: #fff; display: block; margin-bottom: 4px; }
+  .step-body p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  code, .code-inline {
+    background: rgba(99,102,241,.15);
+    color: #a5b4fc;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+  }
+  .code-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+    color: #7dd3fc;
+    line-height: 1.8;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .code-block .comment { color: #475569; }
+  .code-block .keyword { color: #f472b6; }
+  .code-block .string { color: #86efac; }
+  .code-block .var { color: #fde68a; }
+
+  .info-box {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-top: 12px;
+  }
+  .info-box.tip { background: rgba(34,197,94,.08); border: 1px solid rgba(34,197,94,.3); color: #86efac; }
+  .info-box.warn { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.3); color: #fcd34d; }
+  .info-box.danger { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+  .info-box.info { background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.3); color: #7dd3fc; }
+  .info-box .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  .tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .tag {
+    font-size: 12px; padding: 3px 10px;
+    border-radius: 12px; background: var(--card);
+    border: 1px solid var(--border); color: var(--muted);
+  }
+
+  /* ── DIAGRAM / FLOW ── */
+  .flow {
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap; margin: 16px 0;
+  }
+  .flow-node {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px;
+    font-size: 13px; font-weight: 600; color: #fff;
+    text-align: center;
+  }
+  .flow-node.highlight { background: rgba(99,102,241,.2); border-color: var(--primary); color: #a5b4fc; }
+  .flow-arrow { color: var(--muted); font-size: 18px; }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--card); color: var(--muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  td { padding: 9px 12px; border-bottom: 1px solid rgba(51,65,85,.5); color: var(--text); }
+  tr:hover td { background: rgba(30,41,59,.4); }
+  .env-key { color: #fde68a; font-family: monospace; font-size: 12px; }
+  .env-where { color: #86efac; font-size: 12px; }
+
+  /* ── KEYBOARD ── */
+  kbd {
+    background: var(--card); border: 1px solid var(--border);
+    border-bottom: 3px solid var(--border);
+    border-radius: 5px; padding: 3px 8px;
+    font-size: 12px; color: var(--text);
+    font-family: monospace;
+  }
+
+  /* ── FOOTER ── */
+  #footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 24px;
+    background: var(--dark);
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+    flex-shrink: 0;
+  }
+  #footer span { opacity: .6; }
+  #footer .shortcut { color: var(--primary); }
+
+  /* ── PRINT ── */
+  @media print {
+    body { overflow: auto; height: auto; background: white; color: black; }
+    #topbar, #footer, #progress-bar { display: none; }
+    .slide { position: relative; display: flex !important; page-break-after: always; padding: 32px; background: white; color: black; }
+    .slide.slide-cover { background: white; }
+    * { color: black !important; background: white !important; border-color: #ddd !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="progress-bar"><div id="progress-fill"></div></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button id="toc-toggle" title="Sommaire">☰</button>
+    <span class="logo">VS Code + Claude Code + GitHub + Vercel</span>
+  </div>
+  <span class="counter" id="counter">1 / 15</span>
+  <div class="nav-btns">
+    <button id="btn-prev">← Préc.</button>
+    <button id="btn-next">Suiv. →</button>
+  </div>
+</div>
+
+<!-- TOC OVERLAY -->
+<div id="toc-overlay">
+  <div id="toc-panel">
+    <h3>Sommaire</h3>
+    <div id="toc-list"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SLIDES
+════════════════════════════════════════════ -->
+<div id="slides-container">
+
+  <!-- ▸ SLIDE 1 — COVER -->
+  <div class="slide slide-cover active" data-title="Introduction">
+    <div class="eyebrow">Tutoriel de développement IA</div>
+    <h1>VS Code + Claude Code<br>GitHub + Vercel</h1>
+    <p class="subtitle">De l'installation à un SaaS déployé en continu,<br>basé sur le projet réel <strong>Trust Build-IA</strong></p>
+    <div class="badge-row">
+      <span class="badge badge-indigo">🖥 VS Code</span>
+      <span class="badge badge-amber">🤖 Claude Code</span>
+      <span class="badge badge-sky">🐙 GitHub</span>
+      <span class="badge badge-green">▲ Vercel</span>
+      <span class="badge badge-rose">🗄 Supabase</span>
+    </div>
+    <p style="margin-top:36px;font-size:12px;color:#475569;">Utilisez ← → ou les boutons pour naviguer · Appuyez sur ☰ pour le sommaire</p>
+  </div>
+
+  <!-- ▸ SLIDE 2 — LA STACK -->
+  <div class="slide" data-title="La stack en un coup d'œil">
+    <div class="slide-header">
+      <span class="section-icon">🗺</span>
+      <h2>La stack en un coup d'œil</h2>
+    </div>
+    <div class="flow" style="justify-content:center;gap:8px;margin-bottom:24px;">
+      <div class="flow-node highlight">VS Code<br><small style="color:var(--muted);font-size:11px;">éditeur</small></div>
+      <div class="flow-arrow">+</div>
+      <div class="flow-node highlight">Claude Code<br><small style="color:var(--muted);font-size:11px;">IA dans le terminal</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">GitHub<br><small style="color:var(--muted);font-size:11px;">versioning</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">Vercel<br><small style="color:var(--muted);font-size:11px;">déploiement auto</small></div>
+    </div>
+    <div class="grid-2">
+      <div class="card card-accent">
+        <h3>🖥 VS Code</h3>
+        <p>Éditeur de code gratuit Microsoft. Supporte toutes les extensions, terminal intégré, Git intégré. C'est le QG de tout le développement.</p>
+      </div>
+      <div class="card card-accent">
+        <h3>🤖 Claude Code</h3>
+        <p>CLI d'Anthropic à installer dans le terminal. Il lit votre codebase, modifie les fichiers, commit et push — comme un développeur senior dans votre équipe.</p>
+      </div>
+      <div class="card">
+        <h3>🐙 GitHub</h3>
+        <p>Hébergement du code source. Chaque <code>git push</code> déclenche automatiquement un déploiement Vercel.</p>
+      </div>
+      <div class="card">
+        <h3>▲ Vercel</h3>
+        <p>Hébergement frontend gratuit. Déploiement automatique en ~30 secondes après chaque push. HTTPS offert, CDN mondial.</p>
+      </div>
+    </div>
+    <div class="info-box info" style="margin-top:16px;">
+      <span class="icon">💡</span>
+      <span>Coût de la stack de base : <strong>0 €</strong> — VS Code gratuit, GitHub gratuit, Vercel gratuit (plan Hobby), Claude Code ~20 $/mois.</span>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 3 — PRÉREQUIS -->
+  <div class="slide" data-title="Prérequis &amp; comptes à créer">
+    <div class="slide-header">
+      <span class="section-icon">📋</span>
+      <h2>Prérequis &amp; comptes à créer</h2>
+    </div>
+    <div class="grid-2">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Compte GitHub</strong>
+            <p>github.com — Gratuit. Choisir un nom d'utilisateur professionnel (il apparaîtra dans les URLs de vos repos).</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Compte Vercel</strong>
+            <p>vercel.com — Se connecter directement avec son compte GitHub pour lier les deux automatiquement.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Compte Anthropic (Claude)</strong>
+            <p>console.anthropic.com — Créer une clé API. Ajouter des crédits (minimum recommandé : 5 $). La clé commence par <code>sk-ant-…</code></p>
+          </div>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>Compte Supabase (si backend)</strong>
+            <p>supabase.com — Gratuit jusqu'à 2 projets. Récupérer : URL du projet + clé anon + clé service_role.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <strong>Git for Windows</strong>
+            <p>git-scm.com/download/win — Installer avant VS Code. Cocher "Add to PATH" pendant l'installation.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">6</div>
+          <div class="step-body">
+            <strong>Node.js LTS</strong>
+            <p>nodejs.org — Version LTS (ex : v22+). Nécessaire pour npm et pour lancer Claude Code.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 4 — VS CODE INSTALL -->
+  <div class="slide" data-title="Étape 1 — Installer VS Code">
+    <div class="slide-header">
+      <div class="step-badge">Étape 1</div>
+      <span class="section-icon">🖥</span>
+      <h2>Installer &amp; configurer VS Code</h2>
+    </div>
+    <div class="grid-2">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Téléchargement</strong>
+            <p>code.visualstudio.com → Télécharger pour Windows. Installer avec les options par défaut (cocher "Ajouter à PATH").</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Extensions indispensables</strong>
+            <p>Ouvrir le panneau Extensions (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>) et installer :</p>
+            <div class="tag-list">
+              <span class="tag">ESLint</span>
+              <span class="tag">Prettier</span>
+              <span class="tag">GitLens</span>
+              <span class="tag">Tailwind CSS IntelliSense</span>
+              <span class="tag">TypeScript Importer</span>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Terminal intégré</strong>
+            <p>Vérifier que Git Bash est disponible : <kbd>Ctrl</kbd>+<kbd>`</kbd> pour ouvrir le terminal → sélectionner "Git Bash" dans le menu déroulant.</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>⚙️ Paramètres recommandés</h3>
+          <p style="margin-bottom:10px;">Ouvrir <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → "Open User Settings JSON" :</p>
+          <div class="code-block"><span class="comment">// settings.json</span>
+{
+  <span class="string">"editor.formatOnSave"</span>: true,
+  <span class="string">"editor.defaultFormatter"</span>:
+    <span class="string">"esbenp.prettier-vscode"</span>,
+  <span class="string">"terminal.integrated.defaultProfile.windows"</span>:
+    <span class="string">"Git Bash"</span>,
+  <span class="string">"git.autofetch"</span>: true
+}</div>
+        </div>
+        <div class="info-box tip" style="margin-top:12px;">
+          <span class="icon">✅</span>
+          <span>Vérification : dans le terminal VS Code, taper <code>git --version</code> et <code>node --version</code> — les deux doivent répondre.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 5 — GIT & GITHUB -->
+  <div class="slide" data-title="Étape 2 — Git &amp; GitHub">
+    <div class="slide-header">
+      <div class="step-badge">Étape 2</div>
+      <span class="section-icon">🐙</span>
+      <h2>Configurer Git &amp; GitHub</h2>
+    </div>
+    <div class="grid-2">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Configurer son identité Git</strong>
+            <p>Dans le terminal VS Code, une seule fois pour toute la machine :</p>
+          </div>
+        </div>
+        <div style="margin-left:36px;">
+          <div class="code-block">git config --global user.name <span class="string">"Prénom NOM"</span>
+git config --global user.email <span class="string">"votre@email.com"</span></div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Créer le dépôt sur GitHub</strong>
+            <p>github.com → New repository → Nom du projet → Private ou Public → Créer sans README (on poussera depuis VS Code).</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Authentification GitHub dans VS Code</strong>
+            <p>VS Code détecte automatiquement GitHub. Premier push → une fenêtre navigateur s'ouvre pour autoriser. Accepter et c'est fait.</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>📁 Initialiser un projet existant</h3>
+          <div class="code-block"><span class="comment"># Depuis le dossier du projet</span>
+git init
+git add .
+git commit -m <span class="string">"Initial commit"</span>
+git branch -M main
+git remote add origin \
+  https://github.com/<span class="var">user</span>/<span class="var">repo</span>.git
+git push -u origin main</div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h3>🔑 Fichier .gitignore essentiel</h3>
+          <div class="code-block"><span class="comment"># Jamais committer ces fichiers !</span>
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/</div>
+        </div>
+        <div class="info-box warn" style="margin-top:12px;">
+          <span class="icon">⚠️</span>
+          <span>Ne jamais committer de clés API dans le code. Utiliser des variables d'environnement (<code>.env.local</code>).</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 6 — CLAUDE CODE INSTALL -->
+  <div class="slide" data-title="Étape 3 — Installer Claude Code">
+    <div class="slide-header">
+      <div class="step-badge">Étape 3</div>
+      <span class="section-icon">🤖</span>
+      <h2>Installer Claude Code (CLI)</h2>
+    </div>
+    <div class="grid-2">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Installation globale via npm</strong>
+          </div>
+        </div>
+        <div style="margin-left:36px;margin-bottom:8px;">
+          <div class="code-block">npm install -g @anthropic-ai/claude-code</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Premier lancement</strong>
+            <p>Dans le terminal, depuis votre dossier projet :</p>
+          </div>
+        </div>
+        <div style="margin-left:36px;margin-bottom:8px;">
+          <div class="code-block">claude</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Authentification</strong>
+            <p>Claude Code ouvre le navigateur vers console.anthropic.com. S'identifier → copier la clé API → coller dans le terminal. La clé est sauvegardée localement.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>Vérification</strong>
+          </div>
+        </div>
+        <div style="margin-left:36px;">
+          <div class="code-block">claude --version
+<span class="comment"># → @anthropic-ai/claude-code 1.x.x</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="card card-accent">
+          <h3>🎯 Ce que Claude Code peut faire</h3>
+          <ul style="line-height:2;">
+            <li>Lire et modifier tous les fichiers du projet</li>
+            <li>Exécuter des commandes terminal</li>
+            <li>Créer des branches, committer, pousser</li>
+            <li>Chercher dans le code (grep, glob)</li>
+            <li>Lire la doc web pour vous aider</li>
+            <li>Mémoriser des préférences entre sessions</li>
+          </ul>
+        </div>
+        <div class="info-box tip" style="margin-top:12px;">
+          <span class="icon">💡</span>
+          <span>Extension VS Code disponible aussi : chercher "Claude" dans les extensions. Mais le terminal reste la version la plus puissante.</span>
+        </div>
+        <div class="info-box info" style="margin-top:12px;">
+          <span class="icon">ℹ️</span>
+          <span>Tarif : ~20 $/mois (plan Pro) pour une utilisation intensive de dev. Ou paiement à l'usage via la clé API.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 7 — CLAUDE CODE CONFIG -->
+  <div class="slide" data-title="Configurer Claude Code">
+    <div class="slide-header">
+      <div class="step-badge">Étape 3 (suite)</div>
+      <span class="section-icon">⚙️</span>
+      <h2>Configurer Claude Code</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div class="card card-accent">
+          <h3>📄 CLAUDE.md — La "carte de visite" du projet</h3>
+          <p style="margin-bottom:10px;">À la racine du projet, ce fichier est <strong>automatiquement lu</strong> par Claude Code à chaque session. Il contient :</p>
+          <div class="code-block"><span class="comment"># CLAUDE.md</span>
+<span class="comment">## Stack technique</span>
+React + TypeScript + Vite
+Supabase (Edge Functions Deno)
+Déployé sur Vercel
+
+<span class="comment">## Règles de développement</span>
+- Committer et pusher après chaque feature
+- Pas de commentaires inutiles dans le code
+- Variables d'env dans .env.local</div>
+        </div>
+        <div class="info-box tip" style="margin-top:12px;">
+          <span class="icon">💡</span>
+          <span>Plus le CLAUDE.md est précis, moins vous aurez besoin de ré-expliquer le contexte à chaque session.</span>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>🔐 Permissions (.claude/settings.json)</h3>
+          <p style="margin-bottom:10px;">Gérer ce que Claude Code peut faire sans demander confirmation :</p>
+          <div class="code-block">{
+  <span class="string">"permissions"</span>: {
+    <span class="string">"allow"</span>: [
+      <span class="string">"Bash(git *)"</span>,
+      <span class="string">"Bash(npm *)"</span>,
+      <span class="string">"Bash(npx *)"</span>
+    ]
+  }
+}</div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h3>🧠 Mémoire persistante</h3>
+          <p>Claude Code mémorise vos préférences entre sessions. Exemple : <em>"retiens que je veux toujours committer et pusher après chaque développement"</em>. Il le fera automatiquement à chaque session.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 8 — CRÉER LE PROJET REACT -->
+  <div class="slide" data-title="Étape 4 — Créer le projet React">
+    <div class="slide-header">
+      <div class="step-badge">Étape 4</div>
+      <span class="section-icon">⚛️</span>
+      <h2>Créer le projet React + TypeScript</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div class="card card-accent">
+          <h3>🚀 Scaffolding avec Vite</h3>
+          <div class="code-block"><span class="comment"># Créer le projet</span>
+npm create vite@latest mon-projet \
+  -- --template react-ts
+
+<span class="comment"># Entrer dans le dossier</span>
+cd mon-projet
+
+<span class="comment"># Installer les dépendances</span>
+npm install
+
+<span class="comment"># Lancer en développement</span>
+npm run dev</div>
+        </div>
+        <div class="info-box info" style="margin-top:12px;">
+          <span class="icon">🔗</span>
+          <span>L'app tourne sur <code>http://localhost:5173</code> avec rechargement automatique à chaque sauvegarde.</span>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>📦 Bibliothèques utilisées dans Trust Build-IA</h3>
+          <div class="code-block"><span class="comment"># UI Components</span>
+npm install shadcn/ui
+
+<span class="comment"># Routing</span>
+npm install react-router-dom
+
+<span class="comment"># Supabase client</span>
+npm install @supabase/supabase-js
+
+<span class="comment"># Icônes</span>
+npm install lucide-react
+
+<span class="comment"># Notifications</span>
+npm install sonner
+
+<span class="comment"># Formulaires</span>
+npm install react-hook-form</div>
+        </div>
+        <div class="info-box tip" style="margin-top:12px;">
+          <span class="icon">💡</span>
+          <span>Laisser Claude Code installer les dépendances pour vous : <em>"installe shadcn/ui et configure-le"</em>. Il gère le setup complet.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 9 — SUPABASE -->
+  <div class="slide" data-title="Étape 5 — Configurer Supabase">
+    <div class="slide-header">
+      <div class="step-badge">Étape 5</div>
+      <span class="section-icon">🗄</span>
+      <h2>Configurer Supabase (backend)</h2>
+    </div>
+    <div class="grid-2">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Créer le projet Supabase</strong>
+            <p>supabase.com → New Project → choisir région EU West. Noter le mot de passe DB (non récupérable après).</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Récupérer les clés</strong>
+            <p>Settings → API → copier <strong>Project URL</strong> + <strong>anon public key</strong> + <strong>service_role key</strong>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Variables d'environnement locales</strong>
+          </div>
+        </div>
+        <div style="margin-left:36px;">
+          <div class="code-block"><span class="comment"># .env.local</span>
+<span class="var">VITE_SUPABASE_URL</span>=https://xxx.supabase.co
+<span class="var">VITE_SUPABASE_ANON_KEY</span>=eyJhbGc...</div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>🖥 Supabase CLI (Windows via Scoop)</h3>
+          <div class="code-block"><span class="comment"># Installer Scoop (gestionnaire paquets)</span>
+Set-ExecutionPolicy -Scope CurrentUser \
+  -ExecutionPolicy RemoteSigned
+irm get.scoop.sh | iex
+
+<span class="comment"># Installer Supabase CLI</span>
+scoop install supabase
+
+<span class="comment"># Si commande introuvable dans VS Code</span>
+$env:PATH += <span class="string">";$env:USERPROFILE\scoop\shims"</span>
+
+<span class="comment"># Déployer une Edge Function</span>
+supabase functions deploy ma-fonction \
+  --no-verify-jwt</div>
+        </div>
+        <div class="info-box warn" style="margin-top:12px;">
+          <span class="icon">⚠️</span>
+          <span>Toujours déployer les Edge Functions avec <code>--no-verify-jwt</code>, sinon Supabase rejette les requêtes même authentifiées.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 10 — VERCEL -->
+  <div class="slide" data-title="Étape 6 — Déployer sur Vercel">
+    <div class="slide-header">
+      <div class="step-badge">Étape 6</div>
+      <span class="section-icon">▲</span>
+      <h2>Déployer sur Vercel</h2>
+    </div>
+    <div class="grid-2">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <strong>Importer le repo GitHub</strong>
+            <p>vercel.com → Add New Project → Import Git Repository → sélectionner le repo GitHub → Deploy.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <strong>Configuration du build</strong>
+            <p>Vercel détecte Vite automatiquement. Framework Preset : <code>Vite</code>. Build Command : <code>npm run build</code>. Output Directory : <code>dist</code>.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <strong>Variables d'environnement</strong>
+            <p>Settings → Environment Variables → ajouter les mêmes clés que dans <code>.env.local</code> (VITE_SUPABASE_URL, etc.).</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <strong>SPA Routing (vercel.json)</strong>
+            <p>Pour que React Router fonctionne, ajouter à la racine :</p>
+          </div>
+        </div>
+        <div style="margin-left:36px;">
+          <div class="code-block"><span class="comment">// vercel.json</span>
+{
+  <span class="string">"rewrites"</span>: [
+    { <span class="string">"source"</span>: <span class="string">"/(.*)"</span>,
+      <span class="string">"destination"</span>: <span class="string">"/"</span> }
+  ]
+}</div>
+        </div>
+      </div>
+      <div>
+        <div class="card card-accent">
+          <h3>⚡ Déploiement continu automatique</h3>
+          <div class="flow" style="flex-direction:column;align-items:flex-start;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="flow-node highlight" style="font-size:12px;">Claude Code modifie les fichiers</div>
+            </div>
+            <div class="flow-arrow" style="margin-left:20px;">↓</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="flow-node" style="font-size:12px;">git commit + git push</div>
+            </div>
+            <div class="flow-arrow" style="margin-left:20px;">↓</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="flow-node" style="font-size:12px;">Vercel détecte le push</div>
+            </div>
+            <div class="flow-arrow" style="margin-left:20px;">↓</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="flow-node highlight" style="font-size:12px;">Build + Déploiement ~30 sec</div>
+            </div>
+          </div>
+        </div>
+        <div class="info-box tip" style="margin-top:12px;">
+          <span class="icon">🌐</span>
+          <span>Vercel fournit une URL <code>mon-projet.vercel.app</code> immédiatement. Vous pouvez aussi connecter un domaine personnalisé gratuitement.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 11 — ENV VARS TABLE -->
+  <div class="slide" data-title="Variables d'environnement">
+    <div class="slide-header">
+      <span class="section-icon">🔑</span>
+      <h2>Variables d'environnement</h2>
+    </div>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Récapitulatif des clés à configurer et où les mettre (basé sur Trust Build-IA)</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>Usage</th>
+          <th>.env.local</th>
+          <th>Vercel</th>
+          <th>Supabase Secrets</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code class="env-key">VITE_SUPABASE_URL</code></td>
+          <td>URL du projet Supabase</td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td><code class="env-key">VITE_SUPABASE_ANON_KEY</code></td>
+          <td>Clé publique Supabase (frontend)</td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td><code class="env-key">SUPABASE_SERVICE_ROLE_KEY</code></td>
+          <td>Clé admin Supabase (Edge Functions)</td>
+          <td>—</td>
+          <td>—</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><code class="env-key">ANTHROPIC_API_KEY</code></td>
+          <td>Clé Claude / Anthropic (Edge Functions)</td>
+          <td>—</td>
+          <td>—</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><code class="env-key">SENDGRID_API_KEY</code></td>
+          <td>Envoi d'emails transactionnels</td>
+          <td>—</td>
+          <td>—</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><code class="env-key">SENDGRID_FROM_EMAIL</code></td>
+          <td>Email expéditeur vérifié</td>
+          <td>—</td>
+          <td>—</td>
+          <td>✅</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="grid-2" style="margin-top:14px;">
+      <div class="info-box warn">
+        <span class="icon">⚠️</span>
+        <span>Les variables <code>VITE_*</code> sont publiques (intégrées dans le build JS). Ne jamais y mettre de clés secrètes.</span>
+      </div>
+      <div class="info-box info">
+        <span class="icon">ℹ️</span>
+        <span>Supabase Secrets : Dashboard → Settings → Edge Functions → Add new secret. Accessibles uniquement côté serveur.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 12 — SERVICES TIERS -->
+  <div class="slide" data-title="Services tiers configurés">
+    <div class="slide-header">
+      <span class="section-icon">🔌</span>
+      <h2>Services tiers — Configuration avancée</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div class="card card-accent">
+          <h3>📧 SendGrid — Emails transactionnels</h3>
+          <p style="margin-bottom:8px;">Alternative à Resend, sans besoin de domaine custom (Single Sender Verification sur Gmail suffit).</p>
+          <div class="code-block" style="font-size:11px;"><span class="comment">// Dans une Edge Function Supabase</span>
+await fetch(
+  <span class="string">"https://api.sendgrid.com/v3/mail/send"</span>,
+  {
+    method: <span class="string">"POST"</span>,
+    headers: {
+      Authorization: <span class="string">`Bearer ${SENDGRID_KEY}`</span>
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{email}] }],
+      from: { email: fromEmail, name },
+      subject: <span class="string">"Objet"</span>,
+      content: [{ type: <span class="string">"text/html"</span>, value: html }]
+    })
+  }
+)</div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>⏰ pg_cron — Tâches planifiées</h3>
+          <p style="margin-bottom:8px;">Pour des rappels automatiques (ex: expiration KBIS).</p>
+          <p style="margin-bottom:8px;color:var(--muted);font-size:12px;"><strong>1.</strong> Activer l'extension : Supabase → Database → Extensions → pg_cron</p>
+          <div class="code-block" style="font-size:11px;"><span class="comment">-- 2. Planifier (SQL Editor)</span>
+SELECT cron.schedule(
+  <span class="string">'mon-rappel'</span>,
+  <span class="string">'0 8 * * 1'</span>, <span class="comment">-- tous les lundis 8h</span>
+  $$SELECT net.http_post(
+    url := <span class="string">'https://xxx.supabase.co/functions/v1/ma-fn'</span>,
+    headers := <span class="string">'{"Authorization":"Bearer KEY"}'</span>::jsonb,
+    body := <span class="string">'{}'</span>::jsonb
+  )$$
+);
+<span class="comment">-- Réponse "schedule 1" = succès ✅</span></div>
+        </div>
+        <div class="info-box warn" style="margin-top:10px;">
+          <span class="icon">⚠️</span>
+          <span>Activer pg_cron <strong>avant</strong> d'exécuter le SQL — sinon erreur <code>schema "cron" does not exist</code>.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 13 — WORKFLOW QUOTIDIEN -->
+  <div class="slide" data-title="Workflow quotidien">
+    <div class="slide-header">
+      <span class="section-icon">🔄</span>
+      <h2>Workflow quotidien avec Claude Code</h2>
+    </div>
+    <div class="steps" style="max-width:700px;margin:0 auto;">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Ouvrir VS Code + lancer Claude Code</strong>
+          <p>Ouvrir le terminal intégré (<kbd>Ctrl</kbd>+<kbd>`</kbd>) → taper <code>claude</code>. Claude lit automatiquement le projet et le CLAUDE.md.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Décrire la feature en langage naturel</strong>
+          <p>Exemple : <em>"Ajoute une page de paramètres avec un champ pour le préfixe des factures, sauvegarde dans la table artisan_settings"</em></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Valider les modifications proposées</strong>
+          <p>Claude Code montre chaque modification avant de l'appliquer. Approuver, modifier ou refuser. Il s'adapte à vos corrections.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>Commit + Push automatique</strong>
+          <p>Claude Code crée le commit avec un message descriptif et pousse sur GitHub. Vercel déploie en ~30 secondes.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <strong>Tester sur l'URL Vercel</strong>
+          <p>L'app est en ligne. Tester sur smartphone et desktop. Si bug → revenir en étape 2 avec une description du problème.</p>
+        </div>
+      </div>
+    </div>
+    <div class="info-box tip" style="margin-top:16px;">
+      <span class="icon">⚡</span>
+      <span>Ce cycle complet — idée → code → prod — prend <strong>5 à 15 minutes</strong> par feature avec cette stack.</span>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 14 — PIÈGES ET CONSEILS -->
+  <div class="slide" data-title="Pièges fréquents &amp; conseils">
+    <div class="slide-header">
+      <span class="section-icon">🛡</span>
+      <h2>Pièges fréquents &amp; conseils</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <h3 style="color:var(--accent);font-size:14px;margin-bottom:10px;">⚠️ Erreurs classiques</h3>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num" style="background:var(--red);">!</div>
+            <div class="step-body">
+              <strong>Clés API dans le code</strong>
+              <p>Toujours utiliser <code>.env.local</code>. Ne jamais hardcoder une clé dans un fichier JS/TS. GitHub scanne les dépôts et révoque les clés exposées.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num" style="background:var(--red);">!</div>
+            <div class="step-body">
+              <strong>Variables VITE_* pour données secrètes</strong>
+              <p>Les variables <code>VITE_*</code> sont visibles dans le navigateur (bundle JS). Réserver aux clés publiques Supabase uniquement.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num" style="background:var(--red);">!</div>
+            <div class="step-body">
+              <strong>Edge Functions sans --no-verify-jwt</strong>
+              <p>Supabase rejette les requêtes si on oublie ce flag au déploiement. Toujours : <code>supabase functions deploy fn --no-verify-jwt</code></p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 style="color:var(--green);font-size:14px;margin-bottom:10px;">✅ Bonnes pratiques</h3>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num" style="background:var(--green);">✓</div>
+            <div class="step-body">
+              <strong>CLAUDE.md bien documenté</strong>
+              <p>Plus il contient d'infos sur l'architecture, les conventions et les règles, plus Claude Code sera autonome.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num" style="background:var(--green);">✓</div>
+            <div class="step-body">
+              <strong>Migrations SQL versionnées</strong>
+              <p>Stocker toutes les modifications de schéma dans <code>supabase/migrations/</code>. Committer ces fichiers. Rejouer facilement sur un nouveau projet.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num" style="background:var(--green);">✓</div>
+            <div class="step-body">
+              <strong>Activer pg_cron AVANT le SQL</strong>
+              <p>Supabase → Database → Extensions → pg_cron → Enable. Puis exécuter le <code>cron.schedule()</code>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▸ SLIDE 15 — RÉCAPITULATIF -->
+  <div class="slide slide-cover" data-title="Récapitulatif &amp; prochaines étapes">
+    <div style="max-width:700px;width:100%;">
+      <div class="eyebrow">Récapitulatif</div>
+      <h1 style="font-size:clamp(24px,4vw,40px);margin-bottom:24px;">Vous avez maintenant<br>une stack IA de production</h1>
+      <div class="grid-2" style="text-align:left;margin-bottom:24px;">
+        <div class="card">
+          <h3>✅ Ce qu'on a mis en place</h3>
+          <ul style="color:var(--muted);line-height:2.2;font-size:13px;">
+            <li>VS Code + Git + Node.js configurés</li>
+            <li>Claude Code CLI authentifié</li>
+            <li>GitHub + Vercel déploiement continu</li>
+            <li>Supabase (DB, Auth, Edge Functions)</li>
+            <li>SendGrid pour les emails</li>
+            <li>pg_cron pour les tâches planifiées</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>🚀 Prochaines étapes possibles</h3>
+          <ul style="color:var(--muted);line-height:2.2;font-size:13px;">
+            <li>Ajouter une base de connaissance RAG</li>
+            <li>Intégrer des agents IA spécialisés</li>
+            <li>Connecter un domaine personnalisé</li>
+            <li>Mettre en place des tests automatisés</li>
+            <li>Monitorer les erreurs (Sentry)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="info-box tip">
+        <span class="icon">💡</span>
+        <span>Le projet <strong>Trust Build-IA</strong> utilise cette stack exacte pour un SaaS BTP complet : devis, chantiers, factures, assistants IA, KBIS. Tout a été développé avec Claude Code.</span>
+      </div>
+      <p style="margin-top:24px;font-size:12px;color:#475569;">Présentation réalisée avec la stack Trust Build-IA · 2026</p>
+    </div>
+  </div>
+
+</div>
+<!-- END SLIDES -->
+
+<!-- FOOTER -->
+<div id="footer">
+  <span>← → ou boutons pour naviguer · <span class="shortcut">Espace</span> = slide suivante · <span class="shortcut">F</span> = plein écran</span>
+  <span>Trust Build-IA — Tutoriel Stack Dev IA</span>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  let current = 0;
+
+  const counter   = document.getElementById('counter');
+  const fill      = document.getElementById('progress-fill');
+  const btnPrev   = document.getElementById('btn-prev');
+  const btnNext   = document.getElementById('btn-next');
+  const tocList   = document.getElementById('toc-list');
+  const tocOverlay = document.getElementById('toc-overlay');
+  const tocToggle = document.getElementById('toc-toggle');
+
+  // Build TOC
+  slides.forEach((s, i) => {
+    const title = s.dataset.title || `Slide ${i+1}`;
+    const el = document.createElement('div');
+    el.className = 'toc-item' + (i === 0 ? ' active' : '');
+    el.innerHTML = `<span class="toc-num">${i+1}</span><span>${title}</span>`;
+    el.addEventListener('click', () => { goTo(i); closeToc(); });
+    tocList.appendChild(el);
+  });
+
+  function updateToc() {
+    document.querySelectorAll('.toc-item').forEach((el, i) => {
+      el.classList.toggle('active', i === current);
+    });
+  }
+
+  function goTo(n) {
+    slides[current].classList.remove('active');
+    current = Math.max(0, Math.min(total - 1, n));
+    slides[current].classList.add('active');
+    counter.textContent = `${current + 1} / ${total}`;
+    fill.style.width = `${((current + 1) / total) * 100}%`;
+    btnPrev.disabled = current === 0;
+    btnNext.disabled = current === total - 1;
+    updateToc();
+    slides[current].scrollTop = 0;
+  }
+
+  btnPrev.addEventListener('click', () => goTo(current - 1));
+  btnNext.addEventListener('click', () => goTo(current + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')  { e.preventDefault(); goTo(current - 1); }
+    if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+    if (e.key === 'Escape') closeToc();
+  });
+
+  // TOC
+  tocToggle.addEventListener('click', () => tocOverlay.classList.toggle('open'));
+  tocOverlay.addEventListener('click', e => { if (e.target === tocOverlay || !document.getElementById('toc-panel').contains(e.target)) closeToc(); });
+  function closeToc() { tocOverlay.classList.remove('open'); }
+
+  // Touch swipe
+  let touchX = 0;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) { dx < 0 ? goTo(current + 1) : goTo(current - 1); }
+  });
+
+  // Init
+  goTo(0);
+</script>
+</body>
+</html>
