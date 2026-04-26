@@ -938,7 +938,7 @@ function DevisCard({
     setPdfLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("generate-pdf-html", {
-        body: { devis_id: devis.id },
+        body: { type: "devis", devis_id: devis.id },
       });
       if (error) throw new Error(error.message ?? "Erreur génération");
       if (!data?.html) throw new Error("Réponse vide de l'edge function");
