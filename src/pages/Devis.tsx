@@ -1405,7 +1405,7 @@ export default function DevisPage() {
       { data: settData },
     ] = await Promise.all([
       supabase.from("clients").select("id,nom,prenom,email,telephone,adresse,type").eq("artisan_id", user.id).order("nom"),
-      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at").eq("artisan_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
       supabase.from("avenants").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),
@@ -1434,11 +1434,15 @@ export default function DevisPage() {
     });
 
     setClients(cData ?? []);
-    setDevisList((dData ?? []).map(d => ({
-      ...d,
-      client: d.client_id ? clientsMap.get(d.client_id) : undefined,
-      lignes: lignesMap.get(d.id) ?? [],
-    })));
+    setDevisList((dData ?? []).map((d: any) => {
+      const effectiveClientId = d.client_id ?? d.chantiers?.client_id ?? null;
+      return {
+        ...d,
+        client_id: effectiveClientId,
+        client: effectiveClientId ? clientsMap.get(effectiveClientId) : undefined,
+        lignes: lignesMap.get(d.id) ?? [],
+      };
+    }));
     setAvenants((avData ?? []).map(a => ({ ...a, lignes: lignesAvenantMap.get(a.id) ?? [] })));
     setAvoirs((avoirData ?? []).map((a: any) => ({ ...a, lignes: lignesAvoirMap.get(a.id) ?? [] })));
     setAcomptes(acData ?? []);
