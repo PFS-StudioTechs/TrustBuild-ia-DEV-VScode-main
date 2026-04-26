@@ -83,7 +83,7 @@ export default function Parametres() {
           });
         }
       });
-    supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix").eq("user_id", user.id).single()
+    supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix").eq("user_id", user.id).maybeSingle()
       .then(({ data }) => {
         if (!data) return;
         const d = data as any;
@@ -115,7 +115,7 @@ export default function Parametres() {
   // Load saved telegram chat id
   useEffect(() => {
     if (!user) return;
-    supabase.from("artisan_settings").select("preferences").eq("user_id", user.id).single()
+    supabase.from("artisan_settings").select("preferences").eq("user_id", user.id).maybeSingle()
       .then(({ data }) => {
         const prefs = data?.preferences as Record<string, string> | null;
         if (prefs?.telegram_chat_id) {
@@ -197,8 +197,17 @@ export default function Parametres() {
     setSavingPrefixes(true);
     const { error } = await supabase
       .from("artisan_settings")
-      .update({ devis_prefix: devisPrefix.trim() || "DEV", facture_prefix: facturePrefix.trim() || "FAC", avenant_prefix: avenantPrefix.trim() || "AVN", acompte_prefix: acomptePrefix.trim() || "ACP", avoir_prefix: avoirPrefix.trim() || "AVO" } as any)
-      .eq("user_id", user.id);
+      .upsert(
+        {
+          user_id: user.id,
+          devis_prefix: devisPrefix.trim() || "DEV",
+          facture_prefix: facturePrefix.trim() || "FAC",
+          avenant_prefix: avenantPrefix.trim() || "AVN",
+          acompte_prefix: acomptePrefix.trim() || "ACP",
+          avoir_prefix: avoirPrefix.trim() || "AVO",
+        } as any,
+        { onConflict: "user_id" }
+      );
     if (error) toast.error(error.message);
     else toast.success("Préfixes enregistrés");
     setSavingPrefixes(false);

@@ -136,7 +136,7 @@ export default function TemplatePanel() {
       } else {
         // Create template with selected sector or general
         const sector = SECTORS.find(s => s.id === selectedSector) ?? SECTORS[5];
-        await supabase.from("document_templates").insert({
+        const { error: insertError } = await supabase.from("document_templates").insert({
           artisan_id:         user.id,
           secteur:            sector.id,
           nom:                `Mon template`,
@@ -148,6 +148,7 @@ export default function TemplatePanel() {
           is_active:          true,
           metadata:           {},
         });
+        if (insertError) throw insertError;
       }
       toast.success("Personnalisation enregistrée");
       fetchTemplate();
