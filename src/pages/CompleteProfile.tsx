@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, AlertCircle, Loader2, ArrowRight, Building2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, ArrowRight, Building2, ShieldCheck } from "lucide-react";
+import KbisUploadSection from "@/components/kbis/KbisUploadSection";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { toast } from "sonner";
 
@@ -34,6 +35,7 @@ export default function CompleteProfile() {
   const [siretError, setSiretError] = useState("");
   const [siretData, setSiretData] = useState<SiretData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showKbisUpload, setShowKbisUpload] = useState(false);
 
   // Redirige si profil déjà complété
   useEffect(() => {
@@ -280,6 +282,33 @@ export default function CompleteProfile() {
             </div>
           )}
         </div>
+
+        {/* KBIS optionnel — affiché après validation SIRET */}
+        {siretStatus === "valid" && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Extrait KBIS <span className="normal-case font-normal">(facultatif — vous avez 6 mois)</span>
+              </p>
+              {!showKbisUpload && (
+                <button
+                  onClick={() => setShowKbisUpload(true)}
+                  className="text-xs text-primary hover:underline font-medium"
+                >
+                  Déposer maintenant
+                </button>
+              )}
+            </div>
+            {showKbisUpload ? (
+              <KbisUploadSection />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Vous pouvez déposer votre KBIS dès maintenant ou le faire plus tard depuis "Mes Fichiers".
+              </p>
+            )}
+          </div>
+        )}
 
         {/* CTA */}
         <Button

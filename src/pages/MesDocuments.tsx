@@ -12,8 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Upload, Search, Grid3X3, List, Download, Trash2, Tag, Link2, Archive,
   FileText, Image, File, Bot, X, FolderOpen, Plus, Edit2, Filter,
-  PenLine, CreditCard, Send, Eye, Printer, Loader2,
+  PenLine, CreditCard, Send, Eye, Printer, Loader2, ShieldCheck, ShieldAlert,
 } from "lucide-react";
+import KbisUploadSection from "@/components/kbis/KbisUploadSection";
 import { toast } from "sonner";
 
 interface Document {
@@ -57,7 +58,7 @@ function getFileIcon(mime: string) {
 }
 
 export default function MesDocuments() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -65,6 +66,7 @@ export default function MesDocuments() {
   const [filterType, setFilterType] = useState("tous");
   const [filterTag, setFilterTag] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [showKbisUpload, setShowKbisUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
@@ -320,6 +322,47 @@ export default function MesDocuments() {
           <Plus className="w-4 h-4 mr-1" /> Ajouter
         </Button>
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
+      </div>
+
+      {/* Section KBIS */}
+      <div className="forge-card !p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {profile?.kbis_url ? (
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+            ) : (
+              <ShieldAlert className="w-5 h-5 text-amber-500" />
+            )}
+            <span className="font-semibold text-sm">Extrait KBIS</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              profile?.kbis_url
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+            }`}>
+              {profile?.kbis_url ? "Vérifié" : "Non renseigné"}
+            </span>
+          </div>
+          {!showKbisUpload && (
+            <button
+              onClick={() => setShowKbisUpload(true)}
+              className="text-xs text-primary hover:underline font-medium"
+            >
+              {profile?.kbis_url ? "Remplacer" : "Déposer"}
+            </button>
+          )}
+        </div>
+
+        {profile?.kbis_url && !showKbisUpload && (
+          <p className="text-xs text-muted-foreground">
+            Déposé le {profile.kbis_uploaded_at
+              ? new Date(profile.kbis_uploaded_at).toLocaleDateString("fr-FR")
+              : "—"}
+          </p>
+        )}
+
+        {showKbisUpload && (
+          <KbisUploadSection onSuccess={() => setShowKbisUpload(false)} />
+        )}
       </div>
 
       {/* Drop zone */}

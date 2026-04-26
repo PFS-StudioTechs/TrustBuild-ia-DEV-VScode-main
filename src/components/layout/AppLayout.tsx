@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import JarvisBubble from "@/components/jarvis/JarvisBubble";
+import KbisWarningBanner from "@/components/kbis/KbisWarningBanner";
 
 const baseTabs = [
   { path: "/dashboard", icon: LayoutDashboard, label: "Tableau" },
@@ -123,6 +124,9 @@ export default function AppLayout() {
             <LogOut className="w-5 h-5" />
           </button>
         </header>
+
+        {/* KBIS warning banner — visible si KBIS non déposé et dans la période des 6 mois */}
+        <KbisWarningBanner />
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
