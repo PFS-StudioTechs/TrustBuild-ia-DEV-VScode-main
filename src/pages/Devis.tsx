@@ -94,6 +94,8 @@ interface Facture {
   tva: number;
   statut: string;
   date_echeance: string;
+  client_id?: string | null;
+  solde_restant?: number;
 }
 
 interface Avoir {
@@ -679,6 +681,147 @@ function AvoirDialog({
 
 // ─── Dialog création facture ─────────────────────────────────
 
+// ─── Sheet détail facture ────────────────────────────────────────────────────
+function FactureSheet({
+  facture, clientNom, devisNumero, open, onClose, onRefresh, artisanId,
+}: {
+  facture: Facture | null;
+  clientNom: string;
+  devisNumero: string;
+  open: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+  artisanId: string;
+}) {
+  const [pdfHtml, setPdfHtml] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [updatingStatut, setUpdatingStatut] = useState(false);
+
+  useEffect(() => { if (!open) setPdfHtml(null); }, [open]);
+
+  if (!facture) return null;
+  const montantTTC = facture.montant_ht * (1 + facture.tva / 100);
+
+  const openPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-pdf-html", {
+        body: { type: "facture", facture_id: facture.id },
+      });
+      if (error) throw new Error(error.message ?? "Erreur");
+      if (!data?.html) throw new Error("Réponse vide");
+      setPdfHtml(data.html);
+    } catch (err: any) {
+      toast.error("Erreur PDF : " + err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const changeStatut = async (newStatut: string) => {
+    setUpdatingStatut(true);
+    try {
+      const { error } = await supabase.from("factures").update({ statut: newStatut }).eq("id", facture.id);
+      if (error) throw error;
+      toast.success("Statut mis à jour");
+      onRefresh();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setUpdatingStatut(false);
+    }
+  };
+
+  const badgeCn = (s: string) =>
+    s === "payee" ? "bg-emerald-100 text-emerald-700" :
+    s === "impayee" ? "bg-red-100 text-red-700" :
+    s === "envoyee" ? "bg-blue-100 text-blue-700" :
+    "bg-muted text-muted-foreground";
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
+        <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
+          <SheetTitle>{facture.numero}</SheetTitle>
+          {!pdfHtml ? (
+            <Button size="sm" variant="outline" onClick={openPdf} disabled={pdfLoading}>
+              {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Eye className="w-3.5 h-3.5 mr-1" />}
+              Aperçu PDF
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => {
+              const iframe = document.getElementById(`facture-iframe-${facture.id}`) as HTMLIFrameElement | null;
+              iframe?.contentWindow?.print();
+            }}>
+              <Printer className="w-3.5 h-3.5 mr-1" /> Imprimer / PDF
+            </Button>
+          )}
+        </SheetHeader>
+        <div className="flex-1 overflow-auto p-4 space-y-4">
+          {/* Infos */}
+          <div className="rounded-lg border p-3 space-y-2 text-sm">
+            {clientNom && (
+              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Client</span><span className="font-medium">{clientNom}</span></div>
+            )}
+            {devisNumero && (
+              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Devis</span><span className="font-mono">{devisNumero}</span></div>
+            )}
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Montant HT</span><span className="font-mono">{facture.montant_ht.toFixed(2)} €</span></div>
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">TVA {facture.tva}%</span><span className="font-mono">{(facture.montant_ht * facture.tva / 100).toFixed(2)} €</span></div>
+            <div className="flex justify-between text-sm font-bold border-t pt-2"><span>Total TTC</span><span className="font-mono">{montantTTC.toFixed(2)} €</span></div>
+            {facture.date_echeance && (
+              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Échéance</span><span>{new Date(facture.date_echeance).toLocaleDateString("fr-FR")}</span></div>
+            )}
+            <div className="flex justify-between text-xs items-center"><span className="text-muted-foreground">Statut</span><Badge className={`text-xs ${badgeCn(facture.statut)}`}>{facture.statut}</Badge></div>
+          </div>
+
+          {/* Actions statut */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mettre à jour le statut</p>
+            <div className="flex flex-wrap gap-2">
+              {facture.statut === "brouillon" && (
+                <Button size="sm" variant="outline" onClick={() => changeStatut("envoyee")} disabled={updatingStatut}>
+                  <Send className="w-3.5 h-3.5 mr-1.5" /> Marquer envoyée
+                </Button>
+              )}
+              {facture.statut === "envoyee" && (
+                <>
+                  <Button size="sm" variant="outline" className="text-emerald-600 border-emerald-300" onClick={() => changeStatut("payee")} disabled={updatingStatut}>
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Marquer payée
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-red-600 border-red-300" onClick={() => changeStatut("impayee")} disabled={updatingStatut}>
+                    <XCircle className="w-3.5 h-3.5 mr-1.5" /> Marquer impayée
+                  </Button>
+                </>
+              )}
+              {(facture.statut === "payee" || facture.statut === "impayee") && (
+                <Button size="sm" variant="outline" onClick={() => changeStatut("envoyee")} disabled={updatingStatut}>
+                  <ArrowRight className="w-3.5 h-3.5 mr-1.5" /> Remettre en envoyée
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* PDF iframe */}
+          {pdfHtml && (
+            <div className="bg-gray-100 rounded-lg p-2">
+              <iframe
+                id={`facture-iframe-${facture.id}`}
+                srcDoc={pdfHtml}
+                className="w-full bg-white shadow rounded border"
+                style={{ minHeight: "900px" }}
+                title="Aperçu facture"
+              />
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Dialog création facture ──────────────────────────────────────────────────
 function FactureDialog({
   open,
   onClose,
@@ -690,6 +833,7 @@ function FactureDialog({
   acomptesEncaisses,
   artisanId,
   prefixFacture,
+  lignesDevis,
 }: {
   open: boolean;
   onClose: () => void;
@@ -701,35 +845,62 @@ function FactureDialog({
   acomptesEncaisses: number;
   artisanId: string;
   prefixFacture: string;
+  lignesDevis: LigneDevis[];
 }) {
   const [dateEcheance, setDateEcheance] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setDateEcheance("");
-  }, [open]);
+  const [isPartial, setIsPartial] = useState(false);
+  const [montantTTCEditable, setMontantTTCEditable] = useState("");
 
   const montantTTC = montantAjusteHT * (1 + tva / 100);
   const soldeRestant = Math.max(0, montantTTC - acomptesEncaisses);
 
+  useEffect(() => {
+    if (!open) return;
+    setDateEcheance("");
+    setIsPartial(false);
+    setMontantTTCEditable(soldeRestant.toFixed(2));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const montantTTCFinal = isPartial ? (parseFloat(montantTTCEditable.replace(",", ".")) || 0) : soldeRestant;
+  const montantHTFinal = montantTTCFinal / (1 + tva / 100);
+
   const handleSave = async () => {
     if (!dateEcheance) { toast.error("Date d'échéance requise"); return; }
+    if (montantTTCFinal <= 0) { toast.error("Le montant doit être supérieur à 0"); return; }
     setSaving(true);
     try {
       const numero = `${prefixFacture}-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
-      const { error } = await supabase.from("factures").insert({
+      const { data: newFacture, error } = await supabase.from("factures").insert({
         artisan_id: artisanId,
         devis_id: devisId,
         client_id: clientId,
         numero,
-        montant_ht: montantAjusteHT,
+        montant_ht: montantHTFinal,
         tva,
         statut: "brouillon",
         date_echeance: dateEcheance,
-        solde_restant: soldeRestant,
-      } as any);
+        solde_restant: montantTTCFinal,
+      } as any).select("id").single();
       if (error) throw error;
+
+      // Copier les lignes du devis vers lignes_facture (permet la génération PDF)
+      if (newFacture?.id && lignesDevis.length > 0) {
+        await (supabase as any).from("lignes_facture").insert(
+          lignesDevis.map((l, i) => ({
+            facture_id: newFacture.id,
+            artisan_id: artisanId,
+            designation: l.designation,
+            quantite: l.quantite,
+            unite: l.unite,
+            prix_unitaire: l.prix_unitaire,
+            tva: l.tva,
+            ordre: l.ordre ?? i + 1,
+          }))
+        );
+      }
+
       toast.success(`Facture ${numero} créée`);
       onSaved();
       onClose();
@@ -747,6 +918,7 @@ function FactureDialog({
           <DialogTitle>Émettre la facture</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
+          {/* Récap montants */}
           <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">Montant ajusté HT</span>
@@ -773,13 +945,51 @@ function FactureDialog({
               </>
             )}
           </div>
+
+          {/* Choix montant : solde total vs partiel */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold">Montant à facturer</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setIsPartial(false); setMontantTTCEditable(soldeRestant.toFixed(2)); }}
+                className={`px-3 py-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${!isPartial ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
+              >
+                Solde total<br /><span className="font-mono font-bold">{soldeRestant.toFixed(2)} €</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPartial(true)}
+                className={`px-3 py-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${isPartial ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
+              >
+                Montant partiel<br /><span className="font-mono font-bold opacity-70">personnalisé</span>
+              </button>
+            </div>
+            {isPartial && (
+              <div className="space-y-1">
+                <Label className="text-xs">Montant TTC (€)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={montantTTCEditable}
+                  onChange={e => setMontantTTCEditable(e.target.value)}
+                  placeholder={`Max : ${montantTTC.toFixed(2)} €`}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  → HT : {montantHTFinal.toFixed(2)} € · TVA : {(montantTTCFinal - montantHTFinal).toFixed(2)} €
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1">
             <Label className="text-xs">Date d'échéance *</Label>
             <Input type="date" value={dateEcheance} onChange={(e) => setDateEcheance(e.target.value)} />
           </div>
           <Button onClick={handleSave} disabled={saving} className="w-full">
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Créer la facture
+            Créer la facture — {montantTTCFinal.toFixed(2)} € TTC
           </Button>
         </div>
       </DialogContent>
@@ -927,6 +1137,7 @@ function DevisCard({
   const [editAvoir, setEditAvoir] = useState<Avoir | null>(null);
   const [acompteOpen, setAcompteOpen] = useState(false);
   const [factureOpen, setFactureOpen] = useState(false);
+  const [selectedFacture, setSelectedFacture] = useState<Facture | null>(null);
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
@@ -1264,15 +1475,20 @@ function DevisCard({
 
                 {devisFactures.length === 0 && <p className="text-xs text-muted-foreground italic">Aucune facture émise</p>}
                 {devisFactures.map(f => (
-                  <div key={f.id} className="rounded-lg border p-2 flex items-center justify-between">
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setSelectedFacture(f)}
+                    className="w-full rounded-lg border p-2 flex items-center justify-between hover:bg-muted/40 transition-colors text-left"
+                  >
                     <div>
                       <span className="text-xs font-mono font-semibold">{f.numero}</span>
-                      <p className="text-xs text-muted-foreground">{f.montant_ht.toFixed(2)} € HT — {new Date(f.date_echeance).toLocaleDateString("fr-FR")}</p>
+                      <p className="text-xs text-muted-foreground">{f.montant_ht.toFixed(2)} € HT — {f.date_echeance ? new Date(f.date_echeance).toLocaleDateString("fr-FR") : "—"}</p>
                     </div>
-                    <Badge className={`text-xs ${f.statut === "payee" ? "bg-emerald-100 text-emerald-700" : f.statut === "impayee" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
+                    <Badge className={`text-xs ${f.statut === "payee" ? "bg-emerald-100 text-emerald-700" : f.statut === "impayee" ? "bg-red-100 text-red-700" : f.statut === "envoyee" ? "bg-blue-100 text-blue-700" : "bg-muted text-muted-foreground"}`}>
                       {f.statut}
                     </Badge>
-                  </div>
+                  </button>
                 ))}
                 <Button size="sm" className="w-full text-xs" onClick={() => setFactureOpen(true)}>
                   <Plus className="w-3.5 h-3.5 mr-1" /> Émettre la facture
@@ -1333,6 +1549,16 @@ function DevisCard({
         acomptesEncaisses={acomptesEncaisses}
         artisanId={artisanId}
         prefixFacture={prefixes.facture_prefix}
+        lignesDevis={devis.lignes ?? []}
+      />
+      <FactureSheet
+        facture={selectedFacture}
+        clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+        devisNumero={devis.numero}
+        open={!!selectedFacture}
+        onClose={() => setSelectedFacture(null)}
+        onRefresh={onRefresh}
+        artisanId={artisanId}
       />
 
       <Sheet open={pdfOpen} onOpenChange={setPdfOpen}>
@@ -1388,6 +1614,8 @@ export default function DevisPage() {
   const [statutFilter, setStatutFilter] = useState<string>("tous");
   const [createOpen, setCreateOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pageView, setPageView] = useState<"devis" | "factures">("devis");
+  const [pageSelectedFacture, setPageSelectedFacture] = useState<Facture | null>(null);
 
   const loadAll = useCallback(async () => {
     if (!user) return;
@@ -1409,7 +1637,7 @@ export default function DevisPage() {
       supabase.from("avenants").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),
-      supabase.from("factures").select("id,devis_id,numero,montant_ht,tva,statut,date_echeance").eq("artisan_id", user.id),
+      supabase.from("factures").select("id,devis_id,numero,montant_ht,tva,statut,date_echeance,client_id,solde_restant").eq("artisan_id", user.id),
       supabase.from("lignes_devis").select("id,devis_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       supabase.from("lignes_avenant").select("id,avenant_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       (supabase as any).from("lignes_avoir").select("id,avoir_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
@@ -1475,6 +1703,31 @@ export default function DevisPage() {
 
   if (!user) return null;
 
+  // Enrichissement factures pour la vue page-level
+  const facturesEnrichies = factures.map(f => {
+    const devisRef = devisList.find(d => d.id === f.devis_id);
+    const clientRef = clients.find(c => c.id === (f.client_id ?? devisRef?.client_id));
+    return {
+      ...f,
+      devisNumero: devisRef?.numero ?? "",
+      clientNom: clientRef ? `${clientRef.nom}${clientRef.prenom ? " " + clientRef.prenom : ""}` : "",
+    };
+  });
+
+  const filteredFacturesPage = facturesEnrichies.filter(f => {
+    if (selectedClientId) {
+      const devisRef = devisList.find(d => d.id === f.devis_id);
+      return (f.client_id ?? devisRef?.client_id) === selectedClientId;
+    }
+    return true;
+  });
+
+  const badgeFactureCn = (s: string) =>
+    s === "payee" ? "bg-emerald-100 text-emerald-700" :
+    s === "impayee" ? "bg-red-100 text-red-700" :
+    s === "envoyee" ? "bg-blue-100 text-blue-700" :
+    "bg-muted text-muted-foreground";
+
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
       {/* Header */}
@@ -1488,9 +1741,24 @@ export default function DevisPage() {
         </Button>
       </div>
 
-      {/* Filtres */}
+      {/* Onglets Devis / Factures */}
+      <div className="flex gap-1 border-b">
+        <button
+          onClick={() => setPageView("devis")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${pageView === "devis" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+        >
+          <FileText className="w-3.5 h-3.5 inline mr-1.5" />Devis ({devisList.length})
+        </button>
+        <button
+          onClick={() => setPageView("factures")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${pageView === "factures" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+        >
+          <CreditCard className="w-3.5 h-3.5 inline mr-1.5" />Factures ({factures.length})
+        </button>
+      </div>
+
+      {/* Filtres clients (communs aux deux vues) */}
       <div className="flex gap-2 flex-wrap">
-        {/* Filtre client */}
         <div className="flex gap-1.5 flex-wrap">
           <button
             onClick={() => setSelectedClientId(null)}
@@ -1509,23 +1777,73 @@ export default function DevisPage() {
           ))}
         </div>
 
-        {/* Filtre statut */}
-        <Select value={statutFilter} onValueChange={setStatutFilter}>
-          <SelectTrigger className="w-36 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="tous">Tous statuts</SelectItem>
-            <SelectItem value="brouillon">Brouillon</SelectItem>
-            <SelectItem value="envoye">Envoyé</SelectItem>
-            <SelectItem value="signe">Signé</SelectItem>
-            <SelectItem value="refuse">Refusé</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Filtre statut (uniquement vue Devis) */}
+        {pageView === "devis" && (
+          <Select value={statutFilter} onValueChange={setStatutFilter}>
+            <SelectTrigger className="w-36 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tous">Tous statuts</SelectItem>
+              <SelectItem value="brouillon">Brouillon</SelectItem>
+              <SelectItem value="envoye">Envoyé</SelectItem>
+              <SelectItem value="signe">Signé</SelectItem>
+              <SelectItem value="refuse">Refusé</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
-      {/* Liste devis */}
-      {loading ? (
+      {/* ── Vue Factures ── */}
+      {pageView === "factures" && (
+        <div className="space-y-3">
+          {loading ? (
+            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="skeleton-shimmer h-16 rounded-xl" />)}</div>
+          ) : filteredFacturesPage.length === 0 ? (
+            <div className="forge-card text-center py-12 space-y-3">
+              <CreditCard className="w-12 h-12 text-muted-foreground/30 mx-auto" />
+              <p className="text-muted-foreground text-sm">Aucune facture{selectedClientId ? " pour ce client" : ""}</p>
+            </div>
+          ) : (
+            filteredFacturesPage.map(f => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setPageSelectedFacture(f)}
+                className="w-full rounded-xl border bg-card px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors text-left"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono font-semibold">{f.numero}</span>
+                    <Badge className={`text-xs ${badgeFactureCn(f.statut)}`}>{f.statut}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {f.clientNom && <span className="font-medium text-foreground">{f.clientNom} · </span>}
+                    {f.devisNumero && <span>Réf. {f.devisNumero} · </span>}
+                    {f.montant_ht.toFixed(2)} € HT
+                    {f.date_echeance && ` · Éch. ${new Date(f.date_echeance).toLocaleDateString("fr-FR")}`}
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Sheet détail facture niveau page */}
+      <FactureSheet
+        facture={pageSelectedFacture}
+        clientNom={pageSelectedFacture ? (facturesEnrichies.find(f => f.id === pageSelectedFacture.id)?.clientNom ?? "") : ""}
+        devisNumero={pageSelectedFacture ? (facturesEnrichies.find(f => f.id === pageSelectedFacture.id)?.devisNumero ?? "") : ""}
+        open={!!pageSelectedFacture}
+        onClose={() => setPageSelectedFacture(null)}
+        onRefresh={loadAll}
+        artisanId={user.id}
+      />
+
+      {/* ── Vue Devis ── */}
+      {pageView === "devis" && (loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-20 rounded-xl" />)}
         </div>
@@ -1541,7 +1859,6 @@ export default function DevisPage() {
         <div className="space-y-3">
           {filteredDevis.map(d => (
             <div key={d.id}>
-              {/* En-tête client si "tous" */}
               {!selectedClientId && d.client && (
                 <div className="flex items-center gap-2 mb-1.5 px-1">
                   <Users className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1563,7 +1880,7 @@ export default function DevisPage() {
             </div>
           ))}
         </div>
-      )}
+      ))}
 
       <DevisDialog
         open={createOpen}

@@ -362,16 +362,22 @@ serve(async (req) => {
 
       const devisId = (facture as any).devis_id;
       let chantier = null, client = null;
+      let resolvedClientId: string | null = (facture as any).client_id ?? null;
+
       if (devisId) {
-        const { data: devis } = await db.from("devis").select("chantier_id").eq("id", devisId).single();
+        const { data: devis } = await db.from("devis").select("chantier_id, client_id").eq("id", devisId).single();
         if (devis) {
-          const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", devis.chantier_id).single();
-          chantier = ch;
-          if (ch?.client_id) {
-            const { data: cl } = await db.from("clients").select("nom, adresse, email, telephone").eq("id", ch.client_id).single();
-            client = cl;
+          if (!resolvedClientId) resolvedClientId = (devis as any).client_id ?? null;
+          if ((devis as any).chantier_id) {
+            const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (devis as any).chantier_id).single();
+            chantier = ch;
+            if (ch?.client_id && !resolvedClientId) resolvedClientId = ch.client_id;
           }
         }
+      }
+      if (resolvedClientId) {
+        const { data: cl } = await db.from("clients").select("nom, adresse, email, telephone").eq("id", resolvedClientId).single();
+        client = cl;
       }
 
       // Lignes depuis la table lignes_facture
