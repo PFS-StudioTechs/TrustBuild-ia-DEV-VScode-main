@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
-  Loader2, Users, CreditCard, Wrench, ArrowRight,
+  Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -927,6 +928,29 @@ function DevisCard({
   const [acompteOpen, setAcompteOpen] = useState(false);
   const [factureOpen, setFactureOpen] = useState(false);
   const [allClients, setAllClients] = useState<Client[]>([]);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState<string | null>(null);
+  const [pdfTitle, setPdfTitle] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const openDevisPdf = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPdfLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-pdf-html", {
+        body: { devis_id: devis.id },
+      });
+      if (error) throw new Error(error.message ?? "Erreur génération");
+      if (!data?.html) throw new Error("Réponse vide de l'edge function");
+      setPdfTitle(`Devis ${devis.numero}`);
+      setPdfHtml(data.html);
+      setPdfOpen(true);
+    } catch (err: any) {
+      toast.error("Erreur PDF : " + err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   const isLocked = devis.statut === "signe";
   const expired = isExpired(devis.date_validite) && !isLocked;
@@ -1003,6 +1027,13 @@ function DevisCard({
             <div className="font-semibold font-mono text-sm">{montantAjusteTTC.toFixed(2)} €</div>
             <div className="text-xs text-muted-foreground">TTC ajusté</div>
           </div>
+          <button
+            onClick={openDevisPdf}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            title="Aperçu PDF"
+          >
+            {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+          </button>
           {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
         </div>
 
@@ -1303,6 +1334,40 @@ function DevisCard({
         artisanId={artisanId}
         prefixFacture={prefixes.facture_prefix}
       />
+
+      <Sheet open={pdfOpen} onOpenChange={setPdfOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
+            <SheetTitle className="font-display text-base">{pdfTitle}</SheetTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => {
+                const iframe = document.getElementById(`pdf-iframe-${devis.id}`) as HTMLIFrameElement | null;
+                iframe?.contentWindow?.print();
+              }}
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimer / PDF
+            </Button>
+          </SheetHeader>
+          <div className="flex-1 overflow-auto bg-gray-100 p-4">
+            {pdfHtml ? (
+              <iframe
+                id={`pdf-iframe-${devis.id}`}
+                srcDoc={pdfHtml}
+                className="w-full bg-white shadow-lg rounded-lg border"
+                style={{ minHeight: "1123px" }}
+                title="Aperçu A4"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
@@ -1311,6 +1376,7 @@ function DevisCard({
 
 export default function DevisPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [clients, setClients] = useState<Client[]>([]);
   const [devisList, setDevisList] = useState<DevisRow[]>([]);
   const [avenants, setAvenants] = useState<Avenant[]>([]);
@@ -1390,6 +1456,10 @@ export default function DevisPage() {
   }, [user]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  useEffect(() => {
+    if (searchParams.get("new") === "1") setCreateOpen(true);
+  }, [searchParams]);
 
   const filteredDevis = devisList.filter(d => {
     if (selectedClientId && d.client_id !== selectedClientId) return false;

@@ -154,7 +154,7 @@ const App = () => (
               <Route path="/dashboard" element={<ProductionRoute><Dashboard /></ProductionRoute>} />
               <Route path="/chantiers" element={<ProductionRoute><Chantiers /></ProductionRoute>} />
               <Route path="/devis" element={<ProductionRoute><Devis /></ProductionRoute>} />
-              <Route path="/documents" element={<ProductionRoute><Documents /></ProductionRoute>} />
+              <Route path="/documents" element={<Navigate to="/devis" replace />} />
               <Route path="/mes-documents" element={<ProductionRoute><MesDocuments /></ProductionRoute>} />
               <Route path="/assistant" element={<ProductionRoute><Assistant /></ProductionRoute>} />
               <Route path="/parametres" element={<ProductionRoute><Parametres /></ProductionRoute>} />

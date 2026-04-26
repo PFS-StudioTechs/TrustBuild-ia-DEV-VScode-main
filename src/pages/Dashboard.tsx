@@ -76,13 +76,13 @@ export default function Dashboard() {
 
   const kpiCards = [
     { label: "CA du mois", value: kpis.caMois, icon: TrendingUp, iconBg: "bg-success/10", iconColor: "text-success", suffix: " €", link: "/finances?tab=tresorerie" },
-    { label: "Devis à traiter", value: kpis.devisEnAttente, icon: FileText, iconBg: "bg-warning/10", iconColor: "text-warning", link: "/documents?tab=devis" },
+    { label: "Devis à traiter", value: kpis.devisEnAttente, icon: FileText, iconBg: "bg-warning/10", iconColor: "text-warning", link: "/devis" },
     { label: "Factures impayées", value: kpis.impayes, icon: AlertTriangle, iconBg: "bg-destructive/10", iconColor: "text-destructive", link: "/finances?tab=impayes" },
     { label: "Chantiers actifs", value: kpis.chantiersActifs, icon: HardHat, iconBg: "bg-primary/10", iconColor: "text-primary", link: "/chantiers" },
   ];
 
   const quickActions = [
-    { label: "Nouveau devis", icon: Plus, action: () => navigate("/documents?new=devis") },
+    { label: "Nouveau devis", icon: Plus, action: () => navigate("/devis?new=1") },
     { label: "Nouveau chantier", icon: HardHat, action: () => navigate("/chantiers?new=1") },
     { label: "Assistant IA", icon: Bot, action: () => navigate("/assistant") },
   ];
@@ -123,7 +123,7 @@ export default function Dashboard() {
           <h2 className="text-small font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Devis en brouillon</h2>
           <div className="space-y-2">
             {devisBrouillon.map(d => (
-              <div key={d.id} className="forge-card !p-3 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-all" onClick={() => navigate("/documents?tab=devis")}>
+              <div key={d.id} className="forge-card !p-3 flex items-center justify-between cursor-pointer hover:border-primary/30 transition-all" onClick={() => navigate("/devis")}>
                 <div>
                   <p className="text-sm font-medium">{d.numero}</p>
                   {d.chantier_nom && <p className="text-xs text-muted-foreground">{d.chantier_nom}</p>}
