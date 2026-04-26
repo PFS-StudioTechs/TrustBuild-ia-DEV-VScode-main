@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, FileText, Trash2, Plus, Check, Loader2, Users } from "lucide-react";
+import { UserPlus, FileText, Trash2, Plus, Check, Loader2, Users, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -19,13 +19,13 @@ export interface DevisData {
     telephone: string;
     type: "particulier" | "pro";
   };
-  // chantier kept optional for backward compat but no longer used
   chantier?: {
+    id?: string;
     nom: string;
-    adresse: string;
-    date_debut: string;
-    date_fin_prevue: string;
-  };
+    adresse?: string;
+    date_debut?: string;
+    date_fin_prevue?: string;
+  } | null;
   lignes: Array<{
     description: string;
     quantite: number;
@@ -37,6 +37,11 @@ export interface DevisData {
     nom: string;
     email: string;
     type: string;
+  }>;
+  chantier_matches?: Array<{
+    id: string;
+    nom: string;
+    client_id?: string;
   }>;
 }
 
@@ -59,6 +64,8 @@ interface Props {
   onCreated: () => void;
 }
 
+type ChantierOption = { id: string; nom: string };
+
 export default function DevisCreationForm({ data, onCreated }: Props) {
   const { user } = useAuth();
 
@@ -66,6 +73,14 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
   const [client, setClient] = useState(data.client);
   const [lignes, setLignes] = useState(data.lignes);
   const [saving, setSaving] = useState(false);
+
+  // Chantier state
+  const [selectedChantierId, setSelectedChantierId] = useState<string | null>(data.chantier?.id ?? null);
+  const [newChantierNom, setNewChantierNom] = useState(data.chantier?.nom ?? "");
+  const [chantierOptions, setChantierOptions] = useState<ChantierOption[]>(
+    (data.chantier_matches ?? []).map(m => ({ id: m.id, nom: m.nom }))
+  );
+  const [loadingChantiers, setLoadingChantiers] = useState(false);
 
   type Match = NonNullable<DevisData["client_matches"]>[number];
 
@@ -77,7 +92,42 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
       setSelectedClientId(null);
       setClient({ ...data.client, id: undefined });
     }
+    // Reset chantier selection when client changes
+    setSelectedChantierId(null);
+    setChantierOptions([]);
   };
+
+  // Load chantiers from DB when a client is selected
+  useEffect(() => {
+    if (!selectedClientId || !user) {
+      setChantierOptions((data.chantier_matches ?? []).map(m => ({ id: m.id, nom: m.nom })));
+      return;
+    }
+    setLoadingChantiers(true);
+    supabase
+      .from("chantiers")
+      .select("id, nom")
+      .eq("artisan_id", user.id)
+      .eq("client_id", selectedClientId)
+      .in("statut", ["prospect", "en_cours"])
+      .order("nom")
+      .then(({ data: dbChantiers }) => {
+        const list: ChantierOption[] = dbChantiers ?? [];
+        // Merge Jarvis matches not already in DB result
+        const dbIds = new Set(list.map(c => c.id));
+        const extra = (data.chantier_matches ?? [])
+          .filter(m => !dbIds.has(m.id))
+          .map(m => ({ id: m.id, nom: m.nom }));
+        const merged = [...list, ...extra];
+        setChantierOptions(merged);
+        // Auto-select if Jarvis already identified a chantier
+        if (!selectedChantierId && data.chantier?.id && merged.some(c => c.id === data.chantier!.id)) {
+          setSelectedChantierId(data.chantier.id);
+        }
+      })
+      .finally(() => setLoadingChantiers(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId]);
 
   const updateLigne = (i: number, field: string, value: string | number) =>
     setLignes(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
@@ -122,7 +172,6 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
           clientId = newClient.id;
         }
       } else {
-        // Mettre à jour les infos de contact si modifiées
         await supabase.from("clients").update({
           adresse: client.adresse || null,
           email: client.email || null,
@@ -130,13 +179,29 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
         }).eq("id", clientId);
       }
 
-      // 2. Créer le devis directement lié au client (pas de chantier automatique)
+      // 2. Résoudre le chantier
+      let chantierId: string | null = selectedChantierId;
+
+      if (!chantierId && newChantierNom.trim()) {
+        const { data: newChantier, error: chErr } = await supabase.from("chantiers").insert({
+          artisan_id: user.id,
+          client_id: clientId,
+          nom: newChantierNom.trim(),
+          adresse: client.adresse || null,
+          statut: "en_cours",
+        }).select("id").single();
+        if (chErr) throw new Error(`Chantier: ${chErr.message}`);
+        chantierId = newChantier.id;
+      }
+
+      // 3. Créer le devis
       const numero = `DEV-${Date.now().toString(36).toUpperCase()}`;
       const dateValidite = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
       const { data: newDevis, error: devisErr } = await supabase.from("devis").insert({
         artisan_id: user.id,
         client_id: clientId,
+        chantier_id: chantierId,
         numero,
         montant_ht: totalHT,
         tva: 20,
@@ -146,7 +211,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
 
       if (devisErr) throw new Error(`Devis: ${devisErr.message}`);
 
-      // 3. Insérer les lignes
+      // 4. Insérer les lignes
       const lignesValides = lignes.filter(l => l.description.trim() || l.prix_unitaire > 0);
       if (lignesValides.length > 0) {
         await (supabase as any).from("lignes_devis").insert(
@@ -285,6 +350,65 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
               <Input value={client.email} onChange={e => setClient(c => ({ ...c, email: e.target.value }))} className="h-8 text-xs" />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Chantier */}
+      <Card className="border-amber-500/20">
+        <CardHeader className="py-2 px-3">
+          <CardTitle className="text-xs flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-amber-500" />
+            Chantier
+            {loadingChantiers && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-1" />}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 pb-3 space-y-2">
+          {chantierOptions.length > 0 && (
+            <>
+              <p className="text-[10px] text-muted-foreground">Associer à un chantier existant ou en créer un nouveau :</p>
+              <div className="flex flex-wrap gap-1.5">
+                {chantierOptions.map(ch => (
+                  <button
+                    key={ch.id}
+                    type="button"
+                    onClick={() => setSelectedChantierId(selectedChantierId === ch.id ? null : ch.id)}
+                    className={`flex flex-col items-start px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
+                      selectedChantierId === ch.id
+                        ? "bg-amber-500 text-white border-amber-500"
+                        : "bg-background border-border hover:border-amber-400/60"
+                    }`}
+                  >
+                    <span className="font-medium">{ch.nom}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSelectedChantierId(null)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
+                    !selectedChantierId
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-background border-border hover:border-amber-400/60"
+                  }`}
+                >
+                  <Plus className="w-3 h-3" /> Nouveau chantier
+                </button>
+              </div>
+            </>
+          )}
+          {!selectedChantierId && (
+            <div>
+              {chantierOptions.length > 0 && <Label className="text-[10px]">Nom du nouveau chantier</Label>}
+              <Input
+                value={newChantierNom}
+                onChange={e => setNewChantierNom(e.target.value)}
+                placeholder={chantierOptions.length === 0 ? "Nom du chantier (optionnel)" : "Ex : Rénovation salle de bain"}
+                className="h-8 text-xs"
+              />
+            </div>
+          )}
+          {selectedChantierId && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">✓ Chantier existant sélectionné</p>
+          )}
         </CardContent>
       </Card>
 

@@ -32,10 +32,15 @@ N'invente PAS d'email ou de téléphone — laisse ces champs vides ("") s'ils n
 RÈGLE CLIENT EXISTANT :
 Si une liste de clients existants est fournie dans le contexte (section "Clients existants de l'artisan"), cherche les correspondances avec le client mentionné dans la demande (par nom, prénom, initiales, similarité). Inclus dans DEVIS_DATA un tableau "client_matches" avec les clients correspondants (max 3). Si la correspondance est certaine (nom exact), mets aussi l'id du client dans "client.id".
 
+RÈGLE CHANTIER EXISTANT :
+Si une liste de chantiers existants est fournie dans le contexte (section "Chantiers existants de l'artisan"), cherche les correspondances avec le chantier mentionné dans la demande (par nom, lieu, type de travaux, client associé). Inclus dans DEVIS_DATA un tableau "chantier_matches" avec les chantiers correspondants (max 3, en priorité ceux du client identifié). Si la correspondance est certaine, mets l'id dans "chantier.id". Si aucun chantier existant ne correspond mais qu'un chantier est mentionné dans la demande, laisse "chantier.id" vide et remplis "chantier.nom". Si aucun chantier n'est mentionné dans la demande, mets "chantier" à null et laisse "chantier_matches" vide.
+
 À la fin de ta réponse, ajoute OBLIGATOIREMENT un bloc JSON structuré entre les balises <!--DEVIS_DATA et DEVIS_DATA--> contenant :
 - Les informations du client (nom, adresse, email, téléphone, type particulier/pro, id si client existant identifié)
+- Le chantier mentionné dans la demande (id si existant trouvé, sinon nom seulement, sinon null)
 - Les lignes de devis (description, quantité, unité, prix unitaire)
 - Les correspondances clients trouvées (client_matches)
+- Les correspondances chantiers trouvées (chantier_matches)
 
 Exemple de format :
 <!--DEVIS_DATA
@@ -48,11 +53,16 @@ Exemple de format :
     "telephone": "",
     "type": "particulier"
   },
+  "chantier": {
+    "id": "",
+    "nom": "Rénovation salle de bain Dupont"
+  },
   "lignes": [
     {"description": "Dépose carrelage existant", "quantite": 15, "unite": "m²", "prix_unitaire": 25},
     {"description": "Pose carrelage neuf", "quantite": 15, "unite": "m²", "prix_unitaire": 45}
   ],
-  "client_matches": []
+  "client_matches": [],
+  "chantier_matches": []
 }
 DEVIS_DATA-->
 
@@ -402,7 +412,7 @@ serve(async (req) => {
           }
         }
 
-        // Injection liste clients pour Jarvis
+        // Injection liste clients + chantiers pour Jarvis
         if (user && persona === "jarvis") {
           const { data: clientsList } = await supabase
             .from("clients")
@@ -412,6 +422,17 @@ serve(async (req) => {
 
           if (clientsList && clientsList.length > 0) {
             systemContent += `\n\n---\n## Clients existants de l'artisan (${clientsList.length})\n${JSON.stringify(clientsList)}\n---`;
+          }
+
+          const { data: chantiersList } = await supabase
+            .from("chantiers")
+            .select("id, nom, adresse, client_id, statut")
+            .eq("artisan_id", user.id)
+            .in("statut", ["prospect", "en_cours"])
+            .order("nom");
+
+          if (chantiersList && chantiersList.length > 0) {
+            systemContent += `\n\n---\n## Chantiers existants de l'artisan (${chantiersList.length})\n${JSON.stringify(chantiersList)}\n---`;
           }
         }
       } catch (e) {
