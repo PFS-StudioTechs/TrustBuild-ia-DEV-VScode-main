@@ -273,7 +273,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
           </div>
           <div>
             <Label className="text-[10px]">Adresse</Label>
-            <AddressFields value={client.adresse} onChange={v => setClient(c => ({ ...c, adresse: v }))} compact />
+            <AddressFields value={client.adresse} onChange={v => setClient(c => ({ ...c, adresse: v }))} compact autoNormalize={!!data.client.adresse} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
