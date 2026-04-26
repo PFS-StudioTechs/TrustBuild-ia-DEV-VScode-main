@@ -1,0 +1,201 @@
+{
+  "name": "Rapport Hebdomadaire Artisans",
+  "nodes": [
+    {
+      "id": "c1d2e3f4-0001-0001-0001-000000000001",
+      "name": "Schedule Lundi 8h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1" }]
+        }
+      }
+    },
+    {
+      "id": "c1d2e3f4-0002-0002-0002-000000000002",
+      "name": "Get Profiles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://ralsqmyubficxdlpwuod.supabase.co/rest/v1/profiles?select=user_id,nom,prenom",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "{{SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1d2e3f4-0003-0003-0003-000000000003",
+      "name": "Split Par Artisan",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "parameters": { "batchSize": 1, "options": {} }
+    },
+    {
+      "id": "c1d2e3f4-0004-0004-0004-000000000004",
+      "name": "Store Artisan Dates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 300],
+      "parameters": {
+        "jsCode": "const profile = $input.first().json;\nconst now = new Date();\nconst lastMonday = new Date(now);\nconst day = lastMonday.getDay();\nconst diff = (day === 0 ? -6 : 1 - day);\nlastMonday.setDate(lastMonday.getDate() + diff - 7);\nreturn [{ json: { artisan_id: profile.user_id, nom: profile.nom, prenom: profile.prenom, last_monday: lastMonday.toISOString().split('T')[0] } }];"
+      }
+    },
+    {
+      "id": "c1d2e3f4-0005-0005-0005-000000000005",
+      "name": "Get Devis Attente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://ralsqmyubficxdlpwuod.supabase.co/rest/v1/devis?artisan_id=eq.{{$json.artisan_id}}&statut=eq.envoye&select=numero,montant_ht,tva,date_validite,chantiers(nom)",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "{{SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1d2e3f4-0006-0006-0006-000000000006",
+      "name": "Get Chantiers Cours",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 480],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://ralsqmyubficxdlpwuod.supabase.co/rest/v1/chantiers?artisan_id=eq.{{$('Store Artisan Dates').first().json.artisan_id}}&statut=eq.en_cours&select=nom,date_debut,date_fin_prevue,clients(nom)",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "{{SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1d2e3f4-0007-0007-0007-000000000007",
+      "name": "Get Devis Signes Semaine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 660],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://ralsqmyubficxdlpwuod.supabase.co/rest/v1/devis?artisan_id=eq.{{$('Store Artisan Dates').first().json.artisan_id}}&statut=eq.signe&updated_at=gte.{{$('Store Artisan Dates').first().json.last_monday}}&select=numero,montant_ht,tva,chantiers(nom,clients(nom))",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "{{SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1d2e3f4-0008-0008-0008-000000000008",
+      "name": "Get Artisan Email Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 840],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://ralsqmyubficxdlpwuod.supabase.co/auth/v1/admin/users/{{$('Store Artisan Dates').first().json.artisan_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "{{SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1d2e3f4-0009-0009-0009-000000000009",
+      "name": "Compiler Rapport",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1550, 560],
+      "parameters": {
+        "jsCode": "const artisan = $('Store Artisan Dates').first().json;\nconst devisAttente = $('Get Devis Attente').all().map(d => d.json);\nconst chantiers = $('Get Chantiers Cours').all().map(c => c.json);\nconst devisSigne = $('Get Devis Signes Semaine').all().map(d => d.json);\nconst artisanEmail = $('Get Artisan Email Auth').first().json.email;\n\nconst totalSignes = devisSigne.reduce((sum, d) => sum + (parseFloat(d.montant_ht) * (1 + parseFloat(d.tva) / 100)), 0).toFixed(2);\n\nlet rapport = `Bonjour ${artisan.prenom} ${artisan.nom},\\n\\nVoici votre rapport hebdomadaire Trust Build-IA :\\n\\n`;\n\nrapport += `DEVIS EN ATTENTE DE SIGNATURE (${devisAttente.length})\\n`;\nif (devisAttente.length === 0) { rapport += '  Aucun devis en attente.\\n'; }\nelse { devisAttente.forEach(d => { const ttc = (parseFloat(d.montant_ht)*(1+parseFloat(d.tva)/100)).toFixed(2); rapport += `  - ${d.numero} - ${ttc} EUR TTC - valide jusqu'au ${d.date_validite || 'N/A'}\\n`; }); }\n\nrapport += `\\nCHANTIERS EN COURS (${chantiers.length})\\n`;\nif (chantiers.length === 0) { rapport += '  Aucun chantier en cours.\\n'; }\nelse { chantiers.forEach(c => { rapport += `  - ${c.nom} - Client : ${c.clients?.nom || 'N/A'}\\n`; }); }\n\nrapport += `\\nDEVIS SIGNES CETTE SEMAINE (${devisSigne.length})\\n`;\nif (devisSigne.length === 0) { rapport += '  Aucun devis signe cette semaine.\\n'; }\nelse { devisSigne.forEach(d => { const ttc = (parseFloat(d.montant_ht)*(1+parseFloat(d.tva)/100)).toFixed(2); rapport += `  - ${d.numero} - ${ttc} EUR TTC\\n`; }); rapport += `  Total : ${totalSignes} EUR TTC\\n`; }\n\nrapport += `\\nBonne semaine !\\nTrust Build-IA`;\n\nreturn [{ json: { sendgrid_body: JSON.stringify({ personalizations: [{ to: [{ email: artisanEmail, name: `${artisan.prenom} ${artisan.nom}` }], subject: 'Votre rapport hebdomadaire Trust Build-IA' }], from: { email: 'k.steeve.dorival@gmail.com', name: 'Trust Build-IA' }, content: [{ type: 'text/plain', value: rapport }] }) } }];"
+      }
+    },
+    {
+      "id": "c1d2e3f4-0010-0010-0010-000000000010",
+      "name": "SendGrid Rapport",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 560],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{SENDGRID_API_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "rawBody": "={{ $json.sendgrid_body }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Lundi 8h": {
+      "main": [[{ "node": "Get Profiles", "type": "main", "index": 0 }]]
+    },
+    "Get Profiles": {
+      "main": [[{ "node": "Split Par Artisan", "type": "main", "index": 0 }]]
+    },
+    "Split Par Artisan": {
+      "main": [
+        [{ "node": "Store Artisan Dates", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Store Artisan Dates": {
+      "main": [[
+        { "node": "Get Devis Attente", "type": "main", "index": 0 },
+        { "node": "Get Chantiers Cours", "type": "main", "index": 0 },
+        { "node": "Get Devis Signes Semaine", "type": "main", "index": 0 },
+        { "node": "Get Artisan Email Auth", "type": "main", "index": 0 }
+      ]]
+    },
+    "Get Devis Attente": {
+      "main": [[{ "node": "Compiler Rapport", "type": "main", "index": 0 }]]
+    },
+    "Get Chantiers Cours": {
+      "main": [[{ "node": "Compiler Rapport", "type": "main", "index": 1 }]]
+    },
+    "Get Devis Signes Semaine": {
+      "main": [[{ "node": "Compiler Rapport", "type": "main", "index": 2 }]]
+    },
+    "Get Artisan Email Auth": {
+      "main": [[{ "node": "Compiler Rapport", "type": "main", "index": 3 }]]
+    },
+    "Compiler Rapport": {
+      "main": [[{ "node": "SendGrid Rapport", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
