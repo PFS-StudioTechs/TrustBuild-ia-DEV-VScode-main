@@ -64,14 +64,14 @@ export default function Admin() {
   const [deleting, setDeleting] = useState(false);
 
   // ── Base de connaissances globale — hooks AVANT tout return conditionnel ──
-  const [globalDocs, setGlobalDocs] = useState<Array<{ id: string; nom: string; statut: string; storage_path: string | null; metadata: any }>>([]);
+  const [globalDocs, setGlobalDocs] = useState<Array<{ id: string; nom: string; statut: string; storage_path: string | null }>>([]);
   const [seeding, setSeeding] = useState(false);
   const [seedResults, setSeedResults] = useState<{ ok: number; errors: number; skipped: number } | null>(null);
 
   const loadGlobalDocs = useCallback(async () => {
     const { data } = await supabase
       .from("knowledge_documents")
-      .select("id, nom, statut, storage_path, metadata")
+      .select("id, nom, statut, storage_path")
       .eq("is_global", true)
       .order("created_at", { ascending: true });
     setGlobalDocs((data as any[]) ?? []);
@@ -430,16 +430,12 @@ export default function Admin() {
             {GLOBAL_SOURCES.map((source) => {
               const doc = globalDocs.find(d => d.storage_path === source.url);
               const statut = doc?.statut;
-              const errorMsg = doc?.metadata?.error;
               return (
                 <div key={source.url} className="forge-card !p-3 flex items-center gap-3">
                   <Globe className="w-4 h-4 text-violet-500 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{source.nom}</p>
                     <p className="text-[11px] text-muted-foreground truncate">{source.url}</p>
-                    {statut === "erreur" && errorMsg && (
-                      <p className="text-[11px] text-destructive truncate">{errorMsg}</p>
-                    )}
                   </div>
                   <Badge variant="outline" className={`text-[10px] shrink-0 ${
                     source.categorie === "bricolage" ? "border-blue-500/30 text-blue-600" :
