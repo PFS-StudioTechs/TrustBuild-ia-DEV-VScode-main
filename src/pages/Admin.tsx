@@ -192,6 +192,8 @@ export default function Admin() {
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error ?? "Erreur");
       setSeedResults({ ok: result.ok, errors: result.errors, skipped: result.skipped });
+      const failedDetails = (result.results ?? []).filter((r: any) => r.status === "error").map((r: any) => r.error).join(" | ");
+      if (result.errors > 0 && failedDetails) toast.error(`Erreur détail : ${failedDetails}`);
       toast.success(`Indexation terminée : ${result.ok} OK, ${result.errors} erreurs, ${result.skipped} ignorées`);
       loadGlobalDocs();
     } catch (e: any) {
