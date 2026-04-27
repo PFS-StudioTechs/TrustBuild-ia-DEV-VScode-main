@@ -361,7 +361,7 @@ export default function MesDocuments() {
         )}
 
         {showKbisUpload && (
-          <KbisUploadSection onSuccess={() => setShowKbisUpload(false)} />
+          <KbisUploadSection forceUpload onSuccess={() => setShowKbisUpload(false)} />
         )}
       </div>
 

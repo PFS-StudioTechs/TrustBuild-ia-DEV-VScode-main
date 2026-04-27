@@ -7,17 +7,19 @@ import { toast } from "sonner";
 
 interface KbisUploadSectionProps {
   onSuccess?: () => void;
+  forceUpload?: boolean;
 }
 
 type UploadStatus = "idle" | "uploading" | "verifying" | "success" | "error";
 
-export default function KbisUploadSection({ onSuccess }: KbisUploadSectionProps) {
+export default function KbisUploadSection({ onSuccess, forceUpload = false }: KbisUploadSectionProps) {
   const { user, profile, refreshProfile } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [verifiedSiret, setVerifiedSiret] = useState<string | null>(null);
+  const [isReplacing, setIsReplacing] = useState(forceUpload);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -92,7 +94,7 @@ export default function KbisUploadSection({ onSuccess }: KbisUploadSectionProps)
   };
 
   // Affichage si déjà un KBIS en base ou si vient d'être vérifié avec succès
-  if (status === "success" || (profile?.kbis_url && status === "idle")) {
+  if (!isReplacing && (status === "success" || (profile?.kbis_url && status === "idle"))) {
     return (
       <div className="flex items-center gap-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10">
         <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -108,7 +110,7 @@ export default function KbisUploadSection({ onSuccess }: KbisUploadSectionProps)
           )}
         </div>
         <button
-          onClick={() => { setStatus("idle"); setFile(null); if (inputRef.current) inputRef.current.value = ""; }}
+          onClick={() => setIsReplacing(true)}
           className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
         >
           Remplacer
