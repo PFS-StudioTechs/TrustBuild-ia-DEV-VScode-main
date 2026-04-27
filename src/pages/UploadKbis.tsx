@@ -89,12 +89,13 @@ export default function UploadKbis() {
         </div>
 
         {/* Zone de dépôt */}
-        <div
-          className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-colors"
-          onClick={() => inputRef.current?.click()}
+        <label
+          htmlFor="kbis-file-input"
+          className="block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-colors"
         >
           <input
             ref={inputRef}
+            id="kbis-file-input"
             type="file"
             accept=".pdf,.jpg,.jpeg,.png"
             className="hidden"
@@ -113,7 +114,7 @@ export default function UploadKbis() {
               <p className="text-xs">PDF, JPG ou PNG — max 10 Mo</p>
             </div>
           )}
-        </div>
+        </label>
 
         <Button
           onClick={handleUpload}
