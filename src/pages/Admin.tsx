@@ -173,24 +173,7 @@ export default function Admin() {
   };
 
   const GLOBAL_SOURCES = [
-    { url: "https://www.castorama.fr/idees-conseils/pieces/salle-de-bain", nom: "Castorama — Salle de bain", categorie: "bricolage" },
-    { url: "https://www.castorama.fr/idees-conseils/travaux/plomberie", nom: "Castorama — Plomberie", categorie: "bricolage" },
-    { url: "https://www.castorama.fr/idees-conseils/travaux/electricite", nom: "Castorama — Électricité", categorie: "bricolage" },
-    { url: "https://www.castorama.fr/idees-conseils/travaux/peinture", nom: "Castorama — Peinture", categorie: "bricolage" },
-    { url: "https://www.castorama.fr/idees-conseils/travaux/carrelage", nom: "Castorama — Carrelage", categorie: "bricolage" },
-    { url: "https://www.bricodepot.fr/conseils-bricolage/plomberie/", nom: "Brico Dépôt — Plomberie", categorie: "bricolage" },
-    { url: "https://www.bricodepot.fr/conseils-bricolage/electricite/", nom: "Brico Dépôt — Électricité", categorie: "bricolage" },
-    { url: "https://www.bricodepot.fr/conseils-bricolage/peinture/", nom: "Brico Dépôt — Peinture", categorie: "bricolage" },
-    { url: "https://www.leroymerlin.fr/comment-choisir/plomberie-sanitaire/", nom: "Leroy Merlin — Plomberie", categorie: "bricolage" },
-    { url: "https://www.leroymerlin.fr/comment-choisir/electricite/", nom: "Leroy Merlin — Électricité", categorie: "bricolage" },
-    { url: "https://www.leroymerlin.fr/comment-choisir/peinture/", nom: "Leroy Merlin — Peinture", categorie: "bricolage" },
-    { url: "https://www.leroymerlin.fr/comment-choisir/carrelage/", nom: "Leroy Merlin — Carrelage", categorie: "bricolage" },
-    { url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F23449", nom: "Service-Public — Obligations artisan", categorie: "reglementation" },
-    { url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F23461", nom: "Service-Public — Garanties construction", categorie: "reglementation" },
-    { url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F31132", nom: "Service-Public — Devis & factures", categorie: "reglementation" },
-    { url: "https://bpifrance-creation.fr/encyclopedie/statuts-juridiques/entreprise-individuelle/auto-entrepreneur-micro-entrepreneur", nom: "BPI France — Micro-entrepreneur", categorie: "reglementation" },
-    { url: "https://www.oppbtp.fr/nos-offres/prevention-risques-metiers/", nom: "OPPBTP — Prévention BTP", categorie: "securite" },
-    { url: "https://www.ffbatiment.fr/federation-francaise-du-batiment/le-secteur-du-batiment/le-secteur-en-chiffres/", nom: "FFB — Secteur bâtiment", categorie: "secteur" },
+    { url: "internal://prix-reference-btp-2025", nom: "Référentiel Prix BTP France 2025", categorie: "prix_reference" },
   ];
 
   const handleSeedGlobal = async (force = false) => {
@@ -223,6 +206,17 @@ export default function Admin() {
     await supabase.from("knowledge_documents").delete().eq("id", id);
     setGlobalDocs(prev => prev.filter(d => d.id !== id));
     toast.success("Document global supprimé");
+  };
+
+  const handleCleanAllGlobalDocs = async () => {
+    if (!confirm("Supprimer tous les documents globaux et leurs chunks ? Cette action est irréversible.")) return;
+    const ids = globalDocs.map(d => d.id);
+    if (ids.length > 0) {
+      await supabase.from("knowledge_chunks").delete().in("document_id", ids);
+      await supabase.from("knowledge_documents").delete().eq("is_global", true);
+    }
+    setGlobalDocs([]);
+    toast.success("Base globale nettoyée");
   };
 
   return (
@@ -386,7 +380,17 @@ export default function Admin() {
                   {globalDocs.filter(d => d.statut === "indexe").length} / {GLOBAL_SOURCES.length} sources indexées
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCleanAllGlobalDocs}
+                  disabled={seeding || globalDocs.length === 0}
+                  className="gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Tout nettoyer
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"

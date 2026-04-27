@@ -289,7 +289,6 @@ VARIATIONS GÉOGRAPHIQUES
 `;
 
 // ─── Catalogue des sources globales BTP ──────────────────────────────────────
-// Sélection de pages accessibles (pas de Cloudflare agressif sur les sous-pages)
 const GLOBAL_SOURCES: Array<{ url: string; nom: string; categorie: string; type?: "url" | "static"; content?: string }> = [
   // ── Référentiel prix BTP (source statique compilée — pas de scraping) ──────
   {
@@ -298,102 +297,6 @@ const GLOBAL_SOURCES: Array<{ url: string; nom: string; categorie: string; type?
     categorie: "prix_reference",
     type: "static",
     content: PRIX_REFERENCE_BTP,
-  },
-  // ── Castorama ──────────────────────────────────────────────────────────────
-  {
-    url: "https://www.castorama.fr/idees-conseils/pieces/salle-de-bain",
-    nom: "Castorama — Conseils salle de bain",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.castorama.fr/idees-conseils/travaux/plomberie",
-    nom: "Castorama — Conseils plomberie",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.castorama.fr/idees-conseils/travaux/electricite",
-    nom: "Castorama — Conseils électricité",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.castorama.fr/idees-conseils/travaux/peinture",
-    nom: "Castorama — Conseils peinture",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.castorama.fr/idees-conseils/travaux/carrelage",
-    nom: "Castorama — Conseils carrelage",
-    categorie: "bricolage",
-  },
-  // ── Brico Dépôt ───────────────────────────────────────────────────────────
-  {
-    url: "https://www.bricodepot.fr/conseils-bricolage/plomberie/",
-    nom: "Brico Dépôt — Guide plomberie",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.bricodepot.fr/conseils-bricolage/electricite/",
-    nom: "Brico Dépôt — Guide électricité",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.bricodepot.fr/conseils-bricolage/peinture/",
-    nom: "Brico Dépôt — Guide peinture",
-    categorie: "bricolage",
-  },
-  // ── Leroy Merlin (sous-pages conseils, moins protégées que la home) ────────
-  {
-    url: "https://www.leroymerlin.fr/comment-choisir/plomberie-sanitaire/",
-    nom: "Leroy Merlin — Guide plomberie & sanitaire",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.leroymerlin.fr/comment-choisir/electricite/",
-    nom: "Leroy Merlin — Guide électricité",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.leroymerlin.fr/comment-choisir/peinture/",
-    nom: "Leroy Merlin — Guide peinture",
-    categorie: "bricolage",
-  },
-  {
-    url: "https://www.leroymerlin.fr/comment-choisir/carrelage/",
-    nom: "Leroy Merlin — Guide carrelage",
-    categorie: "bricolage",
-  },
-  // ── Réglementation & normes ───────────────────────────────────────────────
-  {
-    url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F23449",
-    nom: "Service-Public — Artisan : obligations légales",
-    categorie: "reglementation",
-  },
-  {
-    url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F23461",
-    nom: "Service-Public — Garanties construction (décennale, biennale)",
-    categorie: "reglementation",
-  },
-  {
-    url: "https://www.service-public.fr/professionnels-entreprises/vosdroits/F31132",
-    nom: "Service-Public — Devis et factures artisan",
-    categorie: "reglementation",
-  },
-  {
-    url: "https://bpifrance-creation.fr/encyclopedie/statuts-juridiques/entreprise-individuelle/auto-entrepreneur-micro-entrepreneur",
-    nom: "BPI France — Micro-entrepreneur : guide complet",
-    categorie: "reglementation",
-  },
-  // ── Sécurité & prévention ─────────────────────────────────────────────────
-  {
-    url: "https://www.oppbtp.fr/nos-offres/prevention-risques-metiers/",
-    nom: "OPPBTP — Prévention des risques BTP",
-    categorie: "securite",
-  },
-  // ── Fédérations ───────────────────────────────────────────────────────────
-  {
-    url: "https://www.ffbatiment.fr/federation-francaise-du-batiment/le-secteur-du-batiment/le-secteur-en-chiffres/",
-    nom: "FFB — Secteur du bâtiment en chiffres",
-    categorie: "secteur",
   },
 ];
 
