@@ -187,7 +187,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
           artisan_id: user.id,
           client_id: clientId,
           nom: newChantierNom.trim(),
-          adresse: client.adresse || null,
+          adresse_chantier: client.adresse || null,
           statut: "en_cours",
         }).select("id").single();
         if (chErr) throw new Error(`Chantier: ${chErr.message}`);
