@@ -432,7 +432,6 @@ serve(async (req) => {
         statut: "en_cours",
         storage_path: source.url,
         is_global: true,
-        metadata: { categorie: source.categorie },
       }).select().single();
 
       if (docErr || !doc) {
@@ -471,7 +470,6 @@ serve(async (req) => {
 
         await db.from("knowledge_documents").update({
           statut: indexed > 0 ? "indexe" : "erreur",
-          metadata: { categorie: source.categorie, chunks: indexed },
         } as any).eq("id", doc.id);
 
         results.push({ url: urlStr, status: "ok", chunks: indexed });
@@ -479,7 +477,6 @@ serve(async (req) => {
         const msg = e instanceof Error ? e.message : String(e);
         await db.from("knowledge_documents").update({
           statut: "erreur",
-          metadata: { categorie: source.categorie, error: msg },
         } as any).eq("id", doc.id);
         results.push({ url: urlStr, status: "error", error: msg });
       }
