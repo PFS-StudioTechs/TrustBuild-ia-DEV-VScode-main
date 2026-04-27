@@ -69,6 +69,66 @@ DEVIS_DATA-->
 Si des informations manquent dans la demande actuelle, laisse les champs vides ("") — ne les invente pas.
 Accompagne toujours le JSON d'un résumé textuel clair pour l'artisan.
 
+CRÉATION D'AVENANT (quand l'artisan demande un avenant sur un devis) :
+Ajoute un bloc <!--AVENANT_DATA ... AVENANT_DATA--> avec :
+- devis_id : UUID du devis si connu depuis le contexte activeDocId (sinon "")
+- devis_numero : numéro lisible du devis (ex : "DEV-ABC123")
+- motif : raison de l'avenant
+- lignes : tableau de lignes supplémentaires (description, quantite, unite, prix_unitaire)
+
+Exemple avenant :
+<!--AVENANT_DATA
+{
+  "devis_id": "",
+  "devis_numero": "DEV-ABC123",
+  "motif": "Travaux supplémentaires : remplacement du siphon de sol",
+  "lignes": [
+    {"description": "Remplacement siphon de sol", "quantite": 1, "unite": "u", "prix_unitaire": 85}
+  ]
+}
+AVENANT_DATA-->
+
+CRÉATION DE FACTURE (quand l'artisan demande une facture sur un devis) :
+Ajoute un bloc <!--FACTURE_DATA ... FACTURE_DATA--> avec :
+- devis_id : UUID du devis si connu depuis le contexte activeDocId (sinon "")
+- devis_numero : numéro lisible du devis
+- lignes : lignes à facturer (reprend les lignes du devis ou un sous-ensemble)
+
+Exemple facture :
+<!--FACTURE_DATA
+{
+  "devis_id": "",
+  "devis_numero": "DEV-ABC123",
+  "lignes": [
+    {"description": "Pose carrelage sol", "quantite": 15, "unite": "m²", "prix_unitaire": 45}
+  ]
+}
+FACTURE_DATA-->
+
+CRÉATION D'AVOIR (quand l'artisan demande un avoir sur une facture) :
+Ajoute un bloc <!--AVOIR_DATA ... AVOIR_DATA--> avec :
+- facture_id : UUID de la facture si connu depuis le contexte activeDocId (sinon "")
+- facture_numero : numéro lisible de la facture
+- devis_id : UUID du devis associé si connu (sinon "")
+- description : motif de l'avoir
+- montant_ht : montant HT à créditer (nombre positif)
+
+Exemple avoir :
+<!--AVOIR_DATA
+{
+  "facture_id": "",
+  "facture_numero": "FAC-ABC123",
+  "devis_id": "",
+  "description": "Avoir pour prestation non réalisée",
+  "montant_ht": 150
+}
+AVOIR_DATA-->
+
+RÈGLE DOCUMENT ACTIF :
+Si le contexte contient activeDocId et activeDocType, c'est le document en cours de travail.
+- Si activeDocType = "devis" : utilise activeDocId comme devis_id dans les blocs AVENANT_DATA et FACTURE_DATA
+- Si activeDocType = "facture" : utilise activeDocId comme facture_id dans le bloc AVOIR_DATA
+
 Commence toujours tes réponses par [Jarvis], [Robert B] ou [Auguste P] selon le persona qui répond.
 Réponds toujours en français. Sois précis, professionnel et bienveillant.`,
 
@@ -433,6 +493,29 @@ serve(async (req) => {
 
           if (chantiersList && chantiersList.length > 0) {
             systemContent += `\n\n---\n## Chantiers existants de l'artisan (${chantiersList.length})\n${JSON.stringify(chantiersList)}\n---`;
+          }
+
+          // Injection du document actif (devis ou facture en cours)
+          const activeDocId = context?.activeDocId as string | undefined;
+          const activeDocType = context?.activeDocType as string | undefined;
+          if (activeDocId && activeDocType === "devis") {
+            const { data: activeDevis } = await supabase
+              .from("devis")
+              .select("id, numero, montant_ht, statut, client_id, chantier_id")
+              .eq("id", activeDocId)
+              .maybeSingle();
+            if (activeDevis) {
+              systemContent += `\n\n---\n## Devis actif en cours de travail\nCe devis est le document actif. Utilise son ID dans les blocs AVENANT_DATA et FACTURE_DATA.\n${JSON.stringify(activeDevis)}\n---`;
+            }
+          } else if (activeDocId && activeDocType === "facture") {
+            const { data: activeFacture } = await supabase
+              .from("factures")
+              .select("id, numero, montant_ht, statut, devis_id")
+              .eq("id", activeDocId)
+              .maybeSingle();
+            if (activeFacture) {
+              systemContent += `\n\n---\n## Facture active en cours de travail\nCette facture est le document actif. Utilise son ID dans le bloc AVOIR_DATA.\n${JSON.stringify(activeFacture)}\n---`;
+            }
           }
         }
       } catch (e) {

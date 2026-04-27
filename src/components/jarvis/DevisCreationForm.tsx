@@ -61,7 +61,7 @@ export function stripDevisData(text: string): string {
 
 interface Props {
   data: DevisData;
-  onCreated: () => void;
+  onCreated: (devisId?: string) => void;
 }
 
 type ChantierOption = { id: string; nom: string };
@@ -235,7 +235,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
       }
 
       toast.success(`Devis ${numero} créé !`);
-      onCreated();
+      onCreated(newDevis.id);
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de la création");
     } finally {

@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { streamChat } from "@/hooks/useStreamingChat";
 import DevisCreationForm, { parseDevisData, stripDevisData, type DevisData } from "./DevisCreationForm";
+import AvenantCreationForm, { parseAvenantData, stripAvenantData, type AvenantData } from "./AvenantCreationForm";
+import FactureCreationForm, { parseFactureData, stripFactureData, type FactureData } from "./FactureCreationForm";
+import AvoirCreationForm, { parseAvoirData, stripAvoirData, type AvoirData } from "./AvoirCreationForm";
 
 interface Message {
   role: "user" | "assistant";
@@ -17,6 +20,9 @@ interface Message {
   persona?: string;
   source?: string;
   devisData?: DevisData | null;
+  avenantData?: AvenantData | null;
+  factureData?: FactureData | null;
+  avoirData?: AvoirData | null;
 }
 
 function detectPersonaFromContent(content: string): string {
@@ -38,6 +44,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [activeDocType, setActiveDocType] = useState<"devis" | "facture" | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lastTranscription, setLastTranscription] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -97,6 +104,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
 
   const startNewDocument = () => {
     setActiveDocId(null);
+    setActiveDocType(null);
     setConversationId(null);
     setMessages([]);
     setLastTranscription(null);
@@ -271,7 +279,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       const finalText = await streamChat({
         body: {
           messages: updated.map((m) => ({ role: m.role, content: m.content })),
-          context: { page: location.pathname, activeDocId },
+          context: { page: location.pathname, activeDocId, activeDocType },
         },
         onChunk: (accumulated) => {
           const persona = detectPersonaFromContent(accumulated);
@@ -292,12 +300,21 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
         persistMessage("assistant", finalText, assistantPersona, "app");
 
         const devisData = parseDevisData(finalText);
-        if (devisData) {
-          const cleanContent = stripDevisData(finalText);
+        const avenantData = parseAvenantData(finalText);
+        const factureData = parseFactureData(finalText);
+        const avoirData = parseAvoirData(finalText);
+
+        if (devisData || avenantData || factureData || avoirData) {
+          let cleanContent = finalText;
+          if (devisData) cleanContent = stripDevisData(cleanContent);
+          if (avenantData) cleanContent = stripAvenantData(cleanContent);
+          if (factureData) cleanContent = stripFactureData(cleanContent);
+          if (avoirData) cleanContent = stripAvoirData(cleanContent);
+          cleanContent = cleanContent.trim();
           setMessages((prev) =>
             prev.map((m, i) =>
               i === prev.length - 1 && m.role === "assistant"
-                ? { ...m, content: cleanContent, devisData }
+                ? { ...m, content: cleanContent, devisData, avenantData, factureData, avoirData }
                 : m
             )
           );
@@ -388,7 +405,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                 )}>
                   {msg.role === "assistant" ? (
                     <div className="prose prose-xs max-w-none dark:prose-invert [&_p]:my-0.5 [&_ul]:my-0.5 [&_li]:my-0 [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
-                      <ReactMarkdown>{stripDevisData(msg.content)}</ReactMarkdown>
+                      <ReactMarkdown>{stripAvoirData(stripFactureData(stripAvenantData(stripDevisData(msg.content))))}</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -397,8 +414,35 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                 {msg.devisData && (
                   <DevisCreationForm
                     data={msg.devisData}
-                    onCreated={() => {
+                    onCreated={(devisId?: string) => {
+                      if (devisId) { setActiveDocId(devisId); setActiveDocType("devis"); }
                       setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisData: null } : m)));
+                    }}
+                  />
+                )}
+                {msg.avenantData && (
+                  <AvenantCreationForm
+                    data={msg.avenantData}
+                    onCreated={() => {
+                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avenantData: null } : m)));
+                    }}
+                  />
+                )}
+                {msg.factureData && (
+                  <FactureCreationForm
+                    data={msg.factureData}
+                    onCreated={(factureId: string) => {
+                      setActiveDocId(factureId);
+                      setActiveDocType("facture");
+                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, factureData: null } : m)));
+                    }}
+                  />
+                )}
+                {msg.avoirData && (
+                  <AvoirCreationForm
+                    data={msg.avoirData}
+                    onCreated={() => {
+                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avoirData: null } : m)));
                     }}
                   />
                 )}
