@@ -194,8 +194,14 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
         chantierId = newChantier.id;
       }
 
-      // 3. Créer le devis
-      const numero = `DEV-${Date.now().toString(36).toUpperCase()}`;
+      // 3. Créer le devis — préfixe depuis artisan_settings si disponible
+      const { data: settingsRow } = await supabase
+        .from("artisan_settings")
+        .select("devis_prefix")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const prefix = settingsRow?.devis_prefix?.trim() || "DEV";
+      const numero = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
       const dateValidite = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
       const { data: newDevis, error: devisErr } = await supabase.from("devis").insert({

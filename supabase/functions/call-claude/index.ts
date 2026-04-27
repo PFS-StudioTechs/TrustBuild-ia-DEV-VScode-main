@@ -426,7 +426,7 @@ serve(async (req) => {
 
           const { data: chantiersList } = await supabase
             .from("chantiers")
-            .select("id, nom, adresse, client_id, statut")
+            .select("id, nom, adresse_chantier, client_id, statut")
             .eq("artisan_id", user.id)
             .in("statut", ["prospect", "en_cours"])
             .order("nom");
