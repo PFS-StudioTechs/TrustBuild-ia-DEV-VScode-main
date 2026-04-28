@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ interface KnowledgeDocument {
   statut: "en_cours" | "indexe" | "erreur";
   storage_path: string | null;
   created_at: string;
+  is_global?: boolean;
   metadata?: { error?: string } | null;
 }
 
@@ -94,6 +96,7 @@ function StatutBadge({ statut, createdAt, now }: { statut: KnowledgeDocument["st
 
 export default function Knowledge() {
   const { user } = useAuth();
+  const { isAdmin } = useRole();
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -321,6 +324,21 @@ export default function Knowledge() {
     toast.info(`Re-indexation de "${doc.nom}" lancée…`);
   };
 
+  const handleToggleGlobal = async (doc: KnowledgeDocument) => {
+    const newVal = !doc.is_global;
+    const { error } = await (supabase as any)
+      .from("knowledge_documents")
+      .update({ is_global: newVal })
+      .eq("id", doc.id);
+    if (error) { toast.error("Erreur lors de la mise à jour"); return; }
+    await (supabase as any)
+      .from("knowledge_chunks")
+      .update({ is_global: newVal })
+      .eq("document_id", doc.id);
+    setDocuments((prev) => prev.map((d) => d.id === doc.id ? { ...d, is_global: newVal } : d));
+    toast.success(newVal ? "Référentiel partagé avec tous les artisans" : "Document rendu privé");
+  };
+
   const indexed = documents.filter((d) => d.statut === "indexe").length;
   const total = documents.length;
 
@@ -494,6 +512,17 @@ export default function Knowledge() {
                     title="Réessayer l'indexation"
                   >
                     <Loader2 className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+                {isAdmin && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleToggleGlobal(doc)}
+                    className={`h-8 px-2 ${doc.is_global ? "text-violet-600" : "text-muted-foreground"}`}
+                    title={doc.is_global ? "Partagé avec tous les artisans — cliquer pour rendre privé" : "Rendre accessible à tous les artisans"}
+                  >
+                    <Globe className="w-3.5 h-3.5" />
                   </Button>
                 )}
                 <Button
