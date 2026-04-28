@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type DocType = "devis" | "facture" | "avenant" | "acompte" | "avoir" | "ts";
 
-interface NomenclatureSettings {
+export interface NomenclatureSettings {
   devis_prefix: string;
   facture_prefix: string;
   avenant_prefix: string;

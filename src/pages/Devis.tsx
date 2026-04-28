@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { generateDocumentNumber, buildVersionedDevisNumero, NomenclatureSettings } from "@/lib/generateDocumentNumber";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +15,7 @@ import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
+  GitBranch, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,6 +51,9 @@ interface DevisRow {
   client_id: string | null;
   chantier_id: string | null;
   created_at: string;
+  version: number;
+  parent_devis_id: string | null;
+  base_numero: string | null;
   client?: Client;
   lignes?: LigneDevis[];
 }
@@ -109,14 +114,6 @@ interface Avoir {
   lignes?: AvenantLigne[];
 }
 
-interface Prefixes {
-  devis_prefix: string;
-  facture_prefix: string;
-  avenant_prefix: string;
-  acompte_prefix: string;
-  avoir_prefix: string;
-}
-
 // ─── Helpers ────────────────────────────────────────────────
 
 const statutColors: Record<string, string> = {
@@ -125,6 +122,7 @@ const statutColors: Record<string, string> = {
   signe: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   refuse: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   en_cours: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  remplace: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
 };
 
 const statutLabels: Record<string, string> = {
@@ -133,6 +131,7 @@ const statutLabels: Record<string, string> = {
   signe: "Signé",
   refuse: "Refusé",
   en_cours: "En cours",
+  remplace: "Remplacé",
 };
 
 function calcMontantHT(lignes: LigneDevis[]) {
@@ -229,7 +228,7 @@ function DevisDialog({
   onClose,
   onSaved,
   clients,
-  prefixes,
+  nomenclatureSettings,
   editDevis,
   preselectedClientId,
   artisanId,
@@ -238,16 +237,17 @@ function DevisDialog({
   onClose: () => void;
   onSaved: () => void;
   clients: Client[];
-  prefixes: Prefixes;
+  nomenclatureSettings: NomenclatureSettings;
   editDevis: DevisRow | null;
   preselectedClientId: string | null;
   artisanId: string;
 }) {
-  const isLocked = editDevis?.statut === "signe";
+  const isLocked = editDevis?.statut === "signe" || editDevis?.statut === "remplace";
   const [clientId, setClientId] = useState(preselectedClientId ?? "");
   const [newClient, setNewClient] = useState({ nom: "", prenom: "", email: "", telephone: "", adresse: "", type: "particulier" });
   const [creatingClient, setCreatingClient] = useState(false);
   const [numero, setNumero] = useState("");
+  const [numeroLoading, setNumeroLoading] = useState(false);
   const [dateValidite, setDateValidite] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 30);
@@ -268,14 +268,19 @@ function DevisDialog({
       setLignes(editDevis.lignes?.length ? editDevis.lignes : [{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
     } else {
       setClientId(preselectedClientId ?? "");
-      setNumero(`${prefixes.devis_prefix}-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`);
+      setNumero("");
+      setNumeroLoading(true);
+      generateDocumentNumber(artisanId, "devis", undefined, nomenclatureSettings)
+        .then(n => setNumero(n))
+        .catch(() => setNumero("—"))
+        .finally(() => setNumeroLoading(false));
       setDateValidite((() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split("T")[0]; })());
       setTva(20);
       setLignes([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
       setCreatingClient(false);
       setNewClient({ nom: "", prenom: "", email: "", telephone: "", adresse: "", type: "particulier" });
     }
-  }, [open, editDevis, preselectedClientId, prefixes.devis_prefix]);
+  }, [open, editDevis, preselectedClientId, artisanId, nomenclatureSettings]);
 
   const filteredClients = clientSearch
     ? clients.filter(c => `${c.nom} ${c.prenom ?? ""}`.toLowerCase().includes(clientSearch.toLowerCase()))
@@ -317,7 +322,7 @@ function DevisDialog({
       } else if (!editDevis) {
         const { data: d, error } = await supabase
           .from("devis")
-          .insert({ artisan_id: artisanId, client_id: resolvedClientId, numero, date_validite: dateValidite, tva, montant_ht: montantHT, statut: "brouillon" })
+          .insert({ artisan_id: artisanId, client_id: resolvedClientId, numero, base_numero: numero, version: 1, date_validite: dateValidite, tva, montant_ht: montantHT, statut: "brouillon" } as any)
           .select("id")
           .single();
         if (error) throw error;
@@ -408,7 +413,14 @@ function DevisDialog({
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 space-y-1">
               <Label className="text-xs">Numéro</Label>
-              <Input value={numero} onChange={(e) => setNumero(e.target.value)} disabled={isLocked} />
+              <div className="relative">
+                <Input value={numeroLoading ? "" : numero} readOnly disabled className="font-mono bg-muted/40" />
+                {numeroLoading && (
+                  <div className="absolute inset-y-0 left-3 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Génération…
+                  </div>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">TVA %</Label>
@@ -455,19 +467,20 @@ function AvenantDialog({
   onClose,
   onSaved,
   devisId,
+  devisNumero,
   artisanId,
-  prefixAvenant,
+  nomenclatureSettings,
   editAvenant,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
   devisId: string;
+  devisNumero: string;
   artisanId: string;
-  prefixAvenant: string;
+  nomenclatureSettings: NomenclatureSettings;
   editAvenant: Avenant | null;
 }) {
-  const [numero, setNumero] = useState(`${prefixAvenant}-${String(Date.now()).slice(-4)}`);
   const [description, setDescription] = useState("");
   const [lignes, setLignes] = useState<AvenantLigne[]>([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
   const [saving, setSaving] = useState(false);
@@ -475,15 +488,13 @@ function AvenantDialog({
   useEffect(() => {
     if (!open) return;
     if (editAvenant) {
-      setNumero(editAvenant.numero ?? "");
       setDescription(editAvenant.description);
       setLignes(editAvenant.lignes?.length ? editAvenant.lignes : [{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
     } else {
-      setNumero(`${prefixAvenant}-${String(Date.now()).slice(-4)}`);
       setDescription("");
       setLignes([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
     }
-  }, [open, editAvenant, prefixAvenant]);
+  }, [open, editAvenant]);
 
   const montantHT = calcMontantHT(lignes);
 
@@ -491,7 +502,7 @@ function AvenantDialog({
     setSaving(true);
     try {
       if (editAvenant) {
-        await supabase.from("avenants").update({ numero, description, montant_ht: montantHT }).eq("id", editAvenant.id);
+        await supabase.from("avenants").update({ description, montant_ht: montantHT }).eq("id", editAvenant.id);
         await supabase.from("lignes_avenant").delete().eq("avenant_id", editAvenant.id);
         if (lignes.length > 0) {
           await supabase.from("lignes_avenant").insert(
@@ -499,6 +510,7 @@ function AvenantDialog({
           );
         }
       } else {
+        const numero = await generateDocumentNumber(artisanId, "avenant", undefined, nomenclatureSettings);
         const { data: av, error } = await supabase
           .from("avenants")
           .insert({ artisan_id: artisanId, devis_id: devisId, numero, description, montant_ht: montantHT, statut: "brouillon", date: new Date().toISOString().split("T")[0] })
@@ -525,15 +537,9 @@ function AvenantDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editAvenant ? "Modifier l'avenant" : "Nouvel avenant"}</DialogTitle>
+          <DialogTitle>{editAvenant ? "Modifier l'avenant" : `Nouvel avenant sur ${devisNumero}`}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Numéro</Label>
-              <Input value={numero} onChange={(e) => setNumero(e.target.value)} />
-            </div>
-          </div>
           <div className="space-y-1">
             <Label className="text-xs">Objet / description</Label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex : Ajout éclairage salle de bain" />
@@ -569,19 +575,20 @@ function AvoirDialog({
   onClose,
   onSaved,
   devisId,
+  devisNumero,
   artisanId,
-  prefixAvoir,
+  nomenclatureSettings,
   editAvoir,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
   devisId: string;
+  devisNumero: string;
   artisanId: string;
-  prefixAvoir: string;
+  nomenclatureSettings: NomenclatureSettings;
   editAvoir: Avoir | null;
 }) {
-  const [numero, setNumero] = useState(`${prefixAvoir}-${String(Date.now()).slice(-4)}`);
   const [description, setDescription] = useState("");
   const [lignes, setLignes] = useState<AvenantLigne[]>([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
   const [saving, setSaving] = useState(false);
@@ -589,15 +596,13 @@ function AvoirDialog({
   useEffect(() => {
     if (!open) return;
     if (editAvoir) {
-      setNumero(editAvoir.numero ?? "");
       setDescription(editAvoir.description);
       setLignes(editAvoir.lignes?.length ? editAvoir.lignes : [{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
     } else {
-      setNumero(`${prefixAvoir}-${String(Date.now()).slice(-4)}`);
       setDescription("");
       setLignes([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
     }
-  }, [open, editAvoir, prefixAvoir]);
+  }, [open, editAvoir]);
 
   const montantHT = calcMontantHT(lignes);
 
@@ -605,7 +610,7 @@ function AvoirDialog({
     setSaving(true);
     try {
       if (editAvoir) {
-        await supabase.from("avoirs").update({ numero, description, montant_ht: montantHT }).eq("id", editAvoir.id);
+        await supabase.from("avoirs").update({ description, montant_ht: montantHT }).eq("id", editAvoir.id);
         await (supabase as any).from("lignes_avoir").delete().eq("avoir_id", editAvoir.id);
         if (lignes.length > 0) {
           await (supabase as any).from("lignes_avoir").insert(
@@ -613,6 +618,7 @@ function AvoirDialog({
           );
         }
       } else {
+        const numero = await generateDocumentNumber(artisanId, "avoir", undefined, nomenclatureSettings);
         const { data: av, error } = await (supabase as any)
           .from("avoirs")
           .insert({ artisan_id: artisanId, devis_id: devisId, numero, description, montant_ht: montantHT, statut: "brouillon", date: new Date().toISOString().split("T")[0] })
@@ -639,17 +645,11 @@ function AvoirDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editAvoir ? "Modifier l'avoir" : "Nouvel avoir"}</DialogTitle>
+          <DialogTitle>{editAvoir ? "Modifier l'avoir" : `Nouvel avoir sur ${devisNumero}`}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-2 text-xs text-amber-700 dark:text-amber-400">
             Un avoir réduit le montant total de la facture finale (ex : poste retiré, remise accordée).
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Numéro</Label>
-              <Input value={numero} onChange={(e) => setNumero(e.target.value)} />
-            </div>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Objet / description</Label>
@@ -832,7 +832,7 @@ function FactureDialog({
   tva,
   acomptesEncaisses,
   artisanId,
-  prefixFacture,
+  nomenclatureSettings,
   lignesDevis,
 }: {
   open: boolean;
@@ -844,7 +844,7 @@ function FactureDialog({
   tva: number;
   acomptesEncaisses: number;
   artisanId: string;
-  prefixFacture: string;
+  nomenclatureSettings: NomenclatureSettings;
   lignesDevis: LigneDevis[];
 }) {
   const [dateEcheance, setDateEcheance] = useState("");
@@ -871,7 +871,7 @@ function FactureDialog({
     if (montantTTCFinal <= 0) { toast.error("Le montant doit être supérieur à 0"); return; }
     setSaving(true);
     try {
-      const numero = `${prefixFacture}-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+      const numero = await generateDocumentNumber(artisanId, "facture", undefined, nomenclatureSettings);
       const { data: newFacture, error } = await supabase.from("factures").insert({
         artisan_id: artisanId,
         devis_id: devisId,
@@ -1007,7 +1007,7 @@ function AcompteDialog({
   devisMontantHT,
   devisTva,
   artisanId,
-  prefixAcompte,
+  nomenclatureSettings,
   acomptesExistants,
 }: {
   open: boolean;
@@ -1017,7 +1017,7 @@ function AcompteDialog({
   devisMontantHT: number;
   devisTva: number;
   artisanId: string;
-  prefixAcompte: string;
+  nomenclatureSettings: NomenclatureSettings;
   acomptesExistants: Acompte[];
 }) {
   const devisTTC = calcMontantTTC(devisMontantHT, devisTva);
@@ -1049,7 +1049,7 @@ function AcompteDialog({
     }
     setSaving(true);
     try {
-      const numero = `${prefixAcompte}-${String(Date.now()).slice(-4)}`;
+      const numero = await generateDocumentNumber(artisanId, "acompte", undefined, nomenclatureSettings);
       const { error } = await supabase.from("acomptes").insert({
         artisan_id: artisanId,
         devis_id: devisId,
@@ -1115,7 +1115,7 @@ function DevisCard({
   avoirs,
   acomptes,
   factures,
-  prefixes,
+  nomenclatureSettings,
   artisanId,
   onRefresh,
 }: {
@@ -1124,7 +1124,7 @@ function DevisCard({
   avoirs: Avoir[];
   acomptes: Acompte[];
   factures: Facture[];
-  prefixes: Prefixes;
+  nomenclatureSettings: NomenclatureSettings;
   artisanId: string;
   onRefresh: () => void;
 }) {
@@ -1143,6 +1143,7 @@ function DevisCard({
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
   const [pdfTitle, setPdfTitle] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [creatingVersion, setCreatingVersion] = useState(false);
 
   const openDevisPdf = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1163,7 +1164,64 @@ function DevisCard({
     }
   };
 
-  const isLocked = devis.statut === "signe";
+  const isRemplace = devis.statut === "remplace";
+  const isLocked = devis.statut === "signe" || isRemplace;
+
+  const handleCreateNouvelleVersion = async () => {
+    setCreatingVersion(true);
+    try {
+      const newVersion = (devis.version ?? 1) + 1;
+      const baseNum = devis.base_numero ?? devis.numero;
+      const newNumero = buildVersionedDevisNumero(baseNum, newVersion);
+      const { error: remErr } = await supabase.from("devis").update({ statut: "remplace" }).eq("id", devis.id);
+      if (remErr) throw remErr;
+      const dateValidite = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split("T")[0]; })();
+      const { error: createErr } = await supabase.from("devis").insert({
+        artisan_id: artisanId,
+        client_id: devis.client_id,
+        chantier_id: devis.chantier_id,
+        numero: newNumero,
+        base_numero: baseNum,
+        version: newVersion,
+        parent_devis_id: devis.id,
+        tva: devis.tva,
+        montant_ht: 0,
+        statut: "brouillon",
+        date_validite: dateValidite,
+      } as any);
+      if (createErr) throw createErr;
+      toast.success(`Version ${newNumero} créée`);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    } finally {
+      setCreatingVersion(false);
+    }
+  };
+
+  const handleReactiver = async () => {
+    setCreatingVersion(true);
+    try {
+      const baseNum = devis.base_numero ?? devis.numero;
+      const { data: siblings } = await supabase
+        .from("devis")
+        .select("id")
+        .eq("artisan_id", artisanId)
+        .eq("base_numero" as any, baseNum)
+        .neq("id", devis.id)
+        .neq("statut", "remplace");
+      if (siblings && siblings.length > 0) {
+        await supabase.from("devis").update({ statut: "remplace" }).in("id", siblings.map((s: any) => s.id));
+      }
+      await supabase.from("devis").update({ statut: "brouillon" }).eq("id", devis.id);
+      toast.success("Devis réactivé");
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    } finally {
+      setCreatingVersion(false);
+    }
+  };
   const expired = isExpired(devis.date_validite) && !isLocked;
   const montantTTC = calcMontantTTC(devis.montant_ht, devis.tva);
   const devisAvenants = avenants.filter(a => a.devis_id === devis.id);
@@ -1210,7 +1268,7 @@ function DevisCard({
 
   return (
     <>
-      <div className={`forge-card space-y-0 p-0 overflow-hidden ${expired ? "border-amber-300 dark:border-amber-700" : ""}`}>
+      <div className={`forge-card space-y-0 p-0 overflow-hidden ${expired ? "border-amber-300 dark:border-amber-700" : ""} ${isRemplace ? "opacity-60" : ""}`}>
         {/* Header de la carte */}
         <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => setExpanded(e => !e)}>
           <div className="flex-1 min-w-0">
@@ -1220,6 +1278,11 @@ function DevisCard({
                 {isLocked && <Lock className="w-3 h-3 mr-1" />}
                 {statutLabels[devis.statut] ?? devis.statut}
               </Badge>
+              {(devis.version ?? 1) > 1 && (
+                <Badge className="text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                  v{devis.version}
+                </Badge>
+              )}
               {expired && (
                 <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                   <AlertTriangle className="w-3 h-3 mr-1" /> Expiré
@@ -1252,17 +1315,16 @@ function DevisCard({
         {expanded && (
           <div className="border-t px-4 pb-4 pt-3 space-y-4">
             {/* Actions statut */}
-            {!isLocked && (
+            {isRemplace ? (
               <div className="flex gap-2 flex-wrap">
-                {devis.statut !== "envoye" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("envoye")}><Send className="w-3.5 h-3.5 mr-1" /> Marquer envoyé</Button>}
-                {devis.statut !== "signe" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("signe")} className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Marquer signé</Button>}
-                {devis.statut !== "refuse" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("refuse")} className="text-destructive"><XCircle className="w-3.5 h-3.5 mr-1" /> Refusé</Button>}
-                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}><Pencil className="w-3.5 h-3.5 mr-1" /> Modifier</Button>
+                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                  <Eye className="w-3.5 h-3.5 mr-1" /> Consulter
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleReactiver} disabled={creatingVersion} className="text-violet-600 border-violet-300">
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" /> Réactiver
+                </Button>
               </div>
-            )}
-
-            {/* Signed devis : actions avancées */}
-            {isLocked && (
+            ) : devis.statut === "signe" ? (
               <div className="flex gap-2 flex-wrap">
                 {!devis.chantier_id && (
                   <Button size="sm" onClick={handleCreateChantier} className="bg-primary/90 hover:bg-primary">
@@ -1276,6 +1338,23 @@ function DevisCard({
                   </Badge>
                 )}
                 <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}><FileText className="w-3.5 h-3.5 mr-1" /> Voir le devis</Button>
+                <Button size="sm" variant="outline" onClick={handleCreateNouvelleVersion} disabled={creatingVersion} className="text-violet-600 border-violet-300">
+                  {creatingVersion ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1" />}
+                  Nouvelle version
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2 flex-wrap">
+                {devis.statut !== "envoye" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("envoye")}><Send className="w-3.5 h-3.5 mr-1" /> Marquer envoyé</Button>}
+                {devis.statut !== "signe" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("signe")} className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Marquer signé</Button>}
+                {devis.statut !== "refuse" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("refuse")} className="text-destructive"><XCircle className="w-3.5 h-3.5 mr-1" /> Refusé</Button>}
+                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}><Pencil className="w-3.5 h-3.5 mr-1" /> Modifier</Button>
+                {devis.statut !== "brouillon" && (
+                  <Button size="sm" variant="outline" onClick={handleCreateNouvelleVersion} disabled={creatingVersion} className="text-violet-600 border-violet-300">
+                    {creatingVersion ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1" />}
+                    Nouvelle version
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1378,9 +1457,11 @@ function DevisCard({
                     )}
                   </div>
                 ))}
-                <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { setEditAvenant(null); setAvenantOpen(true); }}>
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel avenant
-                </Button>
+                {!isRemplace && (
+                  <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { setEditAvenant(null); setAvenantOpen(true); }}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel avenant
+                  </Button>
+                )}
               </TabsContent>
 
               {/* Avoirs */}
@@ -1413,9 +1494,11 @@ function DevisCard({
                     )}
                   </div>
                 ))}
-                <Button size="sm" variant="outline" className="w-full text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setEditAvoir(null); setAvoirOpen(true); }}>
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel avoir
-                </Button>
+                {!isRemplace && (
+                  <Button size="sm" variant="outline" className="w-full text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setEditAvoir(null); setAvoirOpen(true); }}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel avoir
+                  </Button>
+                )}
               </TabsContent>
 
               {/* Acomptes */}
@@ -1448,9 +1531,11 @@ function DevisCard({
                     )}
                   </div>
                 ))}
-                <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setAcompteOpen(true)}>
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel acompte
-                </Button>
+                {!isRemplace && (
+                  <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setAcompteOpen(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel acompte
+                  </Button>
+                )}
               </TabsContent>
 
               {/* Factures */}
@@ -1490,9 +1575,11 @@ function DevisCard({
                     </Badge>
                   </button>
                 ))}
-                <Button size="sm" className="w-full text-xs" onClick={() => setFactureOpen(true)}>
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Émettre la facture
-                </Button>
+                {!isRemplace && (
+                  <Button size="sm" className="w-full text-xs" onClick={() => setFactureOpen(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Émettre la facture
+                  </Button>
+                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -1504,7 +1591,7 @@ function DevisCard({
         onClose={() => setEditOpen(false)}
         onSaved={onRefresh}
         clients={allClients}
-        prefixes={prefixes}
+        nomenclatureSettings={nomenclatureSettings}
         editDevis={devis}
         preselectedClientId={null}
         artisanId={artisanId}
@@ -1514,8 +1601,9 @@ function DevisCard({
         onClose={() => { setAvenantOpen(false); setEditAvenant(null); }}
         onSaved={onRefresh}
         devisId={devis.id}
+        devisNumero={devis.numero}
         artisanId={artisanId}
-        prefixAvenant={prefixes.avenant_prefix}
+        nomenclatureSettings={nomenclatureSettings}
         editAvenant={editAvenant}
       />
       <AcompteDialog
@@ -1526,7 +1614,7 @@ function DevisCard({
         devisMontantHT={montantAjusteHT}
         devisTva={devis.tva}
         artisanId={artisanId}
-        prefixAcompte={prefixes.acompte_prefix}
+        nomenclatureSettings={nomenclatureSettings}
         acomptesExistants={devisAcomptes}
       />
       <AvoirDialog
@@ -1534,8 +1622,9 @@ function DevisCard({
         onClose={() => { setAvoirOpen(false); setEditAvoir(null); }}
         onSaved={onRefresh}
         devisId={devis.id}
+        devisNumero={devis.numero}
         artisanId={artisanId}
-        prefixAvoir={prefixes.avoir_prefix}
+        nomenclatureSettings={nomenclatureSettings}
         editAvoir={editAvoir}
       />
       <FactureDialog
@@ -1548,7 +1637,7 @@ function DevisCard({
         tva={devis.tva}
         acomptesEncaisses={acomptesEncaisses}
         artisanId={artisanId}
-        prefixFacture={prefixes.facture_prefix}
+        nomenclatureSettings={nomenclatureSettings}
         lignesDevis={devis.lignes ?? []}
       />
       <FactureSheet
@@ -1609,7 +1698,11 @@ export default function DevisPage() {
   const [avoirs, setAvoirs] = useState<Avoir[]>([]);
   const [acomptes, setAcomptes] = useState<Acompte[]>([]);
   const [factures, setFactures] = useState<Facture[]>([]);
-  const [prefixes, setPrefixes] = useState<Prefixes>({ devis_prefix: "DEV", facture_prefix: "FAC", avenant_prefix: "AVN", acompte_prefix: "ACP", avoir_prefix: "AVO" });
+  const [nomenclatureSettings, setNomenclatureSettings] = useState<NomenclatureSettings>({
+    devis_prefix: "D", facture_prefix: "F", avenant_prefix: "Avt",
+    acompte_prefix: "Acp", avoir_prefix: "Avoir", ts_prefix: "TS",
+    annee_format: 4, numero_digits: 3,
+  });
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [statutFilter, setStatutFilter] = useState<string>("tous");
   const [createOpen, setCreateOpen] = useState(false);
@@ -1633,7 +1726,7 @@ export default function DevisPage() {
       { data: settData },
     ] = await Promise.all([
       supabase.from("clients").select("id,nom,prenom,email,telephone,adresse,type").eq("artisan_id", user.id).order("nom"),
-      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,version,parent_devis_id,base_numero,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
       supabase.from("avenants").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),
@@ -1641,7 +1734,7 @@ export default function DevisPage() {
       supabase.from("lignes_devis").select("id,devis_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       supabase.from("lignes_avenant").select("id,avenant_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       (supabase as any).from("lignes_avoir").select("id,avoir_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
-      supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix").eq("user_id", user.id).single(),
+      supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix,ts_prefix,annee_format,numero_digits").eq("user_id", user.id).maybeSingle(),
     ]);
 
     const clientsMap = new Map((cData ?? []).map(c => [c.id, c]));
@@ -1669,6 +1762,9 @@ export default function DevisPage() {
         client_id: effectiveClientId,
         client: effectiveClientId ? clientsMap.get(effectiveClientId) : undefined,
         lignes: lignesMap.get(d.id) ?? [],
+        version: d.version ?? 1,
+        parent_devis_id: d.parent_devis_id ?? null,
+        base_numero: d.base_numero ?? null,
       };
     }));
     setAvenants((avData ?? []).map(a => ({ ...a, lignes: lignesAvenantMap.get(a.id) ?? [] })));
@@ -1676,12 +1772,16 @@ export default function DevisPage() {
     setAcomptes(acData ?? []);
     setFactures(fData ?? []);
     if (settData) {
-      setPrefixes({
-        devis_prefix: (settData as any).devis_prefix ?? "DEV",
-        facture_prefix: (settData as any).facture_prefix ?? "FAC",
-        avenant_prefix: (settData as any).avenant_prefix ?? "AVN",
-        acompte_prefix: (settData as any).acompte_prefix ?? "ACP",
-        avoir_prefix: (settData as any).avoir_prefix ?? "AVO",
+      const s = settData as any;
+      setNomenclatureSettings({
+        devis_prefix:   s.devis_prefix   ?? "D",
+        facture_prefix: s.facture_prefix ?? "F",
+        avenant_prefix: s.avenant_prefix ?? "Avt",
+        acompte_prefix: s.acompte_prefix ?? "Acp",
+        avoir_prefix:   s.avoir_prefix   ?? "Avoir",
+        ts_prefix:      s.ts_prefix      ?? "TS",
+        annee_format:   Number(s.annee_format  ?? 4),
+        numero_digits:  Number(s.numero_digits ?? 3),
       });
     }
     setLoading(false);
@@ -1789,6 +1889,7 @@ export default function DevisPage() {
               <SelectItem value="envoye">Envoyé</SelectItem>
               <SelectItem value="signe">Signé</SelectItem>
               <SelectItem value="refuse">Refusé</SelectItem>
+              <SelectItem value="remplace">Remplacé</SelectItem>
             </SelectContent>
           </Select>
         )}
@@ -1873,7 +1974,7 @@ export default function DevisPage() {
                 avoirs={avoirs}
                 acomptes={acomptes}
                 factures={factures}
-                prefixes={prefixes}
+                nomenclatureSettings={nomenclatureSettings}
                 artisanId={user.id}
                 onRefresh={loadAll}
               />
@@ -1887,7 +1988,7 @@ export default function DevisPage() {
         onClose={() => setCreateOpen(false)}
         onSaved={loadAll}
         clients={clients}
-        prefixes={prefixes}
+        nomenclatureSettings={nomenclatureSettings}
         editDevis={null}
         preselectedClientId={selectedClientId}
         artisanId={user.id}
