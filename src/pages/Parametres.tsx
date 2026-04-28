@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Key, Save, Shield, Users, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash } from "lucide-react";
+import { User, Save, Shield, Users, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash, Calendar, ListOrdered } from "lucide-react";
+import { previewDocNumber } from "@/lib/generateDocumentNumber";
 import { toast } from "sonner";
 import MfaSetup from "@/components/security/MfaSetup";
 import IntegrationsPanel from "@/components/integrations/IntegrationsPanel";
@@ -40,11 +41,14 @@ export default function Parametres() {
   const [siretError, setSiretError] = useState("");
   const [siretData, setSiretData] = useState<SiretData | null>(null);
   const [saving, setSaving] = useState(false);
-  const [devisPrefix, setDevisPrefix] = useState("DEV");
-  const [facturePrefix, setFacturePrefix] = useState("FAC");
-  const [avenantPrefix, setAvenantPrefix] = useState("AVN");
-  const [acomptePrefix, setAcomptePrefix] = useState("ACP");
-  const [avoirPrefix, setAvoirPrefix] = useState("AVO");
+  const [devisPrefix, setDevisPrefix] = useState("D");
+  const [facturePrefix, setFacturePrefix] = useState("F");
+  const [avenantPrefix, setAvenantPrefix] = useState("Avt");
+  const [acomptePrefix, setAcomptePrefix] = useState("Acp");
+  const [avoirPrefix, setAvoirPrefix] = useState("Avoir");
+  const [tsPrefix, setTsPrefix] = useState("TS");
+  const [anneeFormat, setAnneeFormat] = useState<2 | 4>(4);
+  const [numeroDigits, setNumeroDigits] = useState<3 | 4 | 5>(3);
   const [savingPrefixes, setSavingPrefixes] = useState(false);
   const [apiConfigs, setApiConfigs] = useState<{ service_name: string; is_active: boolean }[]>([]);
   const [allUsers, setAllUsers] = useState<{ user_id: string; role: string; email?: string }[]>([]);
@@ -83,15 +87,22 @@ export default function Parametres() {
           });
         }
       });
-    supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix").eq("user_id", user.id).maybeSingle()
+    supabase
+      .from("artisan_settings")
+      .select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix,ts_prefix,annee_format,numero_digits")
+      .eq("user_id", user.id)
+      .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
         const d = data as any;
-        if (d.devis_prefix) setDevisPrefix(d.devis_prefix);
+        if (d.devis_prefix)   setDevisPrefix(d.devis_prefix);
         if (d.facture_prefix) setFacturePrefix(d.facture_prefix);
         if (d.avenant_prefix) setAvenantPrefix(d.avenant_prefix);
         if (d.acompte_prefix) setAcomptePrefix(d.acompte_prefix);
-        if ((d as any).avoir_prefix) setAvoirPrefix((d as any).avoir_prefix);
+        if (d.avoir_prefix)   setAvoirPrefix(d.avoir_prefix);
+        if (d.ts_prefix)      setTsPrefix(d.ts_prefix);
+        if (d.annee_format)   setAnneeFormat(d.annee_format as 2 | 4);
+        if (d.numero_digits)  setNumeroDigits(d.numero_digits as 3 | 4 | 5);
       });
     supabase.from("api_configurations").select("service_name, is_active")
       .then(({ data }) => { if (data) setApiConfigs(data); });
@@ -200,16 +211,19 @@ export default function Parametres() {
       .upsert(
         {
           user_id: user.id,
-          devis_prefix: devisPrefix.trim() || "DEV",
-          facture_prefix: facturePrefix.trim() || "FAC",
-          avenant_prefix: avenantPrefix.trim() || "AVN",
-          acompte_prefix: acomptePrefix.trim() || "ACP",
-          avoir_prefix: avoirPrefix.trim() || "AVO",
+          devis_prefix:   devisPrefix.trim()   || "D",
+          facture_prefix: facturePrefix.trim() || "F",
+          avenant_prefix: avenantPrefix.trim() || "Avt",
+          acompte_prefix: acomptePrefix.trim() || "Acp",
+          avoir_prefix:   avoirPrefix.trim()   || "Avoir",
+          ts_prefix:      tsPrefix.trim()      || "TS",
+          annee_format:   anneeFormat,
+          numero_digits:  numeroDigits,
         } as any,
         { onConflict: "user_id" }
       );
     if (error) toast.error(error.message);
-    else toast.success("Préfixes enregistrés");
+    else toast.success("Nomenclature enregistrée");
     setSavingPrefixes(false);
   };
 
@@ -429,38 +443,87 @@ export default function Parametres() {
               </div>
               <div>
                 <h2 className="text-h3 font-display">Nomenclature</h2>
-                <p className="text-xs text-muted-foreground">Préfixes de numérotation de vos documents</p>
+                <p className="text-xs text-muted-foreground">
+                  Format : <span className="font-mono text-primary">PRÉFIXE-ANNÉE-MOIS-NUMÉRO</span>
+                  &nbsp;—&nbsp;ex&nbsp;: <span className="font-mono">{previewDocNumber(devisPrefix || "D", { annee_format: anneeFormat, numero_digits: numeroDigits })}</span>
+                </p>
               </div>
             </div>
+
+            {/* Format année */}
+            <div className="space-y-2 mb-4">
+              <Label className="text-small flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" /> Format de l'année
+              </Label>
+              <div className="flex gap-2">
+                {([4, 2] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setAnneeFormat(v)}
+                    className={`flex-1 rounded-lg border py-2 text-sm font-mono transition-colors ${
+                      anneeFormat === v
+                        ? "border-primary bg-primary/10 text-primary font-semibold"
+                        : "border-border text-muted-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    {v === 4 ? "4 chiffres (2026)" : "2 chiffres (26)"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Nombre de chiffres du compteur */}
+            <div className="space-y-2 mb-5">
+              <Label className="text-small flex items-center gap-1.5">
+                <ListOrdered className="w-3.5 h-3.5" /> Longueur du numéro
+              </Label>
+              <div className="flex gap-2">
+                {([3, 4, 5] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setNumeroDigits(v)}
+                    className={`flex-1 rounded-lg border py-2 text-sm font-mono transition-colors ${
+                      numeroDigits === v
+                        ? "border-primary bg-primary/10 text-primary font-semibold"
+                        : "border-border text-muted-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    {"0".repeat(v - 1)}1
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Préfixes */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-small">Préfixe devis</Label>
-                <Input value={devisPrefix} onChange={(e) => setDevisPrefix(e.target.value.toUpperCase())} placeholder="DEV" className="font-mono" maxLength={8} />
-                <p className="text-xs text-muted-foreground">{devisPrefix || "DEV"}-2026-001</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-small">Préfixe facture</Label>
-                <Input value={facturePrefix} onChange={(e) => setFacturePrefix(e.target.value.toUpperCase())} placeholder="FAC" className="font-mono" maxLength={8} />
-                <p className="text-xs text-muted-foreground">{facturePrefix || "FAC"}-2026-001</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-small">Préfixe avenant</Label>
-                <Input value={avenantPrefix} onChange={(e) => setAvenantPrefix(e.target.value.toUpperCase())} placeholder="AVN" className="font-mono" maxLength={8} />
-                <p className="text-xs text-muted-foreground">{avenantPrefix || "AVN"}-001</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-small">Préfixe acompte</Label>
-                <Input value={acomptePrefix} onChange={(e) => setAcomptePrefix(e.target.value.toUpperCase())} placeholder="ACP" className="font-mono" maxLength={8} />
-                <p className="text-xs text-muted-foreground">{acomptePrefix || "ACP"}-001</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-small">Préfixe avoir</Label>
-                <Input value={avoirPrefix} onChange={(e) => setAvoirPrefix(e.target.value.toUpperCase())} placeholder="AVO" className="font-mono" maxLength={8} />
-                <p className="text-xs text-muted-foreground">{avoirPrefix || "AVO"}-001</p>
-              </div>
+              {[
+                { label: "Devis",    value: devisPrefix,   set: setDevisPrefix,   ph: "D",     type: "devis" as const },
+                { label: "Facture",  value: facturePrefix, set: setFacturePrefix, ph: "F",     type: "facture" as const },
+                { label: "Avenant",  value: avenantPrefix, set: setAvenantPrefix, ph: "Avt",   type: "avenant" as const },
+                { label: "TS",       value: tsPrefix,      set: setTsPrefix,      ph: "TS",    type: "ts" as const },
+                { label: "Avoir",    value: avoirPrefix,   set: setAvoirPrefix,   ph: "Avoir", type: "avoir" as const },
+                { label: "Acompte",  value: acomptePrefix, set: setAcomptePrefix, ph: "Acp",   type: "acompte" as const },
+              ].map(({ label, value, set, ph }) => (
+                <div key={label} className="space-y-1.5">
+                  <Label className="text-small">Préfixe {label.toLowerCase()}</Label>
+                  <Input
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
+                    placeholder={ph}
+                    className="font-mono"
+                    maxLength={8}
+                  />
+                  <p className="text-xs text-muted-foreground font-mono">
+                    {previewDocNumber(value || ph, { annee_format: anneeFormat, numero_digits: numeroDigits })}
+                  </p>
+                </div>
+              ))}
             </div>
+
             <Button onClick={handleSavePrefixes} disabled={savingPrefixes} className="w-full mt-4 touch-target">
-              <Save className="w-4 h-4 mr-2" /> {savingPrefixes ? "Enregistrement…" : "Enregistrer les préfixes"}
+              <Save className="w-4 h-4 mr-2" /> {savingPrefixes ? "Enregistrement…" : "Enregistrer la nomenclature"}
             </Button>
           </div>
 
