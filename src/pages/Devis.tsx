@@ -1318,8 +1318,18 @@ function DevisCard({
       const newNumero = buildVersionedDevisNumero(baseNum, newVersion);
       const { error: remErr } = await supabase.from("devis").update({ statut: "remplace" }).eq("id", devis.id);
       if (remErr) throw remErr;
+
+      // Récupère les lignes de la version courante pour les copier
+      const { data: lignesSource } = await (supabase as any)
+        .from("lignes_devis")
+        .select("designation,quantite,unite,prix_unitaire,tva,ordre")
+        .eq("devis_id", devis.id)
+        .order("ordre");
+
       const dateValidite = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split("T")[0]; })();
-      const { error: createErr } = await supabase.from("devis").insert({
+      const montantHT = (lignesSource ?? []).reduce((s: number, l: any) => s + l.quantite * l.prix_unitaire, 0);
+
+      const { data: newDevis, error: createErr } = await supabase.from("devis").insert({
         artisan_id: artisanId,
         client_id: devis.client_id,
         chantier_id: devis.chantier_id,
@@ -1328,12 +1338,23 @@ function DevisCard({
         version: newVersion,
         parent_devis_id: devis.id,
         tva: devis.tva,
-        montant_ht: 0,
+        montant_ht: montantHT,
         statut: "brouillon",
         date_validite: dateValidite,
-      } as any);
+      } as any).select("id").single();
       if (createErr) throw createErr;
-      toast.success(`Version ${newNumero} créée`);
+
+      if (lignesSource && lignesSource.length > 0) {
+        await (supabase as any).from("lignes_devis").insert(
+          lignesSource.map((l: any) => ({
+            ...l,
+            devis_id: newDevis.id,
+            artisan_id: artisanId,
+          }))
+        );
+      }
+
+      toast.success(`Version ${newNumero} créée avec ${lignesSource?.length ?? 0} ligne(s) copiée(s)`);
       onRefresh();
     } catch (err: any) {
       toast.error(err.message || "Erreur");
