@@ -1283,6 +1283,10 @@ function DevisCard({
   const [tsFactureTargetId, setTsFactureTargetId] = useState<string | null>(null);
   const [tsFactureDateEcheance, setTsFactureDateEcheance] = useState("");
   const [tsFactureSaving, setTsFactureSaving] = useState(false);
+  const [avoirRectifTargetId, setAvoirRectifTargetId] = useState<string | null>(null);
+  const [avoirRectifFactureId, setAvoirRectifFactureId] = useState<string>("");
+  const [avoirRectifEcheance, setAvoirRectifEcheance] = useState("");
+  const [avoirRectifSaving, setAvoirRectifSaving] = useState(false);
 
   const openDevisPdf = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1368,6 +1372,7 @@ function DevisCard({
   const devisAcomptes = acomptes.filter(a => a.devis_id === devis.id);
   const devisFactures = factures.filter(f => f.devis_id === devis.id);
   const devisTs = ts.filter(t => t.devis_id === devis.id);
+  const facturesNonAnnulees = devisFactures.filter(f => f.statut !== "annulee");
 
   // Calculs ajustés
   const totalAvenantHT = devisAvenants.reduce((s, a) => s + a.montant_ht, 0);
@@ -1448,6 +1453,58 @@ function DevisCard({
       toast.error(err.message || "Erreur");
     } finally {
       setTsFactureSaving(false);
+    }
+  };
+
+  const handleEmettreFactureRectif = async (avoirItem: Avoir) => {
+    if (!avoirRectifFactureId) { toast.error("Sélectionnez la facture à annuler"); return; }
+    if (!avoirRectifEcheance) { toast.error("Date d'échéance requise"); return; }
+    setAvoirRectifSaving(true);
+    try {
+      const { data: lignesOrig } = await (supabase as any)
+        .from("lignes_facture")
+        .select("designation,quantite,unite,prix_unitaire,tva,ordre")
+        .eq("facture_id", avoirRectifFactureId)
+        .order("ordre");
+      const origFacture = devisFactures.find(f => f.id === avoirRectifFactureId);
+      if (!origFacture) throw new Error("Facture introuvable");
+      const numero = await generateDocumentNumber(artisanId, "facture", undefined, nomenclatureSettings);
+      const newMontantHT = Math.max(0, origFacture.montant_ht - avoirItem.montant_ht);
+      const newTTC = calcMontantTTC(newMontantHT, devis.tva);
+      const { data: newF, error } = await supabase.from("factures").insert({
+        artisan_id: artisanId,
+        devis_id: devis.id,
+        client_id: devis.client_id,
+        avoir_annulation_id: avoirItem.id,
+        numero,
+        montant_ht: newMontantHT,
+        tva: devis.tva,
+        statut: "brouillon",
+        date_echeance: avoirRectifEcheance,
+        solde_restant: newTTC,
+      } as any).select("id").single();
+      if (error) throw error;
+      if (newF?.id && lignesOrig && lignesOrig.length > 0) {
+        await (supabase as any).from("lignes_facture").insert(
+          lignesOrig.map((l: any, i: number) => ({
+            facture_id: newF.id, artisan_id: artisanId,
+            designation: l.designation, quantite: l.quantite,
+            unite: l.unite, prix_unitaire: l.prix_unitaire,
+            tva: l.tva, ordre: l.ordre ?? i + 1,
+          }))
+        );
+      }
+      await supabase.from("factures").update({ statut: "annulee" }).eq("id", avoirRectifFactureId);
+      await (supabase as any).from("avoirs").update({ facture_remplacante_id: newF.id }).eq("id", avoirItem.id);
+      toast.success(`Facture rectificative ${numero} créée`);
+      setAvoirRectifTargetId(null);
+      setAvoirRectifFactureId("");
+      setAvoirRectifEcheance("");
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    } finally {
+      setAvoirRectifSaving(false);
     }
   };
 
@@ -1674,6 +1731,20 @@ function DevisCard({
                       <span className="text-xs font-mono font-semibold">{av.numero || "AVO"}</span>
                       <div className="flex items-center gap-1">
                         <span className="text-xs font-mono text-amber-600">−{calcMontantTTC(av.montant_ht, devis.tva).toFixed(2)} € TTC</span>
+                        {facturesNonAnnulees.length > 0 && (
+                          <button
+                            onClick={() => {
+                              if (avoirRectifTargetId === av.id) { setAvoirRectifTargetId(null); return; }
+                              setAvoirRectifTargetId(av.id);
+                              setAvoirRectifFactureId(facturesNonAnnulees[facturesNonAnnulees.length - 1].id);
+                              setAvoirRectifEcheance("");
+                            }}
+                            className="text-purple-600 hover:opacity-80 p-0.5"
+                            title="Émettre facture rectificative"
+                          >
+                            <FileText className="w-3 h-3" />
+                          </button>
+                        )}
                         <button onClick={() => { setEditAvoir(av); setAvoirOpen(true); }} className="text-muted-foreground hover:text-foreground p-0.5">
                           <Pencil className="w-3 h-3" />
                         </button>
@@ -1691,6 +1762,41 @@ function DevisCard({
                             <span className="font-mono text-muted-foreground">−{(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {avoirRectifTargetId === av.id && (
+                      <div className="mt-2 pt-2 border-t border-amber-300 dark:border-amber-700 space-y-2">
+                        <p className="text-xs font-semibold text-purple-700 dark:text-purple-400">Facture rectificative</p>
+                        {facturesNonAnnulees.length > 1 ? (
+                          <div className="space-y-1">
+                            <Label className="text-xs">Facture à annuler</Label>
+                            <Select value={avoirRectifFactureId} onValueChange={setAvoirRectifFactureId}>
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {facturesNonAnnulees.map(f => (
+                                  <SelectItem key={f.id} value={f.id} className="text-xs">
+                                    {f.numero} — {f.montant_ht.toFixed(2)} € HT
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Annule : <strong>{facturesNonAnnulees[0]?.numero}</strong></p>
+                        )}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Échéance nouvelle facture</Label>
+                          <Input type="date" className="h-7 text-xs" value={avoirRectifEcheance} onChange={e => setAvoirRectifEcheance(e.target.value)} />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" className="flex-1 text-xs bg-purple-600 hover:bg-purple-700 text-white" disabled={avoirRectifSaving} onClick={() => handleEmettreFactureRectif(av)}>
+                            {avoirRectifSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <FileText className="w-3.5 h-3.5 mr-1" />}
+                            Émettre
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-xs" onClick={() => setAvoirRectifTargetId(null)}>Annuler</Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1771,8 +1877,8 @@ function DevisCard({
                       <span className="text-xs font-mono font-semibold">{f.numero}</span>
                       <p className="text-xs text-muted-foreground">{f.montant_ht.toFixed(2)} € HT — {f.date_echeance ? new Date(f.date_echeance).toLocaleDateString("fr-FR") : "—"}</p>
                     </div>
-                    <Badge className={`text-xs ${f.statut === "payee" ? "bg-emerald-100 text-emerald-700" : f.statut === "impayee" ? "bg-red-100 text-red-700" : f.statut === "envoyee" ? "bg-blue-100 text-blue-700" : "bg-muted text-muted-foreground"}`}>
-                      {f.statut}
+                    <Badge className={`text-xs ${f.statut === "payee" ? "bg-emerald-100 text-emerald-700" : f.statut === "impayee" ? "bg-red-100 text-red-700" : f.statut === "envoyee" ? "bg-blue-100 text-blue-700" : f.statut === "annulee" ? "bg-gray-100 text-gray-400 line-through" : "bg-muted text-muted-foreground"}`}>
+                      {f.statut === "annulee" ? "Annulée" : f.statut}
                     </Badge>
                   </button>
                 ))}
