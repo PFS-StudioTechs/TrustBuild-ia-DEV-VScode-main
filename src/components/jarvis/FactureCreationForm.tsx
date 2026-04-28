@@ -7,6 +7,7 @@ import { Receipt, Trash2, Plus, Check, Loader2, AlertTriangle } from "lucide-rea
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 
 export interface FactureData {
   devis_id: string;
@@ -52,10 +53,7 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
 
     setSaving(true);
     try {
-      const { data: settingsRow } = await supabase
-        .from("artisan_settings").select("facture_prefix").eq("user_id", user.id).maybeSingle();
-      const prefix = settingsRow?.facture_prefix?.trim() || "FAC";
-      const numero = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+      const numero = await generateDocumentNumber(user.id, "facture");
 
       const { data: newFacture, error: facErr } = await supabase
         .from("factures")

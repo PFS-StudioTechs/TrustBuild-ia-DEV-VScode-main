@@ -7,6 +7,7 @@ import { Undo2, Check, Loader2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 
 export interface AvoirData {
   facture_id: string;
@@ -45,7 +46,7 @@ export default function AvoirCreationForm({ data, onCreated }: Props) {
 
     setSaving(true);
     try {
-      const numero = `AV-${Date.now().toString(36).toUpperCase()}`;
+      const numero = await generateDocumentNumber(user.id, "avoir");
 
       const { error: avErr } = await supabase
         .from("avoirs")

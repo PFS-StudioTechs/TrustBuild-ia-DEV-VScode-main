@@ -13,6 +13,7 @@ import DevisCreationForm, { parseDevisData, stripDevisData, type DevisData } fro
 import AvenantCreationForm, { parseAvenantData, stripAvenantData, type AvenantData } from "./AvenantCreationForm";
 import FactureCreationForm, { parseFactureData, stripFactureData, type FactureData } from "./FactureCreationForm";
 import AvoirCreationForm, { parseAvoirData, stripAvoirData, type AvoirData } from "./AvoirCreationForm";
+import TsCreationForm, { parseTsData, stripTsData, type TsData } from "./TsCreationForm";
 
 interface Message {
   role: "user" | "assistant";
@@ -23,6 +24,7 @@ interface Message {
   avenantData?: AvenantData | null;
   factureData?: FactureData | null;
   avoirData?: AvoirData | null;
+  tsData?: TsData | null;
 }
 
 function detectPersonaFromContent(content: string): string {
@@ -303,18 +305,20 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
         const avenantData = parseAvenantData(finalText);
         const factureData = parseFactureData(finalText);
         const avoirData = parseAvoirData(finalText);
+        const tsData = parseTsData(finalText);
 
-        if (devisData || avenantData || factureData || avoirData) {
+        if (devisData || avenantData || factureData || avoirData || tsData) {
           let cleanContent = finalText;
           if (devisData) cleanContent = stripDevisData(cleanContent);
           if (avenantData) cleanContent = stripAvenantData(cleanContent);
           if (factureData) cleanContent = stripFactureData(cleanContent);
           if (avoirData) cleanContent = stripAvoirData(cleanContent);
+          if (tsData) cleanContent = stripTsData(cleanContent);
           cleanContent = cleanContent.trim();
           setMessages((prev) =>
             prev.map((m, i) =>
               i === prev.length - 1 && m.role === "assistant"
-                ? { ...m, content: cleanContent, devisData, avenantData, factureData, avoirData }
+                ? { ...m, content: cleanContent, devisData, avenantData, factureData, avoirData, tsData }
                 : m
             )
           );
@@ -405,7 +409,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                 )}>
                   {msg.role === "assistant" ? (
                     <div className="prose prose-xs max-w-none dark:prose-invert [&_p]:my-0.5 [&_ul]:my-0.5 [&_li]:my-0 [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
-                      <ReactMarkdown>{stripAvoirData(stripFactureData(stripAvenantData(stripDevisData(msg.content))))}</ReactMarkdown>
+                      <ReactMarkdown>{stripTsData(stripAvoirData(stripFactureData(stripAvenantData(stripDevisData(msg.content)))))}</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -443,6 +447,14 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                     data={msg.avoirData}
                     onCreated={() => {
                       setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avoirData: null } : m)));
+                    }}
+                  />
+                )}
+                {msg.tsData && (
+                  <TsCreationForm
+                    data={msg.tsData}
+                    onCreated={() => {
+                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, tsData: null } : m)));
                     }}
                   />
                 )}

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
+import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 
 export interface DevisData {
   client: {
@@ -194,14 +195,8 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
         chantierId = newChantier.id;
       }
 
-      // 3. Créer le devis — préfixe depuis artisan_settings si disponible
-      const { data: settingsRow } = await supabase
-        .from("artisan_settings")
-        .select("devis_prefix")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const prefix = settingsRow?.devis_prefix?.trim() || "DEV";
-      const numero = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+      // 3. Créer le devis — numéro séquentiel via nomenclature v2
+      const numero = await generateDocumentNumber(user.id, "devis");
       const dateValidite = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
       const { data: newDevis, error: devisErr } = await supabase.from("devis").insert({
@@ -209,11 +204,13 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
         client_id: clientId,
         chantier_id: chantierId,
         numero,
+        base_numero: numero,
+        version: 1,
         montant_ht: totalHT,
         tva: 20,
         statut: "brouillon",
         date_validite: dateValidite,
-      }).select("id").single();
+      } as any).select("id").single();
 
       if (devisErr) throw new Error(`Devis: ${devisErr.message}`);
 
