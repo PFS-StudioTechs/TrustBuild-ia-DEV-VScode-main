@@ -15,7 +15,7 @@ import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
-  GitBranch, RotateCcw,
+  GitBranch, RotateCcw, ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -111,6 +111,21 @@ interface Avoir {
   montant_ht: number;
   statut: string;
   date: string;
+  lignes?: AvenantLigne[];
+}
+
+interface TravailSupplementaire {
+  id: string;
+  devis_id: string;
+  artisan_id: string;
+  numero: string | null;
+  description: string;
+  montant_ht: number;
+  statut: string;
+  date: string;
+  client_id?: string | null;
+  chantier_id?: string | null;
+  date_validite?: string | null;
   lignes?: AvenantLigne[];
 }
 
@@ -1107,6 +1122,123 @@ function AcompteDialog({
   );
 }
 
+// ─── Dialog Travail Supplémentaire ──────────────────────────
+
+function TsDialog({
+  open, onClose, onSaved,
+  devisId, devisClientId, devisChantierID, devisNumero,
+  artisanId, nomenclatureSettings, editTs,
+}: {
+  open: boolean; onClose: () => void; onSaved: () => void;
+  devisId: string; devisClientId: string | null; devisChantierID: string | null; devisNumero: string;
+  artisanId: string; nomenclatureSettings: NomenclatureSettings; editTs: TravailSupplementaire | null;
+}) {
+  const [description, setDescription] = useState("");
+  const [dateValidite, setDateValidite] = useState("");
+  const [lignes, setLignes] = useState<AvenantLigne[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editTs) {
+      setDescription(editTs.description);
+      setDateValidite(editTs.date_validite ?? "");
+      setLignes(editTs.lignes ?? []);
+    } else {
+      setDescription("");
+      setDateValidite("");
+      setLignes([{ designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: 0 }]);
+    }
+  }, [open, editTs]);
+
+  const montantHT = lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
+
+  const handleSave = async () => {
+    if (!description.trim()) { toast.error("Description obligatoire"); return; }
+    setSaving(true);
+    try {
+      if (editTs) {
+        const { error } = await (supabase as any).from("travaux_supplementaires").update({
+          description,
+          montant_ht: montantHT,
+          date_validite: dateValidite || null,
+        }).eq("id", editTs.id);
+        if (error) throw error;
+        await (supabase as any).from("lignes_ts").delete().eq("ts_id", editTs.id);
+        if (lignes.length > 0) {
+          const { error: lErr } = await (supabase as any).from("lignes_ts").insert(
+            lignes.map((l, i) => ({ ts_id: editTs.id, artisan_id: artisanId, ...l, ordre: i }))
+          );
+          if (lErr) throw lErr;
+        }
+        toast.success("TS mis à jour");
+      } else {
+        const numero = await generateDocumentNumber(artisanId, "ts", undefined, nomenclatureSettings);
+        const { data: tsData, error } = await (supabase as any).from("travaux_supplementaires").insert({
+          artisan_id: artisanId,
+          devis_id: devisId,
+          client_id: devisClientId,
+          chantier_id: devisChantierID,
+          numero,
+          description,
+          montant_ht: montantHT,
+          statut: "brouillon",
+          date: new Date().toISOString().split("T")[0],
+          date_validite: dateValidite || null,
+        }).select("id").single();
+        if (error) throw error;
+        if (lignes.length > 0) {
+          const { error: lErr } = await (supabase as any).from("lignes_ts").insert(
+            lignes.map((l, i) => ({ ts_id: tsData.id, artisan_id: artisanId, ...l, ordre: i }))
+          );
+          if (lErr) throw lErr;
+        }
+        toast.success(`TS ${numero} créé`);
+      }
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editTs ? "Modifier le TS" : `Nouveau TS sur ${devisNumero}`}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Description *</Label>
+            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Travaux supplémentaires — détail" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Date de validité</Label>
+            <Input type="date" value={dateValidite} onChange={e => setDateValidite(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider">Lignes</Label>
+            <LignesEditor lignes={lignes} onChange={setLignes} />
+          </div>
+          {montantHT > 0 && (
+            <div className="rounded-lg bg-muted/40 p-2 text-xs flex justify-between">
+              <span className="text-muted-foreground">Total HT</span>
+              <span className="font-mono font-semibold">{montantHT.toFixed(2)} €</span>
+            </div>
+          )}
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            {editTs ? "Enregistrer" : "Créer le TS"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Carte devis ─────────────────────────────────────────────
 
 function DevisCard({
@@ -1115,6 +1247,7 @@ function DevisCard({
   avoirs,
   acomptes,
   factures,
+  ts,
   nomenclatureSettings,
   artisanId,
   onRefresh,
@@ -1124,6 +1257,7 @@ function DevisCard({
   avoirs: Avoir[];
   acomptes: Acompte[];
   factures: Facture[];
+  ts: TravailSupplementaire[];
   nomenclatureSettings: NomenclatureSettings;
   artisanId: string;
   onRefresh: () => void;
@@ -1144,6 +1278,11 @@ function DevisCard({
   const [pdfTitle, setPdfTitle] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [creatingVersion, setCreatingVersion] = useState(false);
+  const [tsOpen, setTsOpen] = useState(false);
+  const [editTs, setEditTs] = useState<TravailSupplementaire | null>(null);
+  const [tsFactureTargetId, setTsFactureTargetId] = useState<string | null>(null);
+  const [tsFactureDateEcheance, setTsFactureDateEcheance] = useState("");
+  const [tsFactureSaving, setTsFactureSaving] = useState(false);
 
   const openDevisPdf = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1228,6 +1367,7 @@ function DevisCard({
   const devisAvoirs = avoirs.filter(a => a.devis_id === devis.id);
   const devisAcomptes = acomptes.filter(a => a.devis_id === devis.id);
   const devisFactures = factures.filter(f => f.devis_id === devis.id);
+  const devisTs = ts.filter(t => t.devis_id === devis.id);
 
   // Calculs ajustés
   const totalAvenantHT = devisAvenants.reduce((s, a) => s + a.montant_ht, 0);
@@ -1252,6 +1392,63 @@ function DevisCard({
   const handleDeleteAvenant = async (id: string) => {
     await supabase.from("avenants").delete().eq("id", id);
     onRefresh();
+  };
+
+  const handleSignerTs = async (tsId: string) => {
+    await (supabase as any).from("travaux_supplementaires").update({ statut: "signe" }).eq("id", tsId);
+    toast.success("TS signé");
+    onRefresh();
+  };
+
+  const handleDeleteTs = async (tsId: string) => {
+    await (supabase as any).from("lignes_ts").delete().eq("ts_id", tsId);
+    await (supabase as any).from("travaux_supplementaires").delete().eq("id", tsId);
+    onRefresh();
+  };
+
+  const handleGenererFactureTS = async (tsItem: TravailSupplementaire) => {
+    if (!tsFactureDateEcheance) { toast.error("Date d'échéance requise"); return; }
+    setTsFactureSaving(true);
+    try {
+      const numero = await generateDocumentNumber(artisanId, "facture", undefined, nomenclatureSettings);
+      const montantTTCTs = calcMontantTTC(tsItem.montant_ht, devis.tva);
+      const { data: newFacture, error } = await supabase.from("factures").insert({
+        artisan_id: artisanId,
+        devis_id: devis.id,
+        client_id: devis.client_id,
+        ts_id: tsItem.id,
+        numero,
+        montant_ht: tsItem.montant_ht,
+        tva: devis.tva,
+        statut: "brouillon",
+        date_echeance: tsFactureDateEcheance,
+        solde_restant: montantTTCTs,
+      } as any).select("id").single();
+      if (error) throw error;
+      if (newFacture?.id && tsItem.lignes && tsItem.lignes.length > 0) {
+        await (supabase as any).from("lignes_facture").insert(
+          tsItem.lignes.map((l, i) => ({
+            facture_id: newFacture.id,
+            artisan_id: artisanId,
+            designation: l.designation,
+            quantite: l.quantite,
+            unite: l.unite,
+            prix_unitaire: l.prix_unitaire,
+            tva: l.tva,
+            ordre: l.ordre ?? i + 1,
+          }))
+        );
+      }
+      await (supabase as any).from("travaux_supplementaires").update({ statut: "facture" }).eq("id", tsItem.id);
+      toast.success(`Facture ${numero} générée depuis ${tsItem.numero ?? "TS"}`);
+      setTsFactureTargetId(null);
+      setTsFactureDateEcheance("");
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur");
+    } finally {
+      setTsFactureSaving(false);
+    }
   };
 
   const handleCreateChantier = () => {
@@ -1295,6 +1492,7 @@ function DevisCard({
               {devisAvenants.length > 0 && <span className="text-emerald-600">+{devisAvenants.length} avenant{devisAvenants.length > 1 ? "s" : ""}</span>}
               {devisAvoirs.length > 0 && <span className="text-amber-600">−{devisAvoirs.length} avoir{devisAvoirs.length > 1 ? "s" : ""}</span>}
               {devisAcomptes.length > 0 && <span>{devisAcomptes.length} acompte{devisAcomptes.length > 1 ? "s" : ""}</span>}
+              {devisTs.length > 0 && <span className="text-orange-600">{devisTs.length} TS</span>}
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -1412,7 +1610,7 @@ function DevisCard({
             )}
 
             <Tabs defaultValue="avenants" className="w-full">
-              <TabsList className="w-full grid grid-cols-4">
+              <TabsList className="w-full grid grid-cols-5">
                 <TabsTrigger value="avenants" className="text-xs">
                   <Wrench className="w-3 h-3 mr-1" /> Avenants ({devisAvenants.length})
                 </TabsTrigger>
@@ -1424,6 +1622,9 @@ function DevisCard({
                 </TabsTrigger>
                 <TabsTrigger value="factures" className="text-xs">
                   <FileText className="w-3 h-3 mr-1" /> Factures ({devisFactures.length})
+                </TabsTrigger>
+                <TabsTrigger value="ts" className="text-xs">
+                  <ClipboardList className="w-3 h-3 mr-1" /> TS ({devisTs.length})
                 </TabsTrigger>
               </TabsList>
 
@@ -1581,6 +1782,78 @@ function DevisCard({
                   </Button>
                 )}
               </TabsContent>
+              {/* Travaux Supplémentaires */}
+              <TabsContent value="ts" className="mt-3 space-y-2">
+                {devisTs.length === 0 && <p className="text-xs text-muted-foreground italic">Aucun travail supplémentaire</p>}
+                {devisTs.map(t => (
+                  <div key={t.id} className="rounded-lg border border-orange-200 dark:border-orange-800 p-2 space-y-1.5 bg-orange-50/40 dark:bg-orange-900/5">
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="space-y-0.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-mono font-semibold">{t.numero ?? "TS"}</span>
+                          <Badge className={`text-[10px] ${t.statut === "facture" ? "bg-blue-100 text-blue-700" : t.statut === "signe" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
+                            {t.statut === "facture" ? "Facturé" : t.statut === "signe" ? "Signé" : "Brouillon"}
+                          </Badge>
+                          <span className="text-xs font-mono text-orange-600 ml-auto">{calcMontantTTC(t.montant_ht, devis.tva).toFixed(2)} € TTC</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{t.description}</p>
+                        {t.date_validite && <p className="text-[10px] text-muted-foreground">Valid. {new Date(t.date_validite).toLocaleDateString("fr-FR")}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {t.statut === "brouillon" && (
+                          <>
+                            <button onClick={() => { setEditTs(t); setTsOpen(true); }} className="text-muted-foreground hover:text-foreground p-0.5">
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => handleSignerTs(t.id)} className="text-emerald-600 hover:opacity-80 p-0.5" title="Marquer signé">
+                              <CheckCircle2 className="w-3 h-3" />
+                            </button>
+                            <button onClick={() => handleDeleteTs(t.id)} className="text-destructive hover:opacity-80 p-0.5">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {t.lignes && t.lignes.length > 0 && (
+                      <div className="space-y-0.5 pt-1 border-t border-orange-200 dark:border-orange-700">
+                        {t.lignes.map((l, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="truncate max-w-[60%]">{l.designation}</span>
+                            <span className="font-mono text-muted-foreground">{(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {t.statut === "signe" && (
+                      tsFactureTargetId === t.id ? (
+                        <div className="flex items-center gap-2 pt-1 border-t border-orange-200">
+                          <Input
+                            type="date"
+                            className="h-7 text-xs flex-1"
+                            value={tsFactureDateEcheance}
+                            onChange={e => setTsFactureDateEcheance(e.target.value)}
+                          />
+                          <Button size="sm" className="text-xs h-7 shrink-0" onClick={() => handleGenererFactureTS(t)} disabled={tsFactureSaving}>
+                            {tsFactureSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                            Émettre
+                          </Button>
+                          <button onClick={() => { setTsFactureTargetId(null); setTsFactureDateEcheance(""); }} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="outline" className="w-full text-xs h-7 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => setTsFactureTargetId(t.id)}>
+                          <FileText className="w-3 h-3 mr-1" /> Générer la facture
+                        </Button>
+                      )
+                    )}
+                  </div>
+                ))}
+                {!isRemplace && (
+                  <Button size="sm" variant="outline" className="w-full text-xs border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => { setEditTs(null); setTsOpen(true); }}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Nouveau TS
+                  </Button>
+                )}
+              </TabsContent>
             </Tabs>
           </div>
         )}
@@ -1650,6 +1923,19 @@ function DevisCard({
         artisanId={artisanId}
       />
 
+      <TsDialog
+        open={tsOpen}
+        onClose={() => { setTsOpen(false); setEditTs(null); }}
+        onSaved={onRefresh}
+        devisId={devis.id}
+        devisClientId={devis.client_id}
+        devisChantierID={devis.chantier_id}
+        devisNumero={devis.numero}
+        artisanId={artisanId}
+        nomenclatureSettings={nomenclatureSettings}
+        editTs={editTs}
+      />
+
       <Sheet open={pdfOpen} onOpenChange={setPdfOpen}>
         <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
           <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
@@ -1698,6 +1984,7 @@ export default function DevisPage() {
   const [avoirs, setAvoirs] = useState<Avoir[]>([]);
   const [acomptes, setAcomptes] = useState<Acompte[]>([]);
   const [factures, setFactures] = useState<Facture[]>([]);
+  const [tsList, setTsList] = useState<TravailSupplementaire[]>([]);
   const [nomenclatureSettings, setNomenclatureSettings] = useState<NomenclatureSettings>({
     devis_prefix: "D", facture_prefix: "F", avenant_prefix: "Avt",
     acompte_prefix: "Acp", avoir_prefix: "Avoir", ts_prefix: "TS",
@@ -1724,6 +2011,8 @@ export default function DevisPage() {
       { data: laData },
       { data: lavoirData },
       { data: settData },
+      { data: tsData },
+      { data: ltsData },
     ] = await Promise.all([
       supabase.from("clients").select("id,nom,prenom,email,telephone,adresse,type").eq("artisan_id", user.id).order("nom"),
       supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,version,parent_devis_id,base_numero,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
@@ -1735,6 +2024,8 @@ export default function DevisPage() {
       supabase.from("lignes_avenant").select("id,avenant_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       (supabase as any).from("lignes_avoir").select("id,avoir_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix,ts_prefix,annee_format,numero_digits").eq("user_id", user.id).maybeSingle(),
+      (supabase as any).from("travaux_supplementaires").select("id,devis_id,artisan_id,numero,description,montant_ht,statut,date,client_id,chantier_id,date_validite").eq("artisan_id", user.id),
+      (supabase as any).from("lignes_ts").select("id,ts_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
     ]);
 
     const clientsMap = new Map((cData ?? []).map(c => [c.id, c]));
@@ -1767,10 +2058,17 @@ export default function DevisPage() {
         base_numero: d.base_numero ?? null,
       };
     }));
+    const lignesTsMap = new Map<string, AvenantLigne[]>();
+    (ltsData ?? []).forEach((l: any) => {
+      const existing = lignesTsMap.get(l.ts_id) ?? [];
+      lignesTsMap.set(l.ts_id, [...existing, l]);
+    });
+
     setAvenants((avData ?? []).map(a => ({ ...a, lignes: lignesAvenantMap.get(a.id) ?? [] })));
     setAvoirs((avoirData ?? []).map((a: any) => ({ ...a, lignes: lignesAvoirMap.get(a.id) ?? [] })));
     setAcomptes(acData ?? []);
     setFactures(fData ?? []);
+    setTsList((tsData ?? []).map((t: any) => ({ ...t, lignes: lignesTsMap.get(t.id) ?? [] })));
     if (settData) {
       const s = settData as any;
       setNomenclatureSettings({
@@ -1974,6 +2272,7 @@ export default function DevisPage() {
                 avoirs={avoirs}
                 acomptes={acomptes}
                 factures={factures}
+                ts={tsList}
                 nomenclatureSettings={nomenclatureSettings}
                 artisanId={user.id}
                 onRefresh={loadAll}
