@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, FileText, FolderOpen, Bot, Settings, Shield, LogOut, Wallet, Menu, Brain, FlaskConical, Users, Truck, BookUser, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, FolderOpen, Settings, Shield, LogOut, Wallet, Menu, FlaskConical, Users, Truck, BookUser } from "lucide-react";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/useRole";
@@ -10,24 +10,22 @@ import JarvisBubble from "@/components/jarvis/JarvisBubble";
 import KbisWarningBanner from "@/components/kbis/KbisWarningBanner";
 
 const baseTabs = [
-  { path: "/dashboard", icon: LayoutDashboard, label: "Tableau" },
+  { path: "/dashboard", icon: LayoutDashboard, label: "Tableau de Bord" },
   { path: "/devis", icon: FileText, label: "Devis & Factures" },
   { path: "/chantiers", icon: Building2, label: "Suivi des chantiers" },
   { path: "/finances", icon: Wallet, label: "Comptabilité" },
   { path: "/clients", icon: Users, label: "Clients" },
   { path: "/fournisseurs", icon: Truck, label: "Fournisseurs" },
   { path: "/contacts", icon: BookUser, label: "Contacts" },
-  { path: "/messagerie", icon: MessageSquare, label: "Messagerie" },
-  { path: "/assistant", icon: Bot, label: "Assistants" },
-  { path: "/mes-documents", icon: FolderOpen, label: "Mes Fichiers" },
-  { path: "/parametres", icon: Settings, label: "Réglages" },
+  { path: "/mes-documents", icon: FolderOpen, label: "Mes Docs" },
+  { path: "/parametres", icon: Settings, label: "Paramètres" },
 ];
 
 const adminTab = { path: "/admin", icon: Shield, label: "Admin" };
 const testerTab = { path: "/testing", icon: FlaskConical, label: "Tests" };
 
 // Mobile: show primary 5 tabs, rest in "more" expandable
-const primaryMobilePaths = ["/dashboard", "/devis", "/chantiers", "/finances", "/assistant"];
+const primaryMobilePaths = ["/dashboard", "/devis", "/chantiers", "/finances", "/clients"];
 
 
 export default function AppLayout() {
@@ -53,9 +51,10 @@ export default function AppLayout() {
     <div className="flex h-[100dvh] bg-background">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-[240px] bg-secondary border-r shrink-0">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <img src={logoImg} alt="Trust Build-IA" className="w-9 h-9 rounded-xl object-contain" />
-          <span className="font-display font-bold text-lg tracking-tight text-foreground">Trust Build-IA</span>
+        <div className="flex flex-col items-center px-4 pt-5 pb-3 border-b border-border/50">
+          <img src={logoImg} alt="TrustBuild-IA" className="w-16 h-16 rounded-2xl object-contain mb-2" />
+          <span className="font-display font-bold text-base tracking-tight text-foreground">TrustBuild-IA</span>
+          <span className="text-[10px] text-muted-foreground text-center leading-tight mt-0.5">Parce que la confiance se construit</span>
         </div>
 
         <nav className="flex-1 px-3 py-2 space-y-0.5">
@@ -74,9 +73,6 @@ export default function AppLayout() {
               >
                 <tab.icon className="w-5 h-5" />
                 <span>{tab.label}</span>
-                {tab.path === "/assistant" && (
-                  <span className="ml-auto w-2 h-2 rounded-full bg-accent animate-pulse" />
-                )}
               </button>
             );
           })}
@@ -112,8 +108,8 @@ export default function AppLayout() {
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card shrink-0">
           <div className="flex items-center gap-2">
-            <img src={logoImg} alt="Trust Build-IA" className="w-8 h-8 rounded-lg object-contain" />
-            <span className="font-display font-bold text-lg tracking-tight">TB-IA</span>
+            <img src={logoImg} alt="TrustBuild-IA" className="w-8 h-8 rounded-lg object-contain" />
+            <span className="font-display font-bold text-lg tracking-tight">TrustBuild-IA</span>
             {isAdmin && (
               <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
                 <Shield className="w-3 h-3" /> Admin

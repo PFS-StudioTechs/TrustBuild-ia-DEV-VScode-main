@@ -14,6 +14,7 @@ export interface Contact {
   telephone: string | null;
   adresse: string | null;
   notes: string | null;
+  site_web: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,6 +30,7 @@ export const emptyContactForm = (): ContactForm => ({
   telephone: "",
   adresse: "",
   notes: "",
+  site_web: "",
 });
 
 export function useContacts() {
@@ -63,6 +65,7 @@ export function useContacts() {
       telephone: form.telephone?.trim() || null,
       adresse: form.adresse?.trim() || null,
       notes: form.notes?.trim() || null,
+      site_web: form.site_web?.trim() || null,
     });
     if (error) { toast.error("Erreur lors de l'ajout du contact"); return false; }
     toast.success("Contact ajouté");
@@ -80,6 +83,7 @@ export function useContacts() {
       telephone: form.telephone?.trim() || null,
       adresse: form.adresse?.trim() || null,
       notes: form.notes?.trim() || null,
+      site_web: form.site_web?.trim() || null,
     }).eq("id", id);
     if (error) { toast.error("Erreur lors de la modification"); return false; }
     toast.success("Contact mis à jour");

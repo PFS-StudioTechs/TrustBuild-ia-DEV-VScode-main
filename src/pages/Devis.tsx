@@ -439,7 +439,16 @@ function DevisDialog({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">TVA %</Label>
-              <Input type="number" value={tva} onChange={(e) => setTva(parseFloat(e.target.value) || 0)} disabled={isLocked} />
+              <Select value={String(tva)} onValueChange={(v) => setTva(parseFloat(v))} disabled={isLocked}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5.5">5,5 %</SelectItem>
+                  <SelectItem value="10">10 %</SelectItem>
+                  <SelectItem value="20">20 %</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-3 space-y-1">
               <Label className="text-xs">Date de validité</Label>
@@ -710,9 +719,10 @@ function FactureSheet({
 }) {
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [updatingStatut, setUpdatingStatut] = useState(false);
 
-  useEffect(() => { if (!open) setPdfHtml(null); }, [open]);
+  useEffect(() => { if (!open) { setPdfHtml(null); setPdfModalOpen(false); } }, [open]);
 
   if (!facture) return null;
   const montantTTC = facture.montant_ht * (1 + facture.tva / 100);
@@ -726,6 +736,7 @@ function FactureSheet({
       if (error) throw new Error(error.message ?? "Erreur");
       if (!data?.html) throw new Error("Réponse vide");
       setPdfHtml(data.html);
+      setPdfModalOpen(true);
     } catch (err: any) {
       toast.error("Erreur PDF : " + err.message);
     } finally {
@@ -759,19 +770,20 @@ function FactureSheet({
       <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
           <SheetTitle>{facture.numero}</SheetTitle>
-          {!pdfHtml ? (
-            <Button size="sm" variant="outline" onClick={openPdf} disabled={pdfLoading}>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={pdfHtml ? () => setPdfModalOpen(true) : openPdf} disabled={pdfLoading}>
               {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Eye className="w-3.5 h-3.5 mr-1" />}
               Aperçu PDF
             </Button>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => {
-              const iframe = document.getElementById(`facture-iframe-${facture.id}`) as HTMLIFrameElement | null;
-              iframe?.contentWindow?.print();
-            }}>
-              <Printer className="w-3.5 h-3.5 mr-1" /> Imprimer / PDF
-            </Button>
-          )}
+            {pdfHtml && (
+              <Button size="sm" variant="outline" onClick={() => {
+                const iframe = document.getElementById(`facture-iframe-${facture.id}`) as HTMLIFrameElement | null;
+                iframe?.contentWindow?.print();
+              }}>
+                <Printer className="w-3.5 h-3.5 mr-1" /> Imprimer
+              </Button>
+            )}
+          </div>
         </SheetHeader>
         <div className="flex-1 overflow-auto p-4 space-y-4">
           {/* Infos */}
@@ -818,20 +830,38 @@ function FactureSheet({
             </div>
           </div>
 
-          {/* PDF iframe */}
-          {pdfHtml && (
-            <div className="bg-gray-100 rounded-lg p-2">
+        </div>
+      </SheetContent>
+
+      {/* PDF modal centré */}
+      <Dialog open={pdfModalOpen} onOpenChange={setPdfModalOpen}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[95vh] p-0 flex flex-col gap-0">
+          <DialogHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="font-display text-base">{facture.numero}</DialogTitle>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => {
+              const iframe = document.getElementById(`facture-iframe-${facture.id}`) as HTMLIFrameElement | null;
+              iframe?.contentWindow?.print();
+            }}>
+              <Printer className="w-3.5 h-3.5" /> Imprimer / PDF
+            </Button>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto bg-gray-100 p-4">
+            {pdfHtml ? (
               <iframe
                 id={`facture-iframe-${facture.id}`}
                 srcDoc={pdfHtml}
-                className="w-full bg-white shadow rounded border"
-                style={{ minHeight: "900px" }}
+                className="w-full bg-white shadow-lg rounded-lg border"
+                style={{ minHeight: "1123px" }}
                 title="Aperçu facture"
               />
-            </div>
-          )}
-        </div>
-      </SheetContent>
+            ) : (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
@@ -2063,10 +2093,10 @@ function DevisCard({
         editTs={editTs}
       />
 
-      <Sheet open={pdfOpen} onOpenChange={setPdfOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
-          <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
-            <SheetTitle className="font-display text-base">{pdfTitle}</SheetTitle>
+      <Dialog open={pdfOpen} onOpenChange={setPdfOpen}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[95vh] p-0 flex flex-col gap-0">
+          <DialogHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between space-y-0">
+            <DialogTitle className="font-display text-base">{pdfTitle}</DialogTitle>
             <Button
               variant="outline"
               size="sm"
@@ -2078,7 +2108,7 @@ function DevisCard({
             >
               <Printer className="w-3.5 h-3.5" /> Imprimer / PDF
             </Button>
-          </SheetHeader>
+          </DialogHeader>
           <div className="flex-1 overflow-auto bg-gray-100 p-4">
             {pdfHtml ? (
               <iframe
@@ -2094,8 +2124,8 @@ function DevisCard({
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

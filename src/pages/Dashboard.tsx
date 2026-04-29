@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, FileText, AlertTriangle, HardHat, Plus, Bot } from "lucide-react";
+import { TrendingUp, FileText, AlertTriangle, HardHat, Plus, Bot, MessageSquare, Users, Truck, BookUser, ChevronDown } from "lucide-react";
 
 interface KPIs {
   caMois: number;
@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [profile, setProfile] = useState<{ nom: string; prenom: string } | null>(null);
   const [devisBrouillon, setDevisBrouillon] = useState<{ id: string; numero: string; montant_ht: number; chantier_nom?: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [nouveauOpen, setNouveauOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -81,10 +82,11 @@ export default function Dashboard() {
     { label: "Chantiers actifs", value: kpis.chantiersActifs, icon: HardHat, iconBg: "bg-primary/10", iconColor: "text-primary", link: "/chantiers" },
   ];
 
-  const quickActions = [
-    { label: "Nouveau devis", icon: Plus, action: () => navigate("/devis?new=1") },
-    { label: "Nouveau chantier", icon: HardHat, action: () => navigate("/chantiers?new=1") },
-    { label: "Assistant IA", icon: Bot, action: () => navigate("/assistant") },
+  const nouveauSubActions = [
+    { label: "Clients", icon: Users, action: () => { navigate("/clients"); setNouveauOpen(false); } },
+    { label: "Devis / Factures", icon: FileText, action: () => { navigate("/devis?new=1"); setNouveauOpen(false); } },
+    { label: "Fournisseurs", icon: Truck, action: () => { navigate("/fournisseurs"); setNouveauOpen(false); } },
+    { label: "Contacts", icon: BookUser, action: () => { navigate("/contacts"); setNouveauOpen(false); } },
   ];
 
   return (
@@ -140,19 +142,52 @@ export default function Dashboard() {
 
       {/* Quick Actions */}
       <div className="animate-fade-up-4">
-        <h2 className="text-small font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Actions rapides</h2>
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {quickActions.map((action) => (
+        <h2 className="text-small font-semibold text-muted-foreground mb-3 uppercase tracking-wider text-center">Actions rapides</h2>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex gap-3 justify-center flex-wrap">
+            {/* Nouveau avec sous-menu */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                onClick={() => setNouveauOpen(v => !v)}
+                className="touch-target flex items-center gap-2 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Nouveau
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${nouveauOpen ? "rotate-180" : ""}`} />
+              </Button>
+              {nouveauOpen && (
+                <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border rounded-xl shadow-lg p-1 min-w-[180px]">
+                  {nouveauSubActions.map((sub) => (
+                    <button
+                      key={sub.label}
+                      onClick={sub.action}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-primary/10 hover:text-primary transition-colors text-left"
+                    >
+                      <sub.icon className="w-4 h-4" />
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Button
-              key={action.label}
               variant="outline"
-              onClick={action.action}
-              className="touch-target flex items-center gap-2 shrink-0 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all"
+              onClick={() => navigate("/messagerie")}
+              className="touch-target flex items-center gap-2 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all"
             >
-              <action.icon className="w-4 h-4" />
-              {action.label}
+              <MessageSquare className="w-4 h-4" />
+              Messagerie
             </Button>
-          ))}
+            <Button
+              variant="outline"
+              onClick={() => navigate("/assistant")}
+              className="touch-target flex items-center gap-2 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all"
+            >
+              <Bot className="w-4 h-4" />
+              Assistants IA
+            </Button>
+          </div>
         </div>
       </div>
     </div>

@@ -479,7 +479,7 @@ export default function Parametres() {
                 <ListOrdered className="w-3.5 h-3.5" /> Longueur du numéro
               </Label>
               <div className="flex gap-2">
-                {([3, 4, 5] as const).map((v) => (
+                {([2, 3, 4] as const).map((v) => (
                   <button
                     key={v}
                     type="button"

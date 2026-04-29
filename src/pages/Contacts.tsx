@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useContacts, type Contact, type ContactForm, emptyContactForm } from "@/hooks/useContacts";
+import { useFournisseurs } from "@/hooks/useFournisseurs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,17 +8,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Phone, Mail, Pencil, Trash2, BookUser, Building2, MapPin, FileText } from "lucide-react";
+import { Plus, Search, Phone, Mail, Pencil, Trash2, BookUser, Building2, MapPin, FileText, Globe, Truck } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
 
 const ROLES = [
-  "Architecte", "Maître d'œuvre", "Sous-traitant",
+  "Artisan", "Architecte", "Maître d'œuvre", "Sous-traitant",
   "Bureau de contrôle", "Géomètre", "Assureur",
   "Banquier", "Notaire", "Autre",
 ];
 
 const ROLE_COLORS: Record<string, string> = {
+  "Artisan": "bg-yellow-500/10 text-yellow-700",
   "Architecte": "bg-blue-500/10 text-blue-600",
   "Maître d'œuvre": "bg-purple-500/10 text-purple-600",
   "Sous-traitant": "bg-orange-500/10 text-orange-600",
@@ -127,6 +129,17 @@ function ContactDialog({
             />
           </div>
 
+          {/* Site web */}
+          <div className="space-y-1.5">
+            <Label>Site web</Label>
+            <Input
+              type="url"
+              value={form.site_web ?? ""}
+              onChange={set("site_web")}
+              placeholder="https://www.exemple.fr"
+            />
+          </div>
+
           {/* Notes */}
           <div className="space-y-1.5">
             <Label>Notes</Label>
@@ -154,10 +167,12 @@ function ContactCard({
   c,
   onEdit,
   onDelete,
+  readOnly = false,
 }: {
   c: Contact;
   onEdit: (c: Contact) => void;
   onDelete: (id: string) => void;
+  readOnly?: boolean;
 }) {
   const initials = [c.prenom, c.nom]
     .filter(Boolean)
@@ -176,15 +191,19 @@ function ContactCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
             <div className="min-w-0">
-              <p className="font-semibold text-sm leading-tight">
-                {[c.prenom, c.nom].filter(Boolean).join(" ")}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-sm leading-tight">
+                  {[c.prenom, c.nom].filter(Boolean).join(" ")}
+                </p>
+                {readOnly && <Truck className="w-3 h-3 text-muted-foreground shrink-0" title="Fournisseur" />}
+              </div>
               {c.entreprise && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
                   <Building2 className="w-3 h-3 shrink-0" /> {c.entreprise}
                 </p>
               )}
             </div>
+            {!readOnly && (
             <div className="flex items-center gap-1 shrink-0">
               <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => onEdit(c)}>
                 <Pencil className="w-3.5 h-3.5" />
@@ -211,6 +230,7 @@ function ContactCard({
                 </AlertDialogContent>
               </AlertDialog>
             </div>
+            )}
           </div>
           {c.role && (
             <Badge className={`${roleColor(c.role)} text-[10px] mt-1 font-medium border-0`}>
@@ -237,6 +257,20 @@ function ContactCard({
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
             <MapPin className="w-3 h-3 shrink-0" />
             <span className="truncate">{c.adresse}</span>
+          </p>
+        )}
+        {c.site_web && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+            <Globe className="w-3 h-3 shrink-0" />
+            <a
+              href={c.site_web.startsWith("http") ? c.site_web : `https://${c.site_web}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate text-primary hover:underline"
+              onClick={e => e.stopPropagation()}
+            >
+              {c.site_web.replace(/^https?:\/\//, "")}
+            </a>
           </p>
         )}
         {c.notes && (
@@ -272,14 +306,34 @@ function ContactCard({
 
 export default function Contacts() {
   const { contacts, loading, add, update, remove } = useContacts();
+  const { fournisseurs, loading: loadingF } = useFournisseurs();
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Contact | null>(null);
 
-  const roles = Array.from(new Set(contacts.map(c => c.role).filter(Boolean))) as string[];
+  // Adapter les fournisseurs en pseudo-Contact read-only
+  const fournisseursAsContacts: (Contact & { _isFournisseur: true })[] = fournisseurs.map(f => ({
+    id: f.id,
+    artisan_id: f.artisan_id,
+    nom: f.nom,
+    prenom: f.nom_contact ?? null,
+    role: "Fournisseur",
+    entreprise: f.categorie ?? null,
+    email: f.email,
+    telephone: f.telephone,
+    adresse: f.adresse,
+    notes: f.notes,
+    site_web: null,
+    created_at: f.created_at,
+    updated_at: f.updated_at,
+    _isFournisseur: true as const,
+  }));
 
-  const filtered = contacts.filter(c => {
+  const allEntries = [...contacts, ...fournisseursAsContacts];
+  const roles = Array.from(new Set(allEntries.map(c => c.role).filter(Boolean))) as string[];
+
+  const filtered = allEntries.filter(c => {
     const q = search.toLowerCase();
     const matchSearch =
       c.nom.toLowerCase().includes(q) ||
@@ -308,6 +362,7 @@ export default function Contacts() {
         telephone: editTarget.telephone,
         adresse: editTarget.adresse,
         notes: editTarget.notes,
+        site_web: editTarget.site_web,
       }
     : emptyContactForm();
 
@@ -318,7 +373,7 @@ export default function Contacts() {
         <div>
           <h1 className="text-h1 font-display">Contacts</h1>
           <p className="text-muted-foreground text-body mt-1">
-            {contacts.length} contact{contacts.length !== 1 ? "s" : ""}
+            {contacts.length} contact{contacts.length !== 1 ? "s" : ""}{fournisseurs.length > 0 ? ` + ${fournisseurs.length} fournisseur${fournisseurs.length !== 1 ? "s" : ""}` : ""}
           </p>
         </div>
         <Button onClick={openNew} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
@@ -363,7 +418,7 @@ export default function Contacts() {
       </div>
 
       {/* Contenu */}
-      {loading ? (
+      {(loading || loadingF) ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3].map(i => (
             <div key={i} className="forge-card space-y-3">
@@ -395,7 +450,13 @@ export default function Contacts() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-up-2">
           {filtered.map(c => (
-            <ContactCard key={c.id} c={c} onEdit={openEdit} onDelete={remove} />
+            <ContactCard
+              key={c.id}
+              c={c}
+              onEdit={openEdit}
+              onDelete={remove}
+              readOnly={(c as any)._isFournisseur === true}
+            />
           ))}
         </div>
       )}
