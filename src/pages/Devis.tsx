@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
@@ -706,28 +705,39 @@ function AvoirDialog({
 // ─── Dialog création facture ─────────────────────────────────
 
 // ─── Sheet détail facture ────────────────────────────────────────────────────
-function FactureSheet({
-  facture, clientNom, devisNumero, open, onClose, onRefresh, artisanId,
+function FactureCard({
+  facture,
+  clientNom,
+  devisNumero,
+  onRefresh,
 }: {
-  facture: Facture | null;
+  facture: Facture;
   clientNom: string;
   devisNumero: string;
-  open: boolean;
-  onClose: () => void;
   onRefresh: () => void;
-  artisanId: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
   const [updatingStatut, setUpdatingStatut] = useState(false);
+  const [lignes, setLignes] = useState<AvenantLigne[] | null>(null);
+  const [lignesLoading, setLignesLoading] = useState(false);
 
-  useEffect(() => { if (!open) { setPdfHtml(null); setPdfModalOpen(false); } }, [open]);
-
-  if (!facture) return null;
   const montantTTC = facture.montant_ht * (1 + facture.tva / 100);
 
-  const openPdf = async () => {
+  const badgeCn = (s: string) =>
+    s === "payee" ? "bg-emerald-100 text-emerald-700" :
+    s === "impayee" ? "bg-red-100 text-red-700" :
+    s === "envoyee" ? "bg-blue-100 text-blue-700" :
+    s === "annulee" ? "bg-gray-100 text-gray-400" :
+    "bg-muted text-muted-foreground";
+
+  const badgeLabel = (s: string) => ({ payee: "Payée", impayee: "Impayée", envoyee: "Envoyée", brouillon: "Brouillon", annulee: "Annulée" }[s] ?? s);
+
+  const openPdf = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (pdfHtml) { setPdfOpen(true); return; }
     setPdfLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("generate-pdf-html", {
@@ -736,12 +746,35 @@ function FactureSheet({
       if (error) throw new Error(error.message ?? "Erreur");
       if (!data?.html) throw new Error("Réponse vide");
       setPdfHtml(data.html);
-      setPdfModalOpen(true);
+      setPdfOpen(true);
     } catch (err: any) {
       toast.error("Erreur PDF : " + err.message);
     } finally {
       setPdfLoading(false);
     }
+  };
+
+  const loadLignes = async () => {
+    if (lignes !== null) return;
+    setLignesLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from("lignes_facture")
+        .select("designation,quantite,unite,prix_unitaire,tva,ordre")
+        .eq("facture_id", facture.id)
+        .order("ordre");
+      setLignes(data ?? []);
+    } catch {
+      setLignes([]);
+    } finally {
+      setLignesLoading(false);
+    }
+  };
+
+  const handleExpand = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next) loadLignes();
   };
 
   const changeStatut = async (newStatut: string) => {
@@ -751,7 +784,6 @@ function FactureSheet({
       if (error) throw error;
       toast.success("Statut mis à jour");
       onRefresh();
-      onClose();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -759,53 +791,40 @@ function FactureSheet({
     }
   };
 
-  const badgeCn = (s: string) =>
-    s === "payee" ? "bg-emerald-100 text-emerald-700" :
-    s === "impayee" ? "bg-red-100 text-red-700" :
-    s === "envoyee" ? "bg-blue-100 text-blue-700" :
-    "bg-muted text-muted-foreground";
-
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
-        <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between">
-          <SheetTitle>{facture.numero}</SheetTitle>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={pdfHtml ? () => setPdfModalOpen(true) : openPdf} disabled={pdfLoading}>
-              {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Eye className="w-3.5 h-3.5 mr-1" />}
-              Aperçu PDF
-            </Button>
-            {pdfHtml && (
-              <Button size="sm" variant="outline" onClick={() => {
-                const iframe = document.getElementById(`facture-iframe-${facture.id}`) as HTMLIFrameElement | null;
-                iframe?.contentWindow?.print();
-              }}>
-                <Printer className="w-3.5 h-3.5 mr-1" /> Imprimer
-              </Button>
-            )}
+    <>
+      <div className={`forge-card space-y-0 p-0 overflow-hidden ${facture.statut === "annulee" ? "opacity-60" : ""}`}>
+        {/* Header */}
+        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={handleExpand}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono font-semibold text-sm">{facture.numero}</span>
+              <Badge className={`text-xs ${badgeCn(facture.statut)}`}>{badgeLabel(facture.statut)}</Badge>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+              {clientNom && <span>{clientNom}</span>}
+              {devisNumero && <span>Réf. {devisNumero}</span>}
+              {facture.date_echeance && <span>Éch. {new Date(facture.date_echeance).toLocaleDateString("fr-FR")}</span>}
+            </div>
           </div>
-        </SheetHeader>
-        <div className="flex-1 overflow-auto p-4 space-y-4">
-          {/* Infos */}
-          <div className="rounded-lg border p-3 space-y-2 text-sm">
-            {clientNom && (
-              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Client</span><span className="font-medium">{clientNom}</span></div>
-            )}
-            {devisNumero && (
-              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Devis</span><span className="font-mono">{devisNumero}</span></div>
-            )}
-            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Montant HT</span><span className="font-mono">{facture.montant_ht.toFixed(2)} €</span></div>
-            <div className="flex justify-between text-xs"><span className="text-muted-foreground">TVA {facture.tva}%</span><span className="font-mono">{(facture.montant_ht * facture.tva / 100).toFixed(2)} €</span></div>
-            <div className="flex justify-between text-sm font-bold border-t pt-2"><span>Total TTC</span><span className="font-mono">{montantTTC.toFixed(2)} €</span></div>
-            {facture.date_echeance && (
-              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Échéance</span><span>{new Date(facture.date_echeance).toLocaleDateString("fr-FR")}</span></div>
-            )}
-            <div className="flex justify-between text-xs items-center"><span className="text-muted-foreground">Statut</span><Badge className={`text-xs ${badgeCn(facture.statut)}`}>{facture.statut}</Badge></div>
+          <div className="text-right shrink-0">
+            <div className="font-semibold font-mono text-sm">{montantTTC.toFixed(2)} €</div>
+            <div className="text-xs text-muted-foreground">TTC</div>
           </div>
+          <button
+            onClick={openPdf}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            title="Aperçu PDF"
+          >
+            {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+          </button>
+          {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+        </div>
 
-          {/* Actions statut */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mettre à jour le statut</p>
+        {/* Contenu étendu */}
+        {expanded && (
+          <div className="border-t px-4 pb-4 pt-3 space-y-4">
+            {/* Actions statut */}
             <div className="flex flex-wrap gap-2">
               {facture.statut === "brouillon" && (
                 <Button size="sm" variant="outline" onClick={() => changeStatut("envoyee")} disabled={updatingStatut}>
@@ -828,13 +847,48 @@ function FactureSheet({
                 </Button>
               )}
             </div>
-          </div>
 
-        </div>
-      </SheetContent>
+            {/* Lignes */}
+            {lignesLoading && (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {lignes && (
+              <div className="space-y-1">
+                {lignes.length > 0 && (
+                  <>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lignes</p>
+                    <div className="space-y-1">
+                      {lignes.map((l, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="truncate max-w-[60%]">{l.designation || <span className="italic text-muted-foreground">—</span>}</span>
+                          <span className="font-mono text-muted-foreground">{l.quantite} {l.unite} × {l.prix_unitaire.toFixed(2)} = {(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between text-xs font-semibold border-t pt-1">
+                  <span>Total HT</span>
+                  <span className="font-mono">{facture.montant_ht.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">TVA {facture.tva}%</span>
+                  <span className="font-mono">{(facture.montant_ht * facture.tva / 100).toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold">
+                  <span>Total TTC</span>
+                  <span className="font-mono">{montantTTC.toFixed(2)} €</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* PDF modal centré */}
-      <Dialog open={pdfModalOpen} onOpenChange={setPdfModalOpen}>
+      <Dialog open={pdfOpen} onOpenChange={setPdfOpen}>
         <DialogContent className="max-w-4xl w-[95vw] max-h-[95vh] p-0 flex flex-col gap-0">
           <DialogHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between space-y-0">
             <DialogTitle className="font-display text-base">{facture.numero}</DialogTitle>
@@ -862,7 +916,7 @@ function FactureSheet({
           </div>
         </DialogContent>
       </Dialog>
-    </Sheet>
+    </>
   );
 }
 
@@ -1301,7 +1355,6 @@ function DevisCard({
   const [editAvoir, setEditAvoir] = useState<Avoir | null>(null);
   const [acompteOpen, setAcompteOpen] = useState(false);
   const [factureOpen, setFactureOpen] = useState(false);
-  const [selectedFacture, setSelectedFacture] = useState<Facture | null>(null);
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
@@ -1918,20 +1971,13 @@ function DevisCard({
 
                 {devisFactures.length === 0 && <p className="text-xs text-muted-foreground italic">Aucune facture émise</p>}
                 {devisFactures.map(f => (
-                  <button
+                  <FactureCard
                     key={f.id}
-                    type="button"
-                    onClick={() => setSelectedFacture(f)}
-                    className="w-full rounded-lg border p-2 flex items-center justify-between hover:bg-muted/40 transition-colors text-left"
-                  >
-                    <div>
-                      <span className="text-xs font-mono font-semibold">{f.numero}</span>
-                      <p className="text-xs text-muted-foreground">{f.montant_ht.toFixed(2)} € HT — {f.date_echeance ? new Date(f.date_echeance).toLocaleDateString("fr-FR") : "—"}</p>
-                    </div>
-                    <Badge className={`text-xs ${f.statut === "payee" ? "bg-emerald-100 text-emerald-700" : f.statut === "impayee" ? "bg-red-100 text-red-700" : f.statut === "envoyee" ? "bg-blue-100 text-blue-700" : f.statut === "annulee" ? "bg-gray-100 text-gray-400 line-through" : "bg-muted text-muted-foreground"}`}>
-                      {f.statut === "annulee" ? "Annulée" : f.statut}
-                    </Badge>
-                  </button>
+                    facture={f}
+                    clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+                    devisNumero={devis.numero}
+                    onRefresh={onRefresh}
+                  />
                 ))}
                 {!isRemplace && (
                   <Button size="sm" className="w-full text-xs" onClick={() => setFactureOpen(true)}>
@@ -2070,16 +2116,6 @@ function DevisCard({
         nomenclatureSettings={nomenclatureSettings}
         lignesDevis={devis.lignes ?? []}
       />
-      <FactureSheet
-        facture={selectedFacture}
-        clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
-        devisNumero={devis.numero}
-        open={!!selectedFacture}
-        onClose={() => setSelectedFacture(null)}
-        onRefresh={onRefresh}
-        artisanId={artisanId}
-      />
-
       <TsDialog
         open={tsOpen}
         onClose={() => { setTsOpen(false); setEditTs(null); }}
@@ -2152,7 +2188,6 @@ export default function DevisPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pageView, setPageView] = useState<"devis" | "factures">("devis");
-  const [pageSelectedFacture, setPageSelectedFacture] = useState<Facture | null>(null);
 
   const loadAll = useCallback(async () => {
     if (!user) return;
@@ -2277,12 +2312,6 @@ export default function DevisPage() {
     return true;
   });
 
-  const badgeFactureCn = (s: string) =>
-    s === "payee" ? "bg-emerald-100 text-emerald-700" :
-    s === "impayee" ? "bg-red-100 text-red-700" :
-    s === "envoyee" ? "bg-blue-100 text-blue-700" :
-    "bg-muted text-muted-foreground";
-
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
       {/* Header */}
@@ -2362,41 +2391,17 @@ export default function DevisPage() {
             </div>
           ) : (
             filteredFacturesPage.map(f => (
-              <button
+              <FactureCard
                 key={f.id}
-                type="button"
-                onClick={() => setPageSelectedFacture(f)}
-                className="w-full rounded-xl border bg-card px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors text-left"
-              >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono font-semibold">{f.numero}</span>
-                    <Badge className={`text-xs ${badgeFactureCn(f.statut)}`}>{f.statut}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {f.clientNom && <span className="font-medium text-foreground">{f.clientNom} · </span>}
-                    {f.devisNumero && <span>Réf. {f.devisNumero} · </span>}
-                    {f.montant_ht.toFixed(2)} € HT
-                    {f.date_echeance && ` · Éch. ${new Date(f.date_echeance).toLocaleDateString("fr-FR")}`}
-                  </p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
-              </button>
+                facture={f}
+                clientNom={(f as any).clientNom ?? ""}
+                devisNumero={(f as any).devisNumero ?? ""}
+                onRefresh={loadAll}
+              />
             ))
           )}
         </div>
       )}
-
-      {/* Sheet détail facture niveau page */}
-      <FactureSheet
-        facture={pageSelectedFacture}
-        clientNom={pageSelectedFacture ? (facturesEnrichies.find(f => f.id === pageSelectedFacture.id)?.clientNom ?? "") : ""}
-        devisNumero={pageSelectedFacture ? (facturesEnrichies.find(f => f.id === pageSelectedFacture.id)?.devisNumero ?? "") : ""}
-        open={!!pageSelectedFacture}
-        onClose={() => setPageSelectedFacture(null)}
-        onRefresh={loadAll}
-        artisanId={user.id}
-      />
 
       {/* ── Vue Devis ── */}
       {pageView === "devis" && (loading ? (
