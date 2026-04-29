@@ -18,7 +18,6 @@ import type { Database } from "@/integrations/supabase/types";
 type Chantier = Pick<Database["public"]["Tables"]["chantiers"]["Row"], "id" | "nom" | "statut">;
 type Devis = Pick<Database["public"]["Tables"]["devis"]["Row"], "id" | "chantier_id" | "montant_ht" | "statut">;
 type Facture = Pick<Database["public"]["Tables"]["factures"]["Row"], "id" | "devis_id" | "artisan_id" | "montant_ht" | "solde_restant" | "statut" | "date_echeance" | "numero" | "created_at">;
-type Paiement = Pick<Database["public"]["Tables"]["paiements"]["Row"], "id" | "facture_id" | "montant" | "date">;
 type AvenantLight = { id: string; devis_id: string; montant_ht: number };
 type AvoirLight = { id: string; devis_id: string; montant_ht: number };
 
@@ -29,7 +28,6 @@ export default function Finances() {
   const [chantiers, setChantiers] = useState<Chantier[]>([]);
   const [devis, setDevis] = useState<Devis[]>([]);
   const [factures, setFactures] = useState<Facture[]>([]);
-  const [paiements, setPaiements] = useState<Paiement[]>([]);
   const [avenants, setAvenants] = useState<AvenantLight[]>([]);
   const [avoirs, setAvoirs] = useState<AvoirLight[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,18 +35,16 @@ export default function Finances() {
   useEffect(() => {
     if (!user) return;
     const fetch = async () => {
-      const [ch, dv, fa, pa, av, avo] = await Promise.all([
+      const [ch, dv, fa, av, avo] = await Promise.all([
         supabase.from("chantiers").select("id, nom, statut").eq("artisan_id", user.id),
         supabase.from("devis").select("id, chantier_id, montant_ht, statut").eq("artisan_id", user.id),
         supabase.from("factures").select("id, devis_id, artisan_id, montant_ht, solde_restant, statut, date_echeance, numero, created_at").eq("artisan_id", user.id),
-        supabase.from("paiements").select("id, facture_id, montant, date").eq("artisan_id", user.id),
         supabase.from("avenants").select("id, devis_id, montant_ht").eq("artisan_id", user.id),
         (supabase as any).from("avoirs").select("id, devis_id, montant_ht").eq("artisan_id", user.id),
       ]);
       if (ch.data) setChantiers(ch.data);
       if (dv.data) setDevis(dv.data);
       if (fa.data) setFactures(fa.data);
-      if (pa.data) setPaiements(pa.data);
       if (av.data) setAvenants(av.data);
       if (avo.data) setAvoirs(avo.data);
       setLoading(false);
@@ -58,22 +54,23 @@ export default function Finances() {
 
   const chantierStats = useMemo(() => {
     return chantiers.map(ch => {
-      const chDevis = devis.filter(d => d.chantier_id === ch.id);
+      // Exclure les versions remplacées — seule la version active compte
+      const chDevis = devis.filter(d => d.chantier_id === ch.id && d.statut !== "remplace");
       const devisIds = chDevis.map(d => d.id);
       const chFactures = factures.filter(f => devisIds.includes(f.devis_id));
-      const chPaiements = paiements.filter(p => chFactures.some(f => f.id === p.facture_id));
-      // Budget ajusté = devis de base + avenants - avoirs (par devis du chantier)
+      // Budget ajusté = devis actif + avenants - avoirs
       const budgetDevis = chDevis.reduce((s, d) => {
         const totalAvenants = avenants.filter(a => a.devis_id === d.id).reduce((sum, a) => sum + Number(a.montant_ht), 0);
         const totalAvoirs = avoirs.filter(a => a.devis_id === d.id).reduce((sum, a) => sum + Number(a.montant_ht), 0);
         return s + Number(d.montant_ht) + totalAvenants - totalAvoirs;
       }, 0);
       const facture = chFactures.reduce((s, f) => s + Number(f.montant_ht), 0);
-      const encaisse = chPaiements.reduce((s, p) => s + Number(p.montant), 0);
+      // Encaissé = factures marquées payées (paiements directs via statut)
+      const encaisse = chFactures.filter(f => f.statut === "payee").reduce((s, f) => s + Number(f.solde_restant ?? f.montant_ht), 0);
       const resteAFacturer = budgetDevis - facture;
       return { ...ch, budgetDevis, facture, encaisse, resteAFacturer, progression: budgetDevis > 0 ? (encaisse / budgetDevis) * 100 : 0 };
     });
-  }, [chantiers, devis, factures, paiements, avenants, avoirs]);
+  }, [chantiers, devis, factures, avenants, avoirs]);
 
   const tresorerieData = useMemo(() => {
     const months: { label: string; encaisse: number; attente: number; retard: number }[] = [];
@@ -82,17 +79,17 @@ export default function Finances() {
       const start = startOfMonth(d);
       const end = endOfMonth(d);
       const label = format(d, "MMM yy", { locale: fr });
-      const moisPaiements = paiements.filter(p => { const pd = new Date(p.date); return pd >= start && pd <= end; });
-      const encaisse = moisPaiements.reduce((s, p) => s + Number(p.montant), 0);
       const moisFactures = factures.filter(f => { const fd = new Date(f.created_at); return fd >= start && fd <= end; });
+      // Encaissé = factures payées émises ce mois
+      const encaisse = moisFactures.filter(f => f.statut === "payee").reduce((s, f) => s + Number(f.solde_restant ?? f.montant_ht), 0);
       const attente = moisFactures.filter(f => f.statut === "envoyee").reduce((s, f) => s + Number(f.solde_restant), 0);
       const retard = moisFactures.filter(f => f.statut === "impayee").reduce((s, f) => s + Number(f.solde_restant), 0);
       months.push({ label, encaisse, attente, retard });
     }
     return months;
-  }, [factures, paiements]);
+  }, [factures]);
 
-  const totalEncaisse = paiements.reduce((s, p) => s + Number(p.montant), 0);
+  const totalEncaisse = factures.filter(f => f.statut === "payee").reduce((s, f) => s + Number(f.solde_restant ?? f.montant_ht), 0);
   const totalAttente = factures.filter(f => f.statut === "envoyee").reduce((s, f) => s + Number(f.solde_restant), 0);
   const totalRetard = factures.filter(f => f.statut === "impayee").reduce((s, f) => s + Number(f.solde_restant), 0);
 
