@@ -94,6 +94,10 @@ export default function MesDocuments() {
   const [htmlPreviewTitle, setHtmlPreviewTitle]     = useState("");
   const [htmlPreviewLoading, setHtmlPreviewLoading] = useState(false);
 
+  // Generic document preview Sheet
+  const [previewSheet, setPreviewSheet] = useState<{ doc: Document; url: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
   // Edit dialog
   const [editDoc, setEditDoc] = useState<Document | null>(null);
   const [editNom, setEditNom] = useState("");
@@ -218,6 +222,35 @@ export default function MesDocuments() {
 
     // Autres fichiers (PDF, images…) : téléchargement direct
     window.open(data.signedUrl, "_blank");
+  };
+
+  const handlePreview = async (doc: Document) => {
+    setPreviewLoading(true);
+    const { data, error } = await supabase.storage
+      .from("artisan-documents")
+      .createSignedUrl(doc.storage_path, 300);
+
+    if (error || !data?.signedUrl) {
+      toast.error("Impossible de générer l'aperçu");
+      setPreviewLoading(false);
+      return;
+    }
+
+    if (doc.mime_type === "text/html") {
+      try {
+        const resp = await fetch(data.signedUrl);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const html = await resp.text();
+        setHtmlPreviewTitle(doc.nom.replace(/\.html$/i, ""));
+        setHtmlPreviewHtml(html);
+        setHtmlPreviewOpen(true);
+      } catch (e: any) {
+        toast.error("Impossible d'afficher le document : " + e.message);
+      }
+    } else {
+      setPreviewSheet({ doc, url: data.signedUrl });
+    }
+    setPreviewLoading(false);
   };
 
   const handleDelete = async (doc: Document) => {
@@ -520,7 +553,8 @@ export default function MesDocuments() {
                 )}
                 <Badge variant="outline" className="text-[10px]">{TYPE_OPTIONS.find((o) => o.value === doc.type_fichier)?.label || doc.type_fichier}</Badge>
                 <div className="flex gap-1 pt-1">
-                  <Button size="sm" variant="ghost" onClick={() => handleDownload(doc)} className="h-8 px-2"><Download className="w-3.5 h-3.5" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => handlePreview(doc)} className="h-8 px-2" title="Visualiser" disabled={previewLoading}><Eye className="w-3.5 h-3.5" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => handleDownload(doc)} className="h-8 px-2" title="Télécharger"><Download className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => openEdit(doc)} className="h-8 px-2"><Edit2 className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => handleArchive(doc)} className="h-8 px-2"><Archive className="w-3.5 h-3.5" /></Button>
                   {(doc.type_fichier === "plan" || doc.type_fichier === "cctp") && (
@@ -585,7 +619,8 @@ export default function MesDocuments() {
                 )}
                 <Badge variant="outline" className="text-[10px] hidden sm:inline-flex">{TYPE_OPTIONS.find((o) => o.value === doc.type_fichier)?.label || doc.type_fichier}</Badge>
                 <div className="flex gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" onClick={() => handleDownload(doc)} className="h-8 px-2"><Download className="w-3.5 h-3.5" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => handlePreview(doc)} className="h-8 px-2" title="Visualiser" disabled={previewLoading}><Eye className="w-3.5 h-3.5" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => handleDownload(doc)} className="h-8 px-2" title="Télécharger"><Download className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => openEdit(doc)} className="h-8 px-2"><Edit2 className="w-3.5 h-3.5" /></Button>
                   {doc.type_fichier === "devis" && (
                     <Button size="sm" variant="ghost" onClick={() => openSend(doc, "signature")} className="h-8 px-2 text-violet-600" title="Envoyer en signature électronique">
@@ -711,6 +746,56 @@ export default function MesDocuments() {
                 title="Aperçu document"
               />
             ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Document Preview Sheet ── */}
+      <Sheet open={!!previewSheet} onOpenChange={(o) => !o && setPreviewSheet(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-3xl p-0 flex flex-col">
+          <SheetHeader className="px-4 py-3 border-b shrink-0 flex flex-row items-center justify-between gap-3">
+            <SheetTitle className="font-display text-base truncate min-w-0">{previewSheet?.doc.nom}</SheetTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={() => window.open(previewSheet?.url, "_blank")}
+            >
+              <Download className="w-3.5 h-3.5" /> Télécharger
+            </Button>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-auto bg-gray-100 p-4 flex items-start justify-center">
+            {previewSheet?.doc.mime_type.startsWith("image/") ? (
+              <img
+                src={previewSheet.url}
+                alt={previewSheet.doc.nom}
+                className="max-w-full rounded-lg shadow-lg object-contain"
+                style={{ maxHeight: "90vh" }}
+              />
+            ) : previewSheet?.doc.mime_type.includes("pdf") ? (
+              <iframe
+                src={previewSheet.url}
+                className="w-full bg-white shadow-lg rounded-lg border-0"
+                style={{ minHeight: "calc(100vh - 80px)" }}
+                title={previewSheet.doc.nom}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-4 text-center py-16">
+                <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
+                  <File className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-medium">{previewSheet?.doc.nom}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    L'aperçu n'est pas disponible pour ce type de fichier.
+                  </p>
+                </div>
+                <Button onClick={() => window.open(previewSheet?.url, "_blank")} className="gap-2">
+                  <Download className="w-4 h-4" /> Télécharger pour ouvrir
+                </Button>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
