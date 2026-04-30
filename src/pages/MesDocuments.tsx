@@ -13,6 +13,7 @@ import {
   Upload, Search, Grid3X3, List, Download, Trash2, Tag, Link2, Archive,
   FileText, Image, File, Bot, X, FolderOpen, Plus, Edit2, Filter,
   PenLine, CreditCard, Send, Eye, Printer, Loader2, ShieldCheck, ShieldAlert,
+  Camera, Pen,
 } from "lucide-react";
 import KbisUploadSection from "@/components/kbis/KbisUploadSection";
 import { toast } from "sonner";
@@ -70,7 +71,10 @@ export default function MesDocuments() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Associations
   const [chantiers, setChantiers] = useState<{ id: string; nom: string }[]>([]);
@@ -230,6 +234,20 @@ export default function MesDocuments() {
     fetchDocuments();
   };
 
+  const startRename = (doc: Document) => {
+    setRenamingId(doc.id);
+    setRenameValue(doc.nom);
+  };
+
+  const handleRenameSubmit = async (docId: string) => {
+    const trimmed = renameValue.trim();
+    setRenamingId(null);
+    if (!trimmed) return;
+    const { error } = await supabase.from("documents").update({ nom: trimmed }).eq("id", docId);
+    if (error) toast.error(error.message);
+    else setDocuments((prev) => prev.map((d) => d.id === docId ? { ...d, nom: trimmed } : d));
+  };
+
   const openEdit = (doc: Document) => {
     setEditDoc(doc);
     setEditNom(doc.nom);
@@ -318,10 +336,16 @@ export default function MesDocuments() {
     <div className="p-4 md:p-8 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between animate-fade-up">
         <h1 className="text-h2 font-display">Mes Documents</h1>
-        <Button onClick={() => fileInputRef.current?.click()} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
-          <Plus className="w-4 h-4 mr-1" /> Ajouter
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => cameraInputRef.current?.click()} className="touch-target" title="Prendre une photo">
+            <Camera className="w-4 h-4" />
+          </Button>
+          <Button onClick={() => fileInputRef.current?.click()} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
+            <Plus className="w-4 h-4 mr-1" /> Ajouter
+          </Button>
+        </div>
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
       </div>
 
       {/* Section KBIS */}
@@ -375,9 +399,22 @@ export default function MesDocuments() {
         }`}
       >
         <Upload className={`w-8 h-8 mx-auto mb-2 ${dragOver ? "text-primary" : "text-muted-foreground"}`} />
-        <p className="text-sm text-muted-foreground">
-          Glissez vos fichiers ici ou <button onClick={() => fileInputRef.current?.click()} className="text-primary font-semibold hover:underline">parcourez</button>
-        </p>
+        <p className="text-sm text-muted-foreground mb-3">Glissez vos fichiers ici, ou choisissez une option :</p>
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-colors"
+          >
+            <FolderOpen className="w-3.5 h-3.5" /> Parcourir
+          </button>
+          <span className="text-muted-foreground text-xs">ou</span>
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-colors"
+          >
+            <Camera className="w-3.5 h-3.5" /> Prendre une photo
+          </button>
+        </div>
         {uploading && (
           <div className="mt-3 max-w-xs mx-auto">
             <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -449,7 +486,28 @@ export default function MesDocuments() {
                     <Icon className="w-5 h-5 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm truncate">{doc.nom}</p>
+                    {renamingId === doc.id ? (
+                      <input
+                        className="font-medium text-sm w-full bg-transparent border-b border-primary outline-none pb-0.5 truncate"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => handleRenameSubmit(doc.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleRenameSubmit(doc.id);
+                          if (e.key === "Escape") setRenamingId(null);
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        className="font-medium text-sm w-full text-left group flex items-center gap-1 hover:text-primary transition-colors"
+                        onClick={() => startRename(doc)}
+                        title="Cliquer pour renommer"
+                      >
+                        <span className="truncate min-w-0">{doc.nom}</span>
+                        <Pen className="w-2.5 h-2.5 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
+                      </button>
+                    )}
                     <p className="text-xs text-muted-foreground">{formatSize(doc.taille_octets)} · {new Date(doc.created_at).toLocaleDateString("fr-FR")}</p>
                   </div>
                 </div>
@@ -494,7 +552,28 @@ export default function MesDocuments() {
                   <Icon className="w-4 h-4 text-primary" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{doc.nom}</p>
+                  {renamingId === doc.id ? (
+                    <input
+                      className="font-medium text-sm w-full bg-transparent border-b border-primary outline-none pb-0.5"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => handleRenameSubmit(doc.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRenameSubmit(doc.id);
+                        if (e.key === "Escape") setRenamingId(null);
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      className="font-medium text-sm w-full text-left group flex items-center gap-1 hover:text-primary transition-colors"
+                      onClick={() => startRename(doc)}
+                      title="Cliquer pour renommer"
+                    >
+                      <span className="truncate min-w-0">{doc.nom}</span>
+                      <Pen className="w-2.5 h-2.5 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
+                    </button>
+                  )}
                   <p className="text-xs text-muted-foreground">{formatSize(doc.taille_octets)} · {new Date(doc.created_at).toLocaleDateString("fr-FR")}</p>
                 </div>
                 {doc.tags.length > 0 && (
