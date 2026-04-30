@@ -51,6 +51,10 @@ export default function Parametres() {
   const [savingPrefixes, setSavingPrefixes] = useState(false);
   const [apiConfigs, setApiConfigs] = useState<{ service_name: string; is_active: boolean }[]>([]);
   const [allUsers, setAllUsers] = useState<{ user_id: string; role: string; email?: string }[]>([]);
+  const [rib, setRib] = useState("");
+  const [bic, setBic] = useState("");
+  const [ribError, setRibError] = useState("");
+  const [ribValid, setRibValid] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState("");
   const [telegramStatus, setTelegramStatus] = useState<"idle" | "loading" | "connected" | "error">("idle");
   const [botName, setBotName] = useState("");
@@ -132,6 +136,12 @@ export default function Parametres() {
           setTelegramChatId(prefs.telegram_chat_id);
           setTelegramStatus("connected");
         }
+        if (prefs?.rib) {
+          const formatted = formatIBAN(prefs.rib);
+          setRib(formatted);
+          setRibValid(true);
+        }
+        if (prefs?.bic) setBic(prefs.bic);
       });
     // Verify bot token works
     supabase.functions.invoke("telegram-bot", { body: { action: "verify" } })
@@ -153,6 +163,45 @@ export default function Parametres() {
     setSiretStatus("idle");
     setSiretError("");
     setSiretData(null);
+  };
+
+  const formatIBAN = (value: string) => {
+    const clean = value.replace(/\s/g, "").toUpperCase().slice(0, 27);
+    return clean.replace(/(.{4})/g, "$1 ").trim();
+  };
+
+  const validateIBAN = (raw: string): boolean => {
+    const clean = raw.replace(/\s/g, "").toUpperCase();
+    if (!clean.startsWith("FR") || clean.length !== 27) return false;
+    const rearranged = clean.slice(4) + clean.slice(0, 4);
+    const numeric = rearranged.split("").map(c => {
+      const code = c.charCodeAt(0);
+      return code >= 65 && code <= 90 ? (code - 55).toString() : c;
+    }).join("");
+    let remainder = 0;
+    for (const digit of numeric) remainder = (remainder * 10 + parseInt(digit)) % 97;
+    return remainder === 1;
+  };
+
+  const handleRibChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatIBAN(e.target.value);
+    setRib(formatted);
+    const clean = formatted.replace(/\s/g, "");
+    if (clean.length === 0) {
+      setRibError("");
+      setRibValid(false);
+    } else if (clean.length === 27) {
+      if (validateIBAN(clean)) {
+        setRibError("");
+        setRibValid(true);
+      } else {
+        setRibError("IBAN invalide — vérifiez les chiffres de contrôle");
+        setRibValid(false);
+      }
+    } else {
+      setRibError("");
+      setRibValid(false);
+    }
   };
 
   const validateSiret = async () => {
@@ -269,11 +318,26 @@ export default function Parametres() {
       update.forme_juridique = siretData.formeJuridique;
     }
     const { error } = await supabase.from("profiles").update(update).eq("user_id", user.id);
-    if (error) toast.error(error.message);
-    else {
-      if (siretData) setOriginalSiret(siretData.siret);
-      toast.success("Profil mis à jour");
+    if (error) { toast.error(error.message); setSaving(false); return; }
+
+    // Save RIB/BIC in preferences alongside telegram_chat_id
+    const ribClean = rib.replace(/\s/g, "");
+    const bicClean = bic.trim().toUpperCase();
+    if (ribClean || bicClean) {
+      const { data: settingsRow } = await supabase
+        .from("artisan_settings")
+        .select("preferences")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const existingPrefs = (settingsRow?.preferences as Record<string, string>) ?? {};
+      await supabase.from("artisan_settings").upsert(
+        { user_id: user.id, preferences: { ...existingPrefs, rib: ribClean, bic: bicClean } } as any,
+        { onConflict: "user_id" }
+      );
     }
+
+    if (siretData) setOriginalSiret(siretData.siret);
+    toast.success("Profil mis à jour");
     setSaving(false);
   };
 
@@ -394,6 +458,37 @@ export default function Parametres() {
           <div className="space-y-1.5">
             <Label className="text-small">Email</Label>
             <Input value={user?.email || ""} disabled className="touch-target bg-secondary" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-small">IBAN (RIB)</Label>
+            <div className="relative">
+              <Input
+                value={rib}
+                onChange={handleRibChange}
+                placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX"
+                className={`touch-target font-mono pr-9 ${ribValid ? "border-emerald-500 focus-visible:ring-emerald-500/30" : ""}`}
+                maxLength={33}
+              />
+              {ribValid && (
+                <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+              )}
+            </div>
+            {ribError && (
+              <div className="flex items-center gap-1.5 text-xs text-destructive">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {ribError}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">IBAN français (FR + 25 chiffres). Sera affiché sur vos documents.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-small">BIC / SWIFT</Label>
+            <Input
+              value={bic}
+              onChange={(e) => setBic(e.target.value.toUpperCase())}
+              placeholder="BNPAFRPP"
+              className="touch-target font-mono"
+              maxLength={11}
+            />
           </div>
           <Button onClick={handleSave} disabled={saving} className="w-full touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
             <Save className="w-4 h-4 mr-2" /> {saving ? "Enregistrement…" : "Enregistrer"}

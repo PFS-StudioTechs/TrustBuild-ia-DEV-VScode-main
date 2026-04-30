@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Palette, Upload, CheckCircle2, Loader2, FileText,
   Wrench, Zap, Brush, Trees, Building2, HardHat,
+  Leaf, Waves, Layers, Home, Mountain,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +21,11 @@ const SECTORS = [
   { id: "peinture",     label: "Peinture & Revêtements", icon: Brush,     primary: "#7c3aed", secondary: "#4c1d95", accent: "#f472b6" },
   { id: "menuiserie",   label: "Menuiserie",             icon: Trees,     primary: "#92400e", secondary: "#451a03", accent: "#f59e0b" },
   { id: "general",      label: "BTP Général",            icon: HardHat,   primary: "#2563eb", secondary: "#1e40af", accent: "#f59e0b" },
+  { id: "jardinage",    label: "Jardinier / Paysagiste", icon: Leaf,      primary: "#16a34a", secondary: "#14532d", accent: "#86efac" },
+  { id: "pisciniste",   label: "Pisciniste",             icon: Waves,     primary: "#0891b2", secondary: "#164e63", accent: "#67e8f9" },
+  { id: "platrerie",    label: "Plâtrier",               icon: Layers,    primary: "#6b7280", secondary: "#374151", accent: "#d1d5db" },
+  { id: "charpente",    label: "Charpentier / Couvreur", icon: Home,      primary: "#b45309", secondary: "#7c2d12", accent: "#fb923c" },
+  { id: "maconnerie",   label: "Maçonnerie",             icon: Mountain,  primary: "#4b5563", secondary: "#1f2937", accent: "#9ca3af" },
 ];
 
 interface Template {
@@ -232,39 +238,94 @@ export default function TemplatePanel() {
 
   // ── Preview card ──────────────────────────────────────────────────────────
   const PreviewCard = () => (
-    <div className="rounded-xl overflow-hidden border shadow-sm">
-      <div
-        className="h-16 flex items-center justify-between px-4"
-        style={{ background: `linear-gradient(135deg, ${couleurPrimaire}, ${couleurSecondaire})` }}
-      >
-        <div className="flex items-center gap-3">
+    <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white" style={{ fontSize: "8px", lineHeight: 1.4 }}>
+      {/* Top accent bar */}
+      <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${couleurPrimaire}, ${couleurAccent})` }} />
+
+      {/* Header */}
+      <div className="flex justify-between items-start px-3 pt-2 pb-2 border-b border-gray-100">
+        <div className="flex items-start gap-2">
           {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="h-10 w-10 rounded-lg object-contain bg-white/10 p-1" />
+            <img src={logoUrl} alt="Logo" className="h-9 w-9 rounded object-contain" />
           ) : (
-            <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-white" />
+            <div className="h-9 w-9 rounded flex items-center justify-center shrink-0" style={{ background: couleurPrimaire + "22" }}>
+              <FileText className="w-4 h-4" style={{ color: couleurPrimaire }} />
             </div>
           )}
           <div>
-            <div className="font-bold text-white text-sm">Dupont Artisanat</div>
-            <div className="text-white/70 text-[10px]">SIRET : 123 456 789 00012</div>
+            <div className="font-bold text-[10px]" style={{ color: couleurPrimaire }}>Dupont Artisanat</div>
+            <div className="text-gray-400">12 rue de la Paix, 75001 Paris</div>
+            <div className="text-gray-400">Tél : 06 12 34 56 78</div>
+            <div className="text-gray-400">SIRET : 123 456 789 00012</div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-white font-bold text-lg">DEVIS</div>
-          <div className="text-white/80 text-[10px]">N° DEV-2026-001</div>
+        <div className="text-right shrink-0">
+          <div className="inline-block font-bold text-white px-2 py-0.5 rounded text-[10px]" style={{ background: couleurPrimaire }}>DEVIS</div>
+          <div className="font-mono text-gray-600 mt-0.5">D-2026-05-001</div>
+          <div className="text-gray-400">Émis le 30/05/2026</div>
+          <div className="text-gray-400">Valable 30 jours</div>
         </div>
       </div>
-      <div className="bg-white p-3 space-y-2">
-        <div className="h-2 rounded" style={{ background: couleurPrimaire, width: "60%", opacity: 0.2 }} />
-        <div className="h-2 rounded bg-gray-100 w-full" />
-        <div className="h-2 rounded bg-gray-100 w-4/5" />
-        <div className="flex justify-end mt-2">
-          <div className="rounded px-3 py-1 text-white text-[10px] font-bold" style={{ background: couleurPrimaire }}>
-            Total TTC : 1 200,00 €
+
+      {/* Client block */}
+      <div className="px-3 py-2">
+        <div className="inline-block border rounded px-2 py-1" style={{ borderColor: couleurPrimaire + "50" }}>
+          <div className="font-semibold uppercase tracking-wide mb-0.5" style={{ color: couleurPrimaire }}>Client</div>
+          <div className="font-bold text-gray-800">M. Jean Martin</div>
+          <div className="text-gray-400">5 avenue des Fleurs, 69000 Lyon</div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="px-3">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr style={{ background: couleurPrimaire }}>
+              <th className="text-left text-white px-1.5 py-1 rounded-tl">Désignation</th>
+              <th className="text-right text-white px-1.5 py-1 w-8">Qté</th>
+              <th className="text-right text-white px-1.5 py-1 w-14">PU HT</th>
+              <th className="text-right text-white px-1.5 py-1 w-14 rounded-tr">Total HT</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
+              <td className="px-1.5 py-1 text-gray-700">Pose de carrelage 30 m²</td>
+              <td className="px-1.5 py-1 text-right text-gray-500">30</td>
+              <td className="px-1.5 py-1 text-right text-gray-500">35,00 €</td>
+              <td className="px-1.5 py-1 text-right font-medium text-gray-800">1 050 €</td>
+            </tr>
+            <tr style={{ background: "#f9fafb", borderBottom: "1px solid #f3f4f6" }}>
+              <td className="px-1.5 py-1 text-gray-700">Fourniture matériaux</td>
+              <td className="px-1.5 py-1 text-right text-gray-500">1</td>
+              <td className="px-1.5 py-1 text-right text-gray-500">350,00 €</td>
+              <td className="px-1.5 py-1 text-right font-medium text-gray-800">350 €</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Totals */}
+      <div className="px-3 pt-1.5 pb-2 flex justify-end">
+        <div className="space-y-0.5" style={{ minWidth: "130px" }}>
+          <div className="flex justify-between gap-4 text-gray-500">
+            <span>Total HT</span><span>1 400,00 €</span>
+          </div>
+          <div className="flex justify-between gap-4 text-gray-500">
+            <span>TVA (10%)</span><span>140,00 €</span>
+          </div>
+          <div className="flex justify-between gap-4 font-bold text-white rounded px-1.5 py-0.5 mt-0.5" style={{ background: couleurPrimaire }}>
+            <span>Total TTC</span><span>1 540,00 €</span>
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <div className="px-3 py-1 text-gray-400 text-center border-t border-gray-100">
+        RGE Qualibat n°1234 · Décennale AXA n°POL-56789
+      </div>
+
+      {/* Bottom accent bar */}
+      <div className="h-1" style={{ background: `linear-gradient(90deg, ${couleurPrimaire}, ${couleurAccent})` }} />
     </div>
   );
 
