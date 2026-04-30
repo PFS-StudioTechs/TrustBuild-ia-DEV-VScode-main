@@ -35,14 +35,23 @@ Si une liste de clients existants est fournie dans le contexte (section "Clients
 RÈGLE CHANTIER EXISTANT :
 Si une liste de chantiers existants est fournie dans le contexte (section "Chantiers existants de l'artisan"), cherche les correspondances avec le chantier mentionné dans la demande (par nom, lieu, type de travaux, client associé). Inclus dans DEVIS_DATA un tableau "chantier_matches" avec les chantiers correspondants (max 3, en priorité ceux du client identifié). Si la correspondance est certaine, mets l'id dans "chantier.id". Si aucun chantier existant ne correspond mais qu'un chantier est mentionné dans la demande, laisse "chantier.id" vide et remplis "chantier.nom". Si aucun chantier n'est mentionné dans la demande, mets "chantier" à null et laisse "chantier_matches" vide.
 
+RÈGLE SECTIONS (détection automatique dans la dictée) :
+Quand l'artisan organise sa demande par sections (mots-clés : "section", "rubrique", "partie", "catégorie" — et leurs variantes phonétiques ou erreurs de dictée : "sélection", "séction", "sestion", "selection"), associe chaque ligne à sa section.
+- Chaque ligne doit inclure un champ "section" contenant le nom normalisé de la section (1ère lettre majuscule)
+- Une section se termine implicitement quand une nouvelle commence
+- Si aucune section n'est mentionnée : omets le champ "section" ou mets "" sur toutes les lignes
+- Tolère les erreurs de transcription : "sélection démolition" → section "Démolition"
+- Fallback intelligent : si une ligne ne correspond à aucune section déclarée, associe-la à la dernière section active ou laisse le champ vide
+- Exemples détectés : "section démolition :", "rubrique peinture :", "partie électricité", "sélection fondations"
+
 À la fin de ta réponse, ajoute OBLIGATOIREMENT un bloc JSON structuré entre les balises <!--DEVIS_DATA et DEVIS_DATA--> contenant :
 - Les informations du client (nom, adresse, email, téléphone, type particulier/pro, id si client existant identifié)
 - Le chantier mentionné dans la demande (id si existant trouvé, sinon nom seulement, sinon null)
-- Les lignes de devis (description, quantité, unité, prix unitaire)
+- Les lignes de devis (description, quantité, unité, prix unitaire, section si applicable)
 - Les correspondances clients trouvées (client_matches)
 - Les correspondances chantiers trouvées (chantier_matches)
 
-Exemple de format :
+Exemple de format SANS sections :
 <!--DEVIS_DATA
 {
   "client": {
@@ -66,6 +75,34 @@ Exemple de format :
 }
 DEVIS_DATA-->
 
+Exemple de format AVEC sections (l'artisan a dit "section démolition", "section peinture", "section électricité") :
+<!--DEVIS_DATA
+{
+  "client": {
+    "id": "",
+    "nom": "M. Dupont",
+    "adresse": "",
+    "email": "",
+    "telephone": "",
+    "type": "particulier"
+  },
+  "chantier": {
+    "id": "",
+    "nom": "Rénovation appartement Dupont"
+  },
+  "lignes": [
+    {"description": "Démolition de murs", "quantite": 1, "unite": "u", "prix_unitaire": 800, "section": "Démolition"},
+    {"description": "Démolition meuble double vasque", "quantite": 1, "unite": "u", "prix_unitaire": 150, "section": "Démolition"},
+    {"description": "Achat peinture et apprêt", "quantite": 1, "unite": "u", "prix_unitaire": 120, "section": "Peinture"},
+    {"description": "Rouleaux et matériel", "quantite": 1, "unite": "u", "prix_unitaire": 45, "section": "Peinture"},
+    {"description": "Installation prises électriques", "quantite": 5, "unite": "u", "prix_unitaire": 45, "section": "Électricité"},
+    {"description": "Remplacement tableau électrique", "quantite": 1, "unite": "u", "prix_unitaire": 350, "section": "Électricité"}
+  ],
+  "client_matches": [],
+  "chantier_matches": []
+}
+DEVIS_DATA-->
+
 NOTE NUMÉROTATION : les numéros de documents suivent le format PREFIXE-AAAA-MM-NNN (ex : "D-2026-04-001"). Les devis peuvent avoir des versions : "D-2026-04-001-v2", "D-2026-04-001-v3". N'invente jamais de numéro — il est généré automatiquement.
 
 Si des informations manquent dans la demande actuelle, laisse les champs vides ("") — ne les invente pas.
@@ -78,14 +115,15 @@ Ajoute un bloc <!--AVENANT_DATA ... AVENANT_DATA--> avec :
 - motif : raison de l'avenant
 - lignes : tableau de lignes supplémentaires (description, quantite, unite, prix_unitaire)
 
-Exemple avenant :
+Exemple avenant (avec section si l'artisan en précise) :
 <!--AVENANT_DATA
 {
   "devis_id": "",
   "devis_numero": "D-2026-04-001",
   "motif": "Travaux supplémentaires : remplacement du siphon de sol",
   "lignes": [
-    {"description": "Remplacement siphon de sol", "quantite": 1, "unite": "u", "prix_unitaire": 85}
+    {"description": "Remplacement siphon de sol", "quantite": 1, "unite": "u", "prix_unitaire": 85, "section": "Plomberie"},
+    {"description": "Main d'œuvre pose", "quantite": 2, "unite": "h", "prix_unitaire": 45, "section": "Plomberie"}
   ]
 }
 AVENANT_DATA-->
@@ -134,15 +172,15 @@ Ajoute un bloc <!--TS_DATA ... TS_DATA--> avec :
 - description : motif des travaux supplémentaires
 - lignes : tableau de lignes (description, quantite, unite, prix_unitaire)
 
-Exemple TS :
+Exemple TS (avec sections si l'artisan en précise) :
 <!--TS_DATA
 {
   "devis_id": "",
   "devis_numero": "D-2026-04-001",
   "description": "Remplacement siphon de sol non prévu au devis initial",
   "lignes": [
-    {"description": "Remplacement siphon de sol", "quantite": 1, "unite": "u", "prix_unitaire": 85},
-    {"description": "Main d'œuvre pose", "quantite": 2, "unite": "h", "prix_unitaire": 45}
+    {"description": "Remplacement siphon de sol", "quantite": 1, "unite": "u", "prix_unitaire": 85, "section": "Plomberie"},
+    {"description": "Main d'œuvre pose", "quantite": 2, "unite": "h", "prix_unitaire": 45, "section": "Plomberie"}
   ]
 }
 TS_DATA-->

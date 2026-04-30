@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, FileText, Trash2, Plus, Check, Loader2, Users, Building2 } from "lucide-react";
+import { UserPlus, FileText, Trash2, Plus, Check, Loader2, Users, Building2, Layers, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ export interface DevisData {
     quantite: number;
     unite: string;
     prix_unitaire: number;
+    section?: string;
   }>;
   client_matches?: Array<{
     id: string;
@@ -74,6 +75,12 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
   const [client, setClient] = useState(data.client);
   const [lignes, setLignes] = useState(data.lignes);
   const [saving, setSaving] = useState(false);
+
+  // Sections
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [editingSectionValue, setEditingSectionValue] = useState("");
+  const [newSectionName, setNewSectionName] = useState("");
+  const [showSectionInput, setShowSectionInput] = useState(false);
 
   // Chantier state
   const [selectedChantierId, setSelectedChantierId] = useState<string | null>(data.chantier?.id ?? null);
@@ -134,7 +141,29 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
     setLignes(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
 
   const removeLigne = (i: number) => setLignes(prev => prev.filter((_, idx) => idx !== i));
-  const addLigne = () => setLignes(prev => [...prev, { description: "", quantite: 1, unite: "u", prix_unitaire: 0 }]);
+
+  const lastSection = lignes.length > 0 ? lignes[lignes.length - 1].section : undefined;
+  const addLigne = () => setLignes(prev => [...prev, { description: "", quantite: 1, unite: "u", prix_unitaire: 0, section: lastSection }]);
+
+  const addLigneToSection = (section: string) =>
+    setLignes(prev => [...prev, { description: "", quantite: 1, unite: "u", prix_unitaire: 0, section }]);
+
+  const renameSection = (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setLignes(prev => prev.map(l => l.section === oldName ? { ...l, section: trimmed } : l));
+    setEditingSection(null);
+  };
+
+  const addSection = () => {
+    const trimmed = newSectionName.trim();
+    if (!trimmed) return;
+    setLignes(prev => [...prev, { description: "", quantite: 1, unite: "u", prix_unitaire: 0, section: trimmed }]);
+    setNewSectionName("");
+    setShowSectionInput(false);
+  };
+
+  const hasSections = lignes.some(l => l.section);
 
   const totalHT = lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
 
@@ -227,6 +256,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
             prix_unitaire: l.prix_unitaire,
             tva: 20,
             ordre: i + 1,
+            section_nom: l.section?.trim() || null,
           }))
         );
       }
@@ -424,28 +454,99 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 pb-3 space-y-2">
-          {lignes.map((l, i) => (
-            <div key={i} className="flex gap-1.5 items-end">
-              <div className="flex-1">
-                <Label className="text-[10px]">Description</Label>
-                <Input value={l.description} onChange={e => updateLigne(i, "description", e.target.value)} className="h-7 text-[11px]" />
-              </div>
-              <div className="w-14">
-                <Label className="text-[10px]">Qté</Label>
-                <Input type="number" value={l.quantite} onChange={e => updateLigne(i, "quantite", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
-              </div>
-              <div className="w-14">
-                <Label className="text-[10px]">P.U. €</Label>
-                <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
-              </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeLigne(i)}>
-                <Trash2 className="w-3 h-3" />
+          {lignes.map((l, i) => {
+            const isNewSection = hasSections && l.section && (i === 0 || l.section !== lignes[i - 1].section);
+            const isLastOfSection = hasSections && l.section && (i === lignes.length - 1 || l.section !== lignes[i + 1]?.section);
+            return (
+              <Fragment key={i}>
+                {/* Section header */}
+                {isNewSection && (
+                  <div className="flex items-center gap-2 pt-1.5">
+                    <div className="flex-1 h-px bg-primary/20" />
+                    {editingSection === l.section ? (
+                      <Input
+                        value={editingSectionValue}
+                        onChange={e => setEditingSectionValue(e.target.value)}
+                        onBlur={() => renameSection(l.section!, editingSectionValue)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") renameSection(l.section!, editingSectionValue);
+                          if (e.key === "Escape") setEditingSection(null);
+                        }}
+                        className="h-6 w-32 text-[11px] text-center font-semibold px-2"
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        className="group flex items-center gap-1 text-[11px] font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                        onClick={() => { setEditingSection(l.section!); setEditingSectionValue(l.section!); }}
+                        title="Cliquer pour renommer"
+                      >
+                        <Layers className="w-2.5 h-2.5" />
+                        {l.section}
+                        <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity" />
+                      </button>
+                    )}
+                    <div className="flex-1 h-px bg-primary/20" />
+                  </div>
+                )}
+
+                {/* Line row */}
+                <div className={`flex gap-1.5 items-end ${hasSections && l.section ? "pl-2 border-l-2 border-primary/20" : ""}`}>
+                  <div className="flex-1">
+                    <Label className="text-[10px]">Description</Label>
+                    <Input value={l.description} onChange={e => updateLigne(i, "description", e.target.value)} className="h-7 text-[11px]" />
+                  </div>
+                  <div className="w-14">
+                    <Label className="text-[10px]">Qté</Label>
+                    <Input type="number" value={l.quantite} onChange={e => updateLigne(i, "quantite", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
+                  </div>
+                  <div className="w-14">
+                    <Label className="text-[10px]">P.U. €</Label>
+                    <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeLigne(i)}>
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+
+                {/* Add-line-to-section shortcut */}
+                {isLastOfSection && (
+                  <button
+                    className="ml-2 text-[10px] text-primary/60 hover:text-primary transition-colors flex items-center gap-0.5"
+                    onClick={() => addLigneToSection(l.section!)}
+                  >
+                    <Plus className="w-2.5 h-2.5" /> Ligne dans « {l.section} »
+                  </button>
+                )}
+              </Fragment>
+            );
+          })}
+
+          {/* Add line + Add section */}
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px]" onClick={addLigne}>
+              <Plus className="w-3 h-3 mr-1" /> Ajouter une ligne
+            </Button>
+            {!showSectionInput ? (
+              <Button variant="ghost" size="sm" className="h-7 text-[11px] text-primary/70 hover:text-primary" onClick={() => setShowSectionInput(true)}>
+                <Layers className="w-3 h-3 mr-1" /> Nouvelle section
               </Button>
-            </div>
-          ))}
-          <Button variant="outline" size="sm" className="w-full h-7 text-[11px]" onClick={addLigne}>
-            <Plus className="w-3 h-3 mr-1" /> Ajouter une ligne
-          </Button>
+            ) : (
+              <div className="flex gap-1 flex-1">
+                <Input
+                  value={newSectionName}
+                  onChange={e => setNewSectionName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addSection(); if (e.key === "Escape") { setShowSectionInput(false); setNewSectionName(""); } }}
+                  placeholder="Nom de la section"
+                  className="h-7 text-[11px] flex-1"
+                  autoFocus
+                />
+                <Button size="sm" className="h-7 px-2 text-[11px]" onClick={addSection} disabled={!newSectionName.trim()}>
+                  <Check className="w-3 h-3" />
+                </Button>
+              </div>
+            )}
+          </div>
           <div className="flex justify-between items-center pt-2 border-t text-xs font-semibold">
             <span>Total HT</span>
             <span>{totalHT.toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}</span>

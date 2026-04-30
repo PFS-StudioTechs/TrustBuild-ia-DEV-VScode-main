@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Trash2, Plus, Check, Loader2, AlertTriangle } from "lucide-react";
+import { FileText, Trash2, Plus, Check, Loader2, AlertTriangle, Layers } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ export interface AvenantData {
     quantite: number;
     unite: string;
     prix_unitaire: number;
+    section?: string;
   }>;
 }
 
@@ -85,6 +86,7 @@ export default function AvenantCreationForm({ data, onCreated }: Props) {
             prix_unitaire: l.prix_unitaire,
             tva: 20,
             ordre: i + 1,
+            section_nom: l.section?.trim() || null,
           }))
         );
       }
@@ -130,25 +132,42 @@ export default function AvenantCreationForm({ data, onCreated }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 pb-3 space-y-2">
-          {lignes.map((l, i) => (
-            <div key={i} className="flex gap-1.5 items-end">
-              <div className="flex-1">
-                <Label className="text-[10px]">Description</Label>
-                <Input value={l.description} onChange={e => updateLigne(i, "description", e.target.value)} className="h-7 text-[11px]" />
-              </div>
-              <div className="w-14">
-                <Label className="text-[10px]">Qté</Label>
-                <Input type="number" value={l.quantite} onChange={e => updateLigne(i, "quantite", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
-              </div>
-              <div className="w-14">
-                <Label className="text-[10px]">P.U. €</Label>
-                <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
-              </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeLigne(i)}>
-                <Trash2 className="w-3 h-3" />
-              </Button>
-            </div>
-          ))}
+          {(() => {
+            const hasSections = lignes.some(l => l.section);
+            return lignes.map((l, i) => {
+              const isNewSection = hasSections && l.section && (i === 0 || l.section !== lignes[i - 1].section);
+              return (
+                <Fragment key={i}>
+                  {isNewSection && (
+                    <div className="flex items-center gap-2 pt-1.5">
+                      <div className="flex-1 h-px bg-amber-500/30" />
+                      <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <Layers className="w-2.5 h-2.5" />{l.section}
+                      </span>
+                      <div className="flex-1 h-px bg-amber-500/30" />
+                    </div>
+                  )}
+                  <div className={`flex gap-1.5 items-end ${hasSections && l.section ? "pl-2 border-l-2 border-amber-500/30" : ""}`}>
+                    <div className="flex-1">
+                      <Label className="text-[10px]">Description</Label>
+                      <Input value={l.description} onChange={e => updateLigne(i, "description", e.target.value)} className="h-7 text-[11px]" />
+                    </div>
+                    <div className="w-14">
+                      <Label className="text-[10px]">Qté</Label>
+                      <Input type="number" value={l.quantite} onChange={e => updateLigne(i, "quantite", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
+                    </div>
+                    <div className="w-14">
+                      <Label className="text-[10px]">P.U. €</Label>
+                      <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeLigne(i)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </Fragment>
+              );
+            });
+          })()}
           <Button variant="outline" size="sm" className="w-full h-7 text-[11px]" onClick={addLigne}>
             <Plus className="w-3 h-3 mr-1" /> Ajouter une ligne
           </Button>
