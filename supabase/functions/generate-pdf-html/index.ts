@@ -14,6 +14,11 @@ const SECTOR_DEFAULTS: Record<string, { primary: string; secondary: string; acce
   peinture:       { primary: "#7c3aed", secondary: "#4c1d95", accent: "#f472b6", emoji: "🎨", label: "Peinture & Revêtements" },
   menuiserie:     { primary: "#92400e", secondary: "#451a03", accent: "#f59e0b", emoji: "🪵", label: "Menuiserie" },
   general:        { primary: "#2563eb", secondary: "#1e40af", accent: "#f59e0b", emoji: "🏗️", label: "BTP Général" },
+  jardinage:      { primary: "#16a34a", secondary: "#14532d", accent: "#86efac", emoji: "🌿", label: "Jardinier / Paysagiste" },
+  pisciniste:     { primary: "#0891b2", secondary: "#164e63", accent: "#67e8f9", emoji: "🏊", label: "Pisciniste" },
+  platrerie:      { primary: "#6b7280", secondary: "#374151", accent: "#d1d5db", emoji: "🪣", label: "Plâtrier" },
+  charpente:      { primary: "#b45309", secondary: "#7c2d12", accent: "#fb923c", emoji: "🏠", label: "Charpentier / Couvreur" },
+  maconnerie:     { primary: "#4b5563", secondary: "#1f2937", accent: "#9ca3af", emoji: "🧱", label: "Maçonnerie" },
 };
 
 // ─── HTML template builder ────────────────────────────────────────────────────
@@ -27,7 +32,7 @@ function buildHtml(params: {
   artisan: { nom: string; prenom: string; siret?: string | null; adresse?: string | null; telephone?: string | null; email?: string | null; logo_url?: string | null };
   client: { nom: string; adresse?: string | null; email?: string | null; telephone?: string | null };
   chantier?: { nom?: string | null; adresse?: string | null };
-  lignes: Array<{ description: string; quantite: number; unite: string; prix_unitaire: number; tva_taux?: number }>;
+  lignes: Array<{ description: string; quantite: number; unite: string; prix_unitaire: number; tva_taux?: number; section?: string | null }>;
   montant_ht: number;
   tva: number;
   statut: string;
@@ -77,15 +82,28 @@ function buildHtml(params: {
     impayee: "Impayée", a_modifier: "À modifier",
   };
 
-  const lignesHtml = (params.lignes ?? []).map((l, i) => {
+  const hasSections = (params.lignes ?? []).some(l => l.section);
+  let dataRowIndex = 0;
+  const lignesHtml = (params.lignes ?? []).flatMap((l, i) => {
+    const rows: string[] = [];
+    const isNewSection = hasSections && l.section && (i === 0 || l.section !== params.lignes[i - 1].section);
+    if (isNewSection) {
+      rows.push(`<tr>
+        <td colspan="4" style="padding:6px 10px 4px;background:${cp}18;border-top:2px solid ${cp}40;">
+          <span style="font-size:8pt;font-weight:700;color:${cp};letter-spacing:0.04em;text-transform:uppercase;">${l.section}</span>
+        </td>
+      </tr>`);
+    }
     const total = (l.quantite ?? 0) * (l.prix_unitaire ?? 0);
-    const bg = i % 2 === 0 ? "#ffffff" : "#f9f9f9";
-    return `<tr style="background:${bg};">
-      <td style="padding:8px 10px;">${l.description || "—"}</td>
+    const bg = dataRowIndex % 2 === 0 ? "#ffffff" : "#f9f9f9";
+    dataRowIndex++;
+    rows.push(`<tr style="background:${bg};">
+      <td style="padding:8px 10px;${hasSections && l.section ? "padding-left:18px;" : ""}">${l.description || "—"}</td>
       <td style="padding:8px 10px;text-align:right;white-space:nowrap;">${l.quantite ?? 0} ${l.unite || "u"}</td>
       <td style="padding:8px 10px;text-align:right;white-space:nowrap;">${fmt(l.prix_unitaire ?? 0)}</td>
       <td style="padding:8px 10px;text-align:right;font-weight:600;white-space:nowrap;">${fmt(total)}</td>
-    </tr>`;
+    </tr>`);
+    return rows;
   }).join("");
 
   const defaultMentions = [
@@ -329,6 +347,7 @@ serve(async (req) => {
         unite: l.unite ?? "u",
         prix_unitaire: Number(l.prix_unitaire) || 0,
         tva_taux: Number(l.tva) || 20,
+        section: l.section_nom ?? null,
       }));
 
       html = buildHtml({
@@ -422,6 +441,7 @@ serve(async (req) => {
             unite: l.unite ?? "u",
             prix_unitaire: Number(l.prix_unitaire) || 0,
             tva_taux: Number(l.tva) || 20,
+            section: l.section_nom ?? null,
           }))
         : avenant.description
           ? [{ description: avenant.description, quantite: 1, unite: "forfait", prix_unitaire: Number(avenant.montant_ht) }]

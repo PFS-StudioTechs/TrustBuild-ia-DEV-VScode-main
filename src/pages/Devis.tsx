@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { generateDocumentNumber, buildVersionedDevisNumero, NomenclatureSettings } from "@/lib/generateDocumentNumber";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,7 +14,7 @@ import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
-  GitBranch, RotateCcw, ClipboardList,
+  GitBranch, RotateCcw, ClipboardList, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,6 +38,7 @@ interface LigneDevis {
   prix_unitaire: number;
   tva: number;
   ordre: number;
+  section_nom?: string | null;
 }
 
 interface DevisRow {
@@ -860,12 +861,29 @@ function FactureCard({
                   <>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lignes</p>
                     <div className="space-y-1">
-                      {lignes.map((l, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="truncate max-w-[60%]">{l.designation || <span className="italic text-muted-foreground">—</span>}</span>
-                          <span className="font-mono text-muted-foreground">{l.quantite} {l.unite} × {l.prix_unitaire.toFixed(2)} = {(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
-                        </div>
-                      ))}
+                      {(() => {
+                        const hasSections = lignes.some(l => l.section_nom);
+                        return lignes.map((l, i) => {
+                          const isNewSection = hasSections && l.section_nom && (i === 0 || l.section_nom !== lignes[i - 1].section_nom);
+                          return (
+                            <Fragment key={i}>
+                              {isNewSection && (
+                                <div className="flex items-center gap-2 pt-1">
+                                  <div className="flex-1 h-px bg-primary/20" />
+                                  <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Layers className="w-2.5 h-2.5" />{l.section_nom}
+                                  </span>
+                                  <div className="flex-1 h-px bg-primary/20" />
+                                </div>
+                              )}
+                              <div className={`flex items-center justify-between text-xs ${hasSections && l.section_nom ? "pl-2" : ""}`}>
+                                <span className="truncate max-w-[60%]">{l.designation || <span className="italic text-muted-foreground">—</span>}</span>
+                                <span className="font-mono text-muted-foreground">{l.quantite} {l.unite} × {l.prix_unitaire.toFixed(2)} = {(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
+                              </div>
+                            </Fragment>
+                          );
+                        });
+                      })()}
                     </div>
                   </>
                 )}
@@ -1722,12 +1740,29 @@ function DevisCard({
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lignes</p>
                 <div className="space-y-1">
-                  {devis.lignes.map((l, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span className="truncate max-w-[60%]">{l.designation || <span className="italic text-muted-foreground">—</span>}</span>
-                      <span className="font-mono text-muted-foreground">{l.quantite} {l.unite} × {l.prix_unitaire.toFixed(2)} = {(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const hasSections = devis.lignes.some(l => l.section_nom);
+                    return devis.lignes.map((l, i) => {
+                      const isNewSection = hasSections && l.section_nom && (i === 0 || l.section_nom !== devis.lignes[i - 1].section_nom);
+                      return (
+                        <Fragment key={i}>
+                          {isNewSection && (
+                            <div className="flex items-center gap-2 pt-1">
+                              <div className="flex-1 h-px bg-primary/20" />
+                              <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Layers className="w-2.5 h-2.5" />{l.section_nom}
+                              </span>
+                              <div className="flex-1 h-px bg-primary/20" />
+                            </div>
+                          )}
+                          <div className={`flex items-center justify-between text-xs ${hasSections && l.section_nom ? "pl-2" : ""}`}>
+                            <span className="truncate max-w-[60%]">{l.designation || <span className="italic text-muted-foreground">—</span>}</span>
+                            <span className="font-mono text-muted-foreground">{l.quantite} {l.unite} × {l.prix_unitaire.toFixed(2)} = {(l.quantite * l.prix_unitaire).toFixed(2)} €</span>
+                          </div>
+                        </Fragment>
+                      );
+                    });
+                  })()}
                   <div className="flex justify-between text-xs font-semibold border-t pt-1">
                     <span>Total HT</span>
                     <span className="font-mono">{devis.montant_ht.toFixed(2)} €</span>
@@ -2212,7 +2247,7 @@ export default function DevisPage() {
       (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),
       supabase.from("factures").select("id,devis_id,numero,montant_ht,tva,statut,date_echeance,client_id,solde_restant").eq("artisan_id", user.id),
-      supabase.from("lignes_devis").select("id,devis_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
+      supabase.from("lignes_devis").select("id,devis_id,designation,quantite,unite,prix_unitaire,tva,ordre,section_nom").eq("artisan_id", user.id).order("ordre"),
       supabase.from("lignes_avenant").select("id,avenant_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       (supabase as any).from("lignes_avoir").select("id,avoir_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       supabase.from("artisan_settings").select("devis_prefix,facture_prefix,avenant_prefix,acompte_prefix,avoir_prefix,ts_prefix,annee_format,numero_digits").eq("user_id", user.id).maybeSingle(),
