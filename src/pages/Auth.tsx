@@ -5,10 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, ArrowLeft, Eye, EyeOff, Mail } from "lucide-react";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { toast } from "sonner";
-import MfaChallenge from "@/components/security/MfaChallenge";
 
 export default function Auth() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -19,7 +18,7 @@ export default function Auth() {
   const [prenom, setPrenom] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [awaitingEmail, setAwaitingEmail] = useState(false);
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -28,28 +27,21 @@ export default function Auth() {
     setLoading(true);
     try {
       await signIn(email, password);
-      const { data: { totp } } = await supabase.auth.mfa.listFactors();
-      const verifiedFactors = totp?.filter((f) => f.status === "verified") || [];
-      if (verifiedFactors.length > 0) {
-        setMfaFactorId(verifiedFactors[0].id);
-      } else {
-        navigate("/dashboard");
-      }
+      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+        },
+      });
+      if (error) throw error;
+      setAwaitingEmail(true);
     } catch (err: any) {
       toast.error(err.message || "Erreur de connexion");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleMfaSuccess = () => {
-    setMfaFactorId(null);
-    navigate("/dashboard");
-  };
-
-  const handleMfaCancel = async () => {
-    await supabase.auth.signOut();
-    setMfaFactorId(null);
   };
 
   const handleRegister = async () => {
@@ -66,8 +58,34 @@ export default function Auth() {
     }
   };
 
-  if (mfaFactorId) {
-    return <MfaChallenge factorId={mfaFactorId} onSuccess={handleMfaSuccess} onCancel={handleMfaCancel} />;
+  if (awaitingEmail) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
+        <div className="w-full max-w-md forge-card animate-fade-up text-center space-y-6">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <Mail className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+          <div>
+            <h2 className="text-h2 font-display mb-2">Vérifiez votre email</h2>
+            <p className="text-muted-foreground text-small">
+              Un lien de connexion a été envoyé à <span className="font-semibold text-foreground">{email}</span>.
+              Cliquez sur le lien pour accéder à votre espace.
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Vous n'avez pas reçu l'email ?{" "}
+            <button
+              onClick={() => setAwaitingEmail(false)}
+              className="text-primary font-semibold hover:underline"
+            >
+              Réessayer
+            </button>
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (mode === "register") {

@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { User, Save, Shield, Users, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash, Calendar, ListOrdered } from "lucide-react";
 import { previewDocNumber } from "@/lib/generateDocumentNumber";
 import { toast } from "sonner";
-import MfaSetup from "@/components/security/MfaSetup";
 import IntegrationsPanel from "@/components/integrations/IntegrationsPanel";
 import TemplatePanel from "@/components/settings/TemplatePanel";
 
@@ -401,9 +400,6 @@ export default function Parametres() {
           </Button>
         </div>
       </div>
-
-      {/* 2FA Security */}
-      <MfaSetup />
 
       {/* Admin Panel */}
       {isAdmin && (
