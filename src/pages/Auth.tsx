@@ -27,16 +27,7 @@ export default function Auth() {
     setLoading(true);
     try {
       await signIn(email, password);
-      await supabase.auth.signOut();
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
-      if (error) throw error;
-      setAwaitingEmail(true);
+      navigate("/dashboard");
     } catch (err: any) {
       toast.error(err.message || "Erreur de connexion");
     } finally {
