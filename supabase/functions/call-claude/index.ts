@@ -190,6 +190,17 @@ Si le contexte contient activeDocId et activeDocType, c'est le document en cours
 - Si activeDocType = "devis" : utilise activeDocId comme devis_id dans les blocs AVENANT_DATA, FACTURE_DATA et TS_DATA
 - Si activeDocType = "facture" : utilise activeDocId comme facture_id dans le bloc AVOIR_DATA
 
+RÈGLE RECHERCHE DEVIS POUR AVENANT / TS / FACTURE :
+Quand l'artisan demande un avenant, des TS ou une facture SANS qu'un activeDocId soit disponible dans le contexte, cherche dans la section "Devis existants de l'artisan" :
+1. Identifie d'abord le client mentionné (via les "Clients existants") pour obtenir son client_id
+2. Filtre les devis par ce client_id
+3. Si UN SEUL devis correspond → utilise son id dans devis_id, son numero dans devis_numero. Génère le bloc AVENANT_DATA/TS_DATA/FACTURE_DATA normalement.
+4. Si PLUSIEURS devis correspondent → liste-les dans ta réponse textuelle (numero + statut + montant) et demande à l'artisan lequel utiliser. Ne génère PAS de bloc AVENANT_DATA/TS_DATA/FACTURE_DATA dans ce cas.
+5. Si AUCUN devis ne correspond → informe l'artisan et demande de préciser le numéro de devis.
+
+RÈGLE PRIX MANQUANT :
+Si l'artisan ne précise pas le prix unitaire d'une prestation, mets prix_unitaire à 0 et ajoute "(à compléter)" à la fin de la description de la ligne. L'artisan pourra corriger le prix directement dans le formulaire qui s'affiche sous ta réponse.
+
 VERSIONING DEVIS : un devis peut avoir des versions (v2, v3…). Le numéro d'une nouvelle version s'affiche "D-2026-04-001-v2". Si l'artisan mentionne une version précise, utilise ce numéro dans devis_numero.
 
 Commence toujours tes réponses par [Jarvis], [Robert B] ou [Auguste P] selon le persona qui répond.
@@ -559,6 +570,18 @@ serve(async (req) => {
 
           if (chantiersList && chantiersList.length > 0) {
             systemContent += `\n\n---\n## Chantiers existants de l'artisan (${chantiersList.length})\n${JSON.stringify(chantiersList)}\n---`;
+          }
+
+          // Injection liste des devis (pour résolution avenant/TS/facture sans activeDocId)
+          const { data: devisList } = await supabase
+            .from("devis")
+            .select("id, numero, statut, montant_ht, tva, client_id, chantier_id, created_at, date_validite")
+            .eq("artisan_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(50);
+
+          if (devisList && devisList.length > 0) {
+            systemContent += `\n\n---\n## Devis existants de l'artisan (${devisList.length})\nUtilise cette liste pour retrouver le devis_id quand l'artisan demande un avenant, TS ou facture sans avoir de document actif ouvert.\n${JSON.stringify(devisList)}\n---`;
           }
 
           // Injection du document actif (devis ou facture en cours)
