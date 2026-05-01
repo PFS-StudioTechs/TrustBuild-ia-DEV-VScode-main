@@ -17,6 +17,7 @@ export interface FactureData {
     quantite: number;
     unite: string;
     prix_unitaire: number;
+    section?: string;
   }>;
 }
 
@@ -138,7 +139,7 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
               </div>
               <div className="w-14">
                 <Label className="text-[10px]">P.U. €</Label>
-                <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
+                <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} onFocus={e => { if (Number(e.target.value) === 0) e.target.value = ""; }} className="h-7 text-[11px]" />
               </div>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeLigne(i)}>
                 <Trash2 className="w-3 h-3" />

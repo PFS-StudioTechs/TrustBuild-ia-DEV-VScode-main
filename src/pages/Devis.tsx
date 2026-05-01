@@ -1014,6 +1014,7 @@ function FactureDialog({
             prix_unitaire: l.prix_unitaire,
             tva: l.tva,
             ordre: l.ordre ?? i + 1,
+            section_nom: l.section_nom ?? null,
           }))
         );
       }

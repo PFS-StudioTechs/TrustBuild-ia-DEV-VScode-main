@@ -396,6 +396,7 @@ serve(async (req) => {
         unite: l.unite ?? "u",
         prix_unitaire: Number(l.prix_unitaire) || 0,
         tva_taux: Number(l.tva) || 20,
+        section: l.section_nom ?? null,
       }));
 
       html = buildHtml({
@@ -417,15 +418,20 @@ serve(async (req) => {
       if (!avenant) return new Response(JSON.stringify({ error: "Avenant introuvable" }), { status: 404, headers: cors });
 
       const { data: parentDevis } = avenant.devis_id
-        ? await db.from("devis").select("chantier_id, numero").eq("id", avenant.devis_id).single()
+        ? await db.from("devis").select("chantier_id, client_id, numero").eq("id", avenant.devis_id).single()
         : { data: null };
 
       let chantier = null, client = null;
+      let resolvedClientId: string | null = null;
       if (parentDevis) {
-        const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (parentDevis as any).chantier_id).maybeSingle();
-        chantier = ch;
-        if (ch?.client_id) {
-          const { data: cl } = await db.from("clients").select("nom, adresse, email, telephone").eq("id", ch.client_id).single();
+        if ((parentDevis as any).chantier_id) {
+          const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (parentDevis as any).chantier_id).maybeSingle();
+          chantier = ch;
+          if (ch?.client_id) resolvedClientId = ch.client_id;
+        }
+        if (!resolvedClientId) resolvedClientId = (parentDevis as any).client_id ?? null;
+        if (resolvedClientId) {
+          const { data: cl } = await db.from("clients").select("nom, adresse, email, telephone").eq("id", resolvedClientId).single();
           client = cl;
         }
       }
@@ -480,6 +486,18 @@ serve(async (req) => {
               const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier").eq("id", (dv as any).chantier_id).maybeSingle();
               chantier = ch;
             }
+          }
+        }
+      }
+      // Fallback via devis_id direct (avoirs créés sans facture liée)
+      if (!resolvedClientId && avoir.devis_id) {
+        const { data: dv } = await db.from("devis").select("client_id, chantier_id").eq("id", avoir.devis_id).maybeSingle();
+        if (dv) {
+          resolvedClientId = (dv as any)?.client_id ?? null;
+          if ((dv as any)?.chantier_id) {
+            const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (dv as any).chantier_id).maybeSingle();
+            if (!chantier) chantier = ch;
+            if (ch?.client_id && !resolvedClientId) resolvedClientId = ch.client_id;
           }
         }
       }
