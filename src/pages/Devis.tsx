@@ -1510,6 +1510,14 @@ function DevisCard({
     onRefresh();
   };
 
+  const handleDeleteDevis = async () => {
+    if (!window.confirm(`Supprimer définitivement le devis ${devis.numero} ?`)) return;
+    await supabase.from("lignes_devis").delete().eq("devis_id", devis.id);
+    await supabase.from("devis").delete().eq("id", devis.id);
+    toast.success(`Devis ${devis.numero} supprimé`);
+    onRefresh();
+  };
+
   const handleEncaisserAcompte = async (acompteId: string) => {
     await supabase.from("acomptes").update({ statut: "encaisse", date_encaissement: new Date().toISOString() }).eq("id", acompteId);
     toast.success("Acompte marqué encaissé");
@@ -1730,6 +1738,11 @@ function DevisCard({
                   <Button size="sm" variant="outline" onClick={handleCreateNouvelleVersion} disabled={creatingVersion} className="text-violet-600 border-violet-300">
                     {creatingVersion ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1" />}
                     Nouvelle version
+                  </Button>
+                )}
+                {devis.statut === "brouillon" && (
+                  <Button size="sm" variant="outline" onClick={handleDeleteDevis} className="text-destructive border-destructive/30 hover:bg-destructive/10">
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Supprimer
                   </Button>
                 )}
               </div>
