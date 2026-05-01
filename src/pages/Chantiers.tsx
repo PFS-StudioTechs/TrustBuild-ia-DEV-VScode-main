@@ -669,7 +669,7 @@ export default function Chantiers() {
                   <p className="font-medium">{ch.nom}</p>
                   {ch.adresse_chantier && <p className="text-small text-muted-foreground">{ch.adresse_chantier}</p>}
                   {ch.date_debut && <p className="text-small text-muted-foreground">Début : {new Date(ch.date_debut).toLocaleDateString("fr-FR")}</p>}
-                  <p className="text-small text-muted-foreground">Client : {clients.find(c => c.id === ch.client_id)?.nom || "—"}</p>
+                  <p className="text-small text-muted-foreground">Client : {(() => { const cl = clients.find(c => c.id === ch.client_id); return cl ? [cl.prenom, cl.nom].filter(Boolean).join(" ") : "—"; })()}</p>
                 </div>
                 <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <Badge variant="secondary" className={statutStyles[ch.statut]}>{statutLabels[ch.statut]}</Badge>
@@ -719,7 +719,7 @@ export default function Chantiers() {
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
-                        <AlertDialogDescription>Le client "{cl.nom}" sera définitivement supprimé.</AlertDialogDescription>
+                        <AlertDialogDescription>Le client "{[cl.prenom, cl.nom].filter(Boolean).join(" ")}" sera définitivement supprimé.</AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Annuler</AlertDialogCancel>
@@ -768,7 +768,7 @@ export default function Chantiers() {
                 {!chantierUseNewClient ? (
                   <Select value={chForm.client_id} onValueChange={(v) => setChForm(p => ({ ...p, client_id: v }))}>
                     <SelectTrigger><SelectValue placeholder="Sélectionner un client" /></SelectTrigger>
-                    <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
+                    <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{[c.prenom, c.nom].filter(Boolean).join(" ")}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
                   <div className="space-y-3 p-3 bg-muted/40 rounded-lg border border-border/50">
@@ -814,7 +814,7 @@ export default function Chantiers() {
                 <Label>Client</Label>
                 <Select value={chForm.client_id} onValueChange={(v) => setChForm(p => ({ ...p, client_id: v }))}>
                   <SelectTrigger><SelectValue placeholder="Sélectionner un client" /></SelectTrigger>
-                  <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>)}</SelectContent>
+                  <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{[c.prenom, c.nom].filter(Boolean).join(" ")}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -930,7 +930,7 @@ export default function Chantiers() {
                       </Button>
                     </div>
                     {[
-                      { label: "Client", value: clients.find(c => c.id === detailChantier.client_id)?.nom || "—" },
+                      { label: "Client", value: (() => { const cl = clients.find(c => c.id === detailChantier.client_id); return cl ? [cl.prenom, cl.nom].filter(Boolean).join(" ") : "—"; })() },
                       { label: "Adresse", value: detailForm.adresse_chantier || "—" },
                       { label: "Statut", value: statutLabels[detailChantier.statut] },
                       { label: "Début", value: detailChantier.date_debut ? new Date(detailChantier.date_debut).toLocaleDateString("fr-FR") : "—" },

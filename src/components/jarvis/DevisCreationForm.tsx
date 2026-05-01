@@ -302,7 +302,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
                       : "bg-background border-border hover:border-primary/50"
                   }`}
                 >
-                  <span className="font-medium">{match.nom}</span>
+                  <span className="font-medium">{[match.prenom, match.nom].filter(Boolean).join(" ")}</span>
                   {match.email && <span className={`text-[10px] ${selectedClientId === match.id ? "opacity-80" : "text-muted-foreground"}`}>{match.email}</span>}
                 </button>
               ))}
@@ -310,12 +310,12 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
               {matches.length === 0 && data.client.id && (
                 <button
                   type="button"
-                  onClick={() => selectedClientId ? handleSelectMatch(null) : handleSelectMatch({ id: data.client.id!, nom: data.client.nom, email: data.client.email, type: data.client.type })}
+                  onClick={() => selectedClientId ? handleSelectMatch(null) : handleSelectMatch({ id: data.client.id!, nom: data.client.nom, prenom: data.client.prenom, email: data.client.email, type: data.client.type })}
                   className={`flex flex-col items-start px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
                     selectedClientId ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:border-primary/50"
                   }`}
                 >
-                  <span className="font-medium">{data.client.nom}</span>
+                  <span className="font-medium">{[data.client.prenom, data.client.nom].filter(Boolean).join(" ")}</span>
                   {data.client.email && <span className="text-[10px] opacity-70">{data.client.email}</span>}
                 </button>
               )}
@@ -349,28 +349,39 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
         <CardContent className="px-3 pb-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
+              <Label className="text-[10px]">Prénom</Label>
+              <Input
+                value={client.prenom ?? ""}
+                onChange={e => setClient(c => ({ ...c, prenom: e.target.value }))}
+                className="h-8 text-xs"
+                disabled={!!selectedClientId}
+                placeholder="Jean"
+              />
+            </div>
+            <div>
               <Label className="text-[10px]">Nom *</Label>
               <Input
                 value={client.nom}
                 onChange={e => setClient(c => ({ ...c, nom: e.target.value }))}
                 className="h-8 text-xs"
                 disabled={!!selectedClientId}
+                placeholder="Dupont"
               />
             </div>
-            <div>
-              <Label className="text-[10px]">Type</Label>
-              <Select
-                value={client.type}
-                onValueChange={v => setClient(c => ({ ...c, type: v as "particulier" | "pro" }))}
-                disabled={!!selectedClientId}
-              >
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="particulier">Particulier</SelectItem>
-                  <SelectItem value="pro">Professionnel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          </div>
+          <div>
+            <Label className="text-[10px]">Type</Label>
+            <Select
+              value={client.type}
+              onValueChange={v => setClient(c => ({ ...c, type: v as "particulier" | "pro" }))}
+              disabled={!!selectedClientId}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="particulier">Particulier</SelectItem>
+                <SelectItem value="pro">Professionnel</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="text-[10px]">Adresse</Label>
@@ -505,7 +516,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
                   </div>
                   <div className="w-14">
                     <Label className="text-[10px]">P.U. €</Label>
-                    <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} className="h-7 text-[11px]" />
+                    <Input type="number" value={l.prix_unitaire} onChange={e => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)} onFocus={e => { if (Number(e.target.value) === 0) e.target.value = ""; }} className="h-7 text-[11px]" />
                   </div>
                   <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive" onClick={() => removeLigne(i)}>
                     <Trash2 className="w-3 h-3" />
