@@ -30,7 +30,13 @@ IMPORTANT : N'utilise JAMAIS les informations (client, lignes) des échanges pr�
 N'invente PAS d'email ou de téléphone — laisse ces champs vides ("") s'ils ne sont pas explicitement fournis.
 
 RÈGLE CLIENT EXISTANT :
-Si une liste de clients existants est fournie dans le contexte (section "Clients existants de l'artisan"), cherche les correspondances avec le client mentionné dans la demande (par nom, prénom, initiales, similarité). Inclus dans DEVIS_DATA un tableau "client_matches" avec les clients correspondants (max 3). Si la correspondance est certaine (nom exact), mets aussi l'id du client dans "client.id".
+Si une liste de clients existants est fournie dans le contexte (section "Clients existants de l'artisan"), cherche les correspondances avec le client mentionné dans la demande.
+IMPORTANT : la correspondance doit porter sur NOM + PRÉNOM ensemble, jamais sur le nom seul.
+- Un client existant n'est considéré comme correspondant QUE si son nom ET son prénom correspondent tous les deux au client demandé.
+- Si seul le nom correspond (ex: deux "PIERRE" différents), NE mets pas de client_matches — génère un nouveau client.
+- Si la correspondance est certaine (nom + prénom identiques), mets l'id dans "client.id" et inclus le client dans client_matches.
+- Si plusieurs clients ont nom + prénom identiques (homonymes), liste-les tous dans client_matches et laisse client.id vide — le formulaire proposera à l'artisan de choisir.
+- Convention de découpage : pour un nom complet comme "PIERRE Boussico", le premier mot est le prénom, le dernier mot est le nom de famille. Exemple : "PIERRE Boussico" → prenom="PIERRE", nom="Boussico".
 
 RÈGLE CHANTIER EXISTANT :
 Si une liste de chantiers existants est fournie dans le contexte (section "Chantiers existants de l'artisan"), cherche les correspondances avec le chantier mentionné dans la demande (par nom, lieu, type de travaux, client associé). Inclus dans DEVIS_DATA un tableau "chantier_matches" avec les chantiers correspondants (max 3, en priorité ceux du client identifié). Si la correspondance est certaine, mets l'id dans "chantier.id". Si aucun chantier existant ne correspond mais qu'un chantier est mentionné dans la demande, laisse "chantier.id" vide et remplis "chantier.nom". Si aucun chantier n'est mentionné dans la demande, mets "chantier" à null et laisse "chantier_matches" vide.
@@ -45,7 +51,7 @@ Quand l'artisan organise sa demande par sections (mots-clés : "section", "rubri
 - Exemples détectés : "section démolition :", "rubrique peinture :", "partie électricité", "sélection fondations"
 
 À la fin de ta réponse, ajoute OBLIGATOIREMENT un bloc JSON structuré entre les balises <!--DEVIS_DATA et DEVIS_DATA--> contenant :
-- Les informations du client (nom, adresse, email, téléphone, type particulier/pro, id si client existant identifié)
+- Les informations du client (nom de famille, prénom, adresse, email, téléphone, type particulier/pro, id si client existant identifié)
 - Le chantier mentionné dans la demande (id si existant trouvé, sinon nom seulement, sinon null)
 - Les lignes de devis (description, quantité, unité, prix unitaire, section si applicable)
 - Les correspondances clients trouvées (client_matches)
@@ -56,7 +62,8 @@ Exemple de format SANS sections :
 {
   "client": {
     "id": "",
-    "nom": "M. Dupont",
+    "nom": "Dupont",
+    "prenom": "Jean",
     "adresse": "12 rue des Lilas, 75001 Paris",
     "email": "",
     "telephone": "",
@@ -80,7 +87,8 @@ Exemple de format AVEC sections (l'artisan a dit "section démolition", "section
 {
   "client": {
     "id": "",
-    "nom": "M. Dupont",
+    "nom": "Dupont",
+    "prenom": "Jean",
     "adresse": "",
     "email": "",
     "telephone": "",
@@ -199,7 +207,7 @@ Quand l'artisan demande un avenant, des TS ou une facture SANS qu'un activeDocId
 5. Si AUCUN devis ne correspond → informe l'artisan et demande de préciser le numéro de devis.
 
 RÈGLE PRIX MANQUANT :
-Si l'artisan ne précise pas le prix unitaire d'une prestation, mets prix_unitaire à 0 et ajoute "(à compléter)" à la fin de la description de la ligne. L'artisan pourra corriger le prix directement dans le formulaire qui s'affiche sous ta réponse.
+Si l'artisan ne précise pas le prix unitaire d'une prestation, utilise ta connaissance générale du secteur BTP français (tarifs main-d'œuvre, matériaux, prestations courantes) pour estimer un prix réaliste. Indique alors dans ta réponse textuelle que les prix sont estimatifs et peuvent être ajustés dans le formulaire. Ne mets 0 que si tu n'as vraiment aucune base pour estimer (matériau ou prestation totalement inconnu).
 
 VERSIONING DEVIS : un devis peut avoir des versions (v2, v3…). Le numéro d'une nouvelle version s'affiche "D-2026-04-001-v2". Si l'artisan mentionne une version précise, utilise ce numéro dans devis_numero.
 
@@ -553,7 +561,7 @@ serve(async (req) => {
         if (user && persona === "jarvis") {
           const { data: clientsList } = await supabase
             .from("clients")
-            .select("id, nom, email, telephone, type")
+            .select("id, nom, prenom, email, telephone, type")
             .eq("artisan_id", user.id)
             .order("nom");
 

@@ -15,6 +15,7 @@ export interface DevisData {
   client: {
     id?: string;
     nom: string;
+    prenom?: string;
     adresse: string;
     email: string;
     telephone: string;
@@ -37,6 +38,7 @@ export interface DevisData {
   client_matches?: Array<{
     id: string;
     nom: string;
+    prenom?: string;
     email: string;
     type: string;
   }>;
@@ -95,7 +97,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
   const handleSelectMatch = (match: Match | null) => {
     if (match) {
       setSelectedClientId(match.id);
-      setClient(c => ({ ...c, nom: match.nom, email: match.email ?? "", type: (match.type as "particulier" | "pro") ?? "particulier" }));
+      setClient(c => ({ ...c, nom: match.nom, prenom: match.prenom ?? "", email: match.email ?? "", type: (match.type as "particulier" | "pro") ?? "particulier" }));
     } else {
       setSelectedClientId(null);
       setClient({ ...data.client, id: undefined });
@@ -184,15 +186,16 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
           if (existing) clientId = existing.id;
         }
         if (!clientId && client.nom.trim()) {
-          const { data: existing } = await supabase
-            .from("clients").select("id")
-            .eq("artisan_id", user.id).eq("nom", client.nom.trim()).maybeSingle();
+          let query = supabase.from("clients").select("id").eq("artisan_id", user.id).eq("nom", client.nom.trim());
+          if (client.prenom?.trim()) query = query.eq("prenom", client.prenom.trim());
+          const { data: existing } = await query.maybeSingle();
           if (existing) clientId = existing.id;
         }
         if (!clientId) {
           const { data: newClient, error: clErr } = await supabase.from("clients").insert({
             artisan_id: user.id,
             nom: client.nom.trim(),
+            prenom: client.prenom?.trim() || null,
             adresse: client.adresse || null,
             email: client.email || null,
             telephone: client.telephone || null,
