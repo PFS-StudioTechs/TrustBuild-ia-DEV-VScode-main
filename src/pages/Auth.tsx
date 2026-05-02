@@ -39,9 +39,9 @@ export default function Auth() {
     setLoading(true);
     try {
       await signUp(email, password, { nom, prenom });
-      toast.success("Compte créé ! Vérifiez votre email pour confirmer et compléter votre profil.");
       setMode("login");
       setStep(1);
+      setAwaitingEmail(true);
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de l'inscription");
     } finally {
@@ -72,6 +72,15 @@ export default function Auth() {
               className="text-primary font-semibold hover:underline"
             >
               Réessayer
+            </button>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Déjà un compte ?{" "}
+            <button
+              onClick={() => setAwaitingEmail(false)}
+              className="text-primary font-semibold hover:underline"
+            >
+              Se connecter
             </button>
           </p>
         </div>

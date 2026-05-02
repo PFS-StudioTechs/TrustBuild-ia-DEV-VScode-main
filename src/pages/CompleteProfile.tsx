@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, AlertCircle, Loader2, ArrowRight, Building2, ShieldCheck } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, ArrowRight, Building2, ShieldCheck, LogOut } from "lucide-react";
 import KbisUploadSection from "@/components/kbis/KbisUploadSection";
 import logoImg from "@/assets/Logo_TrustBuild.png";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ interface SiretData {
 type SiretStatus = "idle" | "loading" | "valid" | "inactive" | "error";
 
 export default function CompleteProfile() {
-  const { user, profile, profileLoading, refreshProfile } = useAuth();
+  const { user, profile, profileLoading, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [siretInput, setSiretInput] = useState("");
@@ -327,6 +327,16 @@ export default function CompleteProfile() {
           Données récupérées depuis la base officielle{" "}
           <span className="font-medium">INSEE Sirene</span>
         </p>
+
+        <div className="text-center pt-2 border-t border-muted">
+          <button
+            onClick={async () => { await signOut(); navigate("/auth", { replace: true }); }}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Annuler l'inscription et se connecter avec un autre compte
+          </button>
+        </div>
       </div>
     </div>
   );
