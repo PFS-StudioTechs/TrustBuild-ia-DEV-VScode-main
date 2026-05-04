@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, FileText, AlertTriangle, HardHat, Plus, Bot, MessageSquare, Users, Truck, BookUser, ChevronDown } from "lucide-react";
+import { TrendingUp, FileText, AlertTriangle, HardHat, Plus, Bot, MessageSquare, Users, Truck, BookUser, ChevronDown, ArrowRight } from "lucide-react";
 
 interface KPIs {
   caMois: number;
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [devisBrouillon, setDevisBrouillon] = useState<{ id: string; numero: string; montant_ht: number; chantier_nom?: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [nouveauOpen, setNouveauOpen] = useState(false);
+  const [jarvisMessage, setJarvisMessage] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -49,7 +50,7 @@ export default function Dashboard() {
       const [profileRes, chantiersRes, devisRes, facturesRes] = await Promise.all([
         supabase.from("profiles").select("nom, prenom").eq("user_id", user.id).single(),
         supabase.from("chantiers").select("id, nom, statut").eq("artisan_id", user.id),
-        supabase.from("devis").select("id, statut, montant_ht, numero, chantier_id").eq("artisan_id", user.id),
+        supabase.from("devis").select("id, statut, montant_ht, numero, chantier_id, date_validite").eq("artisan_id", user.id),
         supabase.from("factures").select("id, statut, montant_ht, solde_restant").eq("artisan_id", user.id),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
@@ -69,6 +70,26 @@ export default function Dashboard() {
         montant_ht: Number(d.montant_ht),
         chantier_nom: chantiersRes.data?.find(c => c.id === d.chantier_id)?.nom,
       })));
+
+      // Jarvis briefing
+      const prenom = profileRes.data?.prenom ?? "";
+      const now = new Date();
+      const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const devisExpirant = (devisRes.data ?? []).filter(d =>
+        d.statut === "envoye" && d.date_validite &&
+        new Date(d.date_validite) >= now && new Date(d.date_validite) <= in7d
+      ).length;
+      const nbImpayes = (facturesRes.data ?? []).filter(f => f.statut === "impayee").length;
+
+      const parts: string[] = [`Bonjour ${prenom}.`];
+      if (devisExpirant > 0) parts.push(`Tu as ${devisExpirant} devis qui expire${devisExpirant > 1 ? "nt" : ""} cette semaine.`);
+      if (nbImpayes > 0) parts.push(`${nbImpayes} facture${nbImpayes > 1 ? "s" : ""} en retard de paiement.`);
+      if (devisExpirant === 0 && nbImpayes === 0) {
+        parts.push("Tout est à jour — aucune urgence aujourd'hui. Belle journée !");
+      } else {
+        parts.push("Je peux rédiger une relance si tu veux.");
+      }
+      setJarvisMessage(parts.join(" "));
 
       setLoaded(true);
     };
@@ -190,6 +211,28 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      {/* Jarvis briefing banner */}
+      {loaded && jarvisMessage && (
+        <div className="animate-fade-up-4">
+          <div className="rounded-xl bg-gray-900 dark:bg-black/60 border border-white/10 px-4 py-3 flex items-center gap-3">
+            <div className="relative shrink-0 w-2.5 h-2.5">
+              <span className="absolute inset-0 rounded-full bg-orange-500 animate-ping opacity-60" />
+              <span className="relative w-2.5 h-2.5 rounded-full bg-orange-500 block" />
+            </div>
+            <p className="flex-1 min-w-0 text-sm text-white/90 leading-snug">
+              <span className="font-bold text-orange-400">Jarvis — </span>
+              {jarvisMessage}
+            </p>
+            <Button
+              size="sm"
+              onClick={() => navigate("/assistant")}
+              className="shrink-0 bg-orange-500 hover:bg-orange-600 text-white text-xs h-8 px-3 gap-1 rounded-lg"
+            >
+              Lui répondre <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
