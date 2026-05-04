@@ -240,7 +240,7 @@ export default function Parametres() {
         .maybeSingle();
       if (existing) {
         setSiretStatus("error");
-        setSiretError("Ce SIRET est déjà associé à un autre compte Trust Build-IA");
+        setSiretError("Ce SIRET est déjà associé à un autre compte TrustBuild-IA");
         return;
       }
       setSiretData(data as SiretData);
@@ -281,7 +281,7 @@ export default function Parametres() {
     try {
       // Test sending a message
       const { data, error } = await supabase.functions.invoke("telegram-bot", {
-        body: { action: "send", chat_id: telegramChatId.trim(), text: "✅ Trust Build-IA connecté avec succès !\nVous recevrez vos notifications Jarvis ici." },
+        body: { action: "send", chat_id: telegramChatId.trim(), text: "✅ TrustBuild-IA connecté avec succès !\nVous recevrez vos notifications Jarvis ici." },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error("Échec de l'envoi");

@@ -230,7 +230,7 @@ export default function Testing() {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(255);
-    doc.text("Trust Build-IA — TestBot", margin, 9);
+    doc.text("TrustBuild-IA — TestBot", margin, 9);
     doc.setFont("helvetica", "normal");
     doc.text(new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }), pageW - margin, 9, { align: "right" });
 

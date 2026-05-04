@@ -1,11 +1,11 @@
-import { createLovableConfig } from "lovable-agent-playwright-config/config";
+import { defineConfig } from "@playwright/test";
 
-export default createLovableConfig({
+export default defineConfig({
   use: {
     baseURL: "https://trust-build-ia-vs-code.vercel.app",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    headless: false, // false = fenêtre visible pour suivre le test en direct
+    headless: false,
     viewport: { width: 1280, height: 900 },
     locale: "fr-FR",
   },

@@ -93,7 +93,7 @@ export default function Auth() {
       <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
         <div className="w-full max-w-md forge-card animate-fade-up">
           <div className="text-center mb-6">
-            <img src={logoImg} alt="Trust Build-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
+            <img src={logoImg} alt="TrustBuild-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
             <h1 className="text-h2 font-display">Créer un compte</h1>
             <p className="text-small text-muted-foreground mt-1">Étape {step} sur 2</p>
             <div className="flex gap-1.5 justify-center mt-3">
@@ -178,8 +178,8 @@ export default function Auth() {
     <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-md forge-card animate-fade-up">
         <div className="text-center mb-6">
-          <img src={logoImg} alt="Trust Build-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
-          <h1 className="text-h2 font-display">Trust Build-IA</h1>
+          <img src={logoImg} alt="TrustBuild-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
+          <h1 className="text-h2 font-display">TrustBuild-IA</h1>
           <p className="text-small text-muted-foreground mt-1">Connectez-vous à votre espace artisan</p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">

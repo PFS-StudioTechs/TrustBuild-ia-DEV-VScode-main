@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    /* Trust Build-IA — Inspired by logo colors */
+    /* TrustBuild-IA — Inspired by logo colors */
     --background: 180 20% 97%;        /* Warm teal-tinted white */
     --foreground: 210 50% 18%;        /* Dark navy from logo outlines */
 

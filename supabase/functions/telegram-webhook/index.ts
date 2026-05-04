@@ -75,7 +75,7 @@ serve(async (req) => {
 
     if (!artisanId) {
       await sendTelegram(TELEGRAM_BOT_TOKEN, chatId,
-        "⚠️ Ce compte Telegram n'est pas encore lié à un compte Trust Build-IA.\n\nRendez-vous dans Paramètres > Intégrations pour associer votre chat_id : " + chatId
+        "⚠️ Ce compte Telegram n'est pas encore lié à un compte TrustBuild-IA.\n\nRendez-vous dans Paramètres > Intégrations pour associer votre chat_id : " + chatId
       );
       return new Response("OK", { status: 200 });
     }
@@ -199,7 +199,7 @@ serve(async (req) => {
     const actionKeywords = ["devis", "facture", "courrier", "mise en demeure"];
     if (actionKeywords.some(k => assistantText.toLowerCase().includes(k))) {
       await sendTelegram(TELEGRAM_BOT_TOKEN, chatId,
-        "📋 Une action a été identifiée. Consultez l'application pour la valider :\n👉 Ouvrir Trust Build-IA"
+        "📋 Une action a été identifiée. Consultez l'application pour la valider :\n👉 Ouvrir TrustBuild-IA"
       );
     }
 

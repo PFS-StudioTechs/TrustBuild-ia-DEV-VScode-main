@@ -69,7 +69,7 @@ export default function ResetPassword() {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
         <div className="w-full max-w-md forge-card animate-fade-up text-center">
-          <img src={logoImg} alt="Trust Build-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
+          <img src={logoImg} alt="TrustBuild-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
           <h1 className="text-h2 font-display mb-2">Réinitialisation</h1>
           <p className="text-muted-foreground">Chargement en cours…</p>
         </div>
@@ -81,7 +81,7 @@ export default function ResetPassword() {
     <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-md forge-card animate-fade-up">
         <div className="text-center mb-6">
-          <img src={logoImg} alt="Trust Build-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
+          <img src={logoImg} alt="TrustBuild-IA" className="mx-auto w-16 h-16 rounded-2xl object-contain mb-4" />
           <h1 className="text-h2 font-display">Nouveau mot de passe</h1>
           <p className="text-small text-muted-foreground mt-1">Choisissez un nouveau mot de passe sécurisé</p>
         </div>

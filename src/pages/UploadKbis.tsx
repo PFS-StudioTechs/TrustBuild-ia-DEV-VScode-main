@@ -67,7 +67,7 @@ export default function UploadKbis() {
       <div className="w-full max-w-lg forge-card animate-fade-up space-y-6">
         {/* Header */}
         <div className="text-center">
-          <img src={logoImg} alt="Trust Build-IA" className="mx-auto w-14 h-14 rounded-2xl object-contain mb-4" />
+          <img src={logoImg} alt="TrustBuild-IA" className="mx-auto w-14 h-14 rounded-2xl object-contain mb-4" />
           <h1 className="text-h2 font-display">Dépôt de votre KBIS</h1>
           {isBlocked ? (
             <div className="mt-3 flex items-start gap-2 text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg p-3 text-left">

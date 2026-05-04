@@ -9,12 +9,12 @@ export const TEST_DATA = {
   artisan: {
     email: "steevival@yahoo.fr",
     password: "steevedo",
-    siret: "VOTRE_SIRET_14_CHIFFRES", // ← RENSEIGNER ex: "80295478900027"
+    siret: "92265565900030", // ← RENSEIGNER ex: "80295478900027"
   },
 
   // ─── KBIS ─────────────────────────────────────────────────────────────
   kbisPath: path.resolve(
-    "C:/Users/kstee/OneDrive/Bureau/Formations/Formation IA/Projet Trust Build-IA/KBIS de test/KBIS0910925.pdf"
+    "C:/Users/kstee/OneDrive/Bureau/Formations/Formation IA/Projet TrustBuild-IA/KBIS de test/KBIS0910925.pdf"
   ),
 
   // ─── Client de test ───────────────────────────────────────────────────

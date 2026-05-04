@@ -101,7 +101,7 @@ export default function CompleteProfile() {
 
       if (existing) {
         setSiretStatus("error");
-        setSiretError("Ce SIRET est déjà associé à un autre compte Trust Build-IA");
+        setSiretError("Ce SIRET est déjà associé à un autre compte TrustBuild-IA");
         return;
       }
 
@@ -136,7 +136,7 @@ export default function CompleteProfile() {
       if (error) throw error;
 
       await refreshProfile();
-      toast.success("Profil complété — bienvenue sur Trust Build-IA !");
+      toast.success("Profil complété — bienvenue sur TrustBuild-IA !");
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de la sauvegarde");
@@ -162,7 +162,7 @@ export default function CompleteProfile() {
       <div className="w-full max-w-lg forge-card animate-fade-up space-y-6">
         {/* Header */}
         <div className="text-center">
-          <img src={logoImg} alt="Trust Build-IA" className="mx-auto w-14 h-14 rounded-2xl object-contain mb-4" />
+          <img src={logoImg} alt="TrustBuild-IA" className="mx-auto w-14 h-14 rounded-2xl object-contain mb-4" />
           <h1 className="text-h2 font-display">Complétez votre profil</h1>
           <p className="text-small text-muted-foreground mt-1">
             Dernière étape — informations de votre entreprise

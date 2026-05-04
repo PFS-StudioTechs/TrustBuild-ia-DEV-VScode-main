@@ -1,7 +1,31 @@
 {
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
-      "PowerShell($env:PATH += \";$env:USERPROFILE\\\\scoop\\\\shims\"; cd \"c:\\\\Users\\\\kstee\\\\OneDrive\\\\Bureau\\\\Formations\\\\Formation IA\\\\Projet Trust Build-IA\\\\trust-builder-hub-corrected\\\\trust-builder-hub-main\"; supabase functions deploy validate-siret --no-verify-jwt 2>&1)"
+      "PowerShell($env:PATH += \";$env:USERPROFILE\\\\scoop\\\\shims\"; cd \"c:\\\\Users\\\\kstee\\\\OneDrive\\\\Bureau\\\\Formations\\\\Formation IA\\\\Projet TrustBuild-IA\\\\trust-builder-hub-corrected\\\\trust-builder-hub-main\"; supabase functions deploy validate-siret --no-verify-jwt 2>&1)",
+      "Bash(pip show *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s -o /tmp/n8n_response.json -w '%{http_code}' -X POST http://187.124.223.6:5678/api/v1/workflows -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OGE2YjAyZi1lYzhiLTQ2NDAtYTM5MS01MjM1MjYxMzM4YTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiM2NjMDhmNmUtZDFlMi00NWZjLWExNjktMzZkMmMzMTY0NjRkIiwiaWF0IjoxNzc3MTkwMDE1fQ.qfzdLs3S4eZGro6WO83Q2EvjV-i6T7WBa2i8TuvQIyQ' -H 'Content-Type: application/json' -d @C:/Users/kstee/AppData/Local/Temp/n8n_workflow.json)",
+      "Read(//tmp/**)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('ID:', d.get\\('id'\\)\\); print\\('Name:', d.get\\('name'\\)\\); print\\('Active:', d.get\\('active'\\)\\)\")",
+      "Bash(curl -s -X PATCH http://187.124.223.6:5678/api/v1/workflows/wpylnqX8TqJvbKcB -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OGE2YjAyZi1lYzhiLTQ2NDAtYTM5MS01MjM1MjYxMzM4YTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiM2NjMDhmNmUtZDFlMi00NWZjLWExNjktMzZkMmMzMTY0NjRkIiwiaWF0IjoxNzc3MTkwMDE1fQ.qfzdLs3S4eZGro6WO83Q2EvjV-i6T7WBa2i8TuvQIyQ' -H 'Content-Type: application/json' -d '{\"active\": true}')",
+      "Bash(curl -s -X POST http://187.124.223.6:5678/api/v1/workflows/wpylnqX8TqJvbKcB/activate -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OGE2YjAyZi1lYzhiLTQ2NDAtYTM5MS01MjM1MjYxMzM4YTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiM2NjMDhmNmUtZDFlMi00NWZjLWExNjktMzZkMmMzMTY0NjRkIiwiaWF0IjoxNzc3MTkwMDE1fQ.qfzdLs3S4eZGro6WO83Q2EvjV-i6T7WBa2i8TuvQIyQ')",
+      "Bash(curl -s -o /tmp/n8n_sig_response.json -w '%{http_code}' -X POST http://187.124.223.6:5678/api/v1/workflows -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OGE2YjAyZi1lYzhiLTQ2NDAtYTM5MS01MjM1MjYxMzM4YTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiM2NjMDhmNmUtZDFlMi00NWZjLWExNjktMzZkMmMzMTY0NjRkIiwiaWF0IjoxNzc3MTkwMDE1fQ.qfzdLs3S4eZGro6WO83Q2EvjV-i6T7WBa2i8TuvQIyQ' -H 'Content-Type: application/json' -d @C:/Users/kstee/AppData/Local/Temp/n8n_workflow_signature.json)",
+      "Bash(curl -s -X POST http://187.124.223.6:5678/api/v1/workflows/SU0oduHWljUAI1tc/activate -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OGE2YjAyZi1lYzhiLTQ2NDAtYTM5MS01MjM1MjYxMzM4YTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiM2NjMDhmNmUtZDFlMi00NWZjLWExNjktMzZkMmMzMTY0NjRkIiwiaWF0IjoxNzc3MTkwMDE1fQ.qfzdLs3S4eZGro6WO83Q2EvjV-i6T7WBa2i8TuvQIyQ')",
+      "Bash(curl -s -o /tmp/n8n_rapport_response.json -w '%{http_code}' -X POST http://187.124.223.6:5678/api/v1/workflows -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OGE2YjAyZi1lYzhiLTQ2NDAtYTM5MS01MjM1MjYxMzM4YTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiM2NjMDhmNmUtZDFlMi00NWZjLWExNjktMzZkMmMzMTY0NjRkIiwiaWF0IjoxNzc3MTkwMDE1fQ.qfzdLs3S4eZGro6WO83Q2EvjV-i6T7WBa2i8TuvQIyQ' -H 'Content-Type: application/json' -d @C:/Users/kstee/AppData/Local/Temp/n8n_workflow_rapport.json)",
+      "Bash(curl -s -X POST http://187.124.223.6:5678/api/v1/workflows/cGS4JVzYDbgceB5m/activate -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1OGE2YjAyZi1lYzhiLTQ2NDAtYTM5MS01MjM1MjYxMzM4YTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiM2NjMDhmNmUtZDFlMi00NWZjLWExNjktMzZkMmMzMTY0NjRkIiwiaWF0IjoxNzc3MTkwMDE1fQ.qfzdLs3S4eZGro6WO83Q2EvjV-i6T7WBa2i8TuvQIyQ')",
+      "Bash(npm list *)",
+      "Bash(node generate-tests.js)",
+      "Bash(cat vercel.json)",
+      "Bash(ls -la .vercel)",
+      "Bash(vercel --version)",
+      "Bash(npm search *)",
+      "Bash(npm info *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\kstee\\.claude",
+      "C:\\Users\\kstee\\AppData\\Local\\Temp"
     ]
   }
 }

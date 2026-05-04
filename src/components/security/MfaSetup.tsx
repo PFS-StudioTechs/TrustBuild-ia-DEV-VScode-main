@@ -53,7 +53,7 @@ export default function MfaSetup() {
 
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName: "Trust Build-IA",
+        friendlyName: "TrustBuild-IA",
       });
       if (error) throw error;
       setQrCode(data.totp.qr_code);

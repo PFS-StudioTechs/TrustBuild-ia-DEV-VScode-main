@@ -12,7 +12,7 @@
  * Variables d'environnement requises :
  *   SENDGRID_API_KEY   — clé API SendGrid
  *   SENDGRID_FROM_EMAIL — adresse expéditeur vérifiée (ex : "noreply@trustbuild.fr")
- *   SENDGRID_FROM_NAME  — nom expéditeur (ex : "Trust Build-IA") — optionnel
+ *   SENDGRID_FROM_NAME  — nom expéditeur (ex : "TrustBuild-IA") — optionnel
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  */
@@ -29,7 +29,7 @@ serve(async (req) => {
 
   const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
   const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "Trust Build-IA";
+  const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -73,7 +73,7 @@ serve(async (req) => {
     const emailBody = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #1a1a2e;">Bonjour ${prenom},</h2>
-        <p>Votre compte <strong>Trust Build-IA</strong> a été créé il y a bientôt 5 mois.</p>
+        <p>Votre compte <strong>TrustBuild-IA</strong> a été créé il y a bientôt 5 mois.</p>
         <p>Il vous reste <strong>${daysLeft} jour${daysLeft > 1 ? "s" : ""}</strong> pour déposer votre <strong>extrait KBIS</strong> avant que votre accès soit restreint.</p>
         <p style="margin: 24px 0;">
           <a href="${supabaseUrl.replace(".supabase.co", ".vercel.app")}/upload-kbis"
@@ -83,7 +83,7 @@ serve(async (req) => {
         </p>
         <p style="color: #666; font-size: 14px;">Si votre entreprise est en cours de création, contactez notre support pour obtenir un délai supplémentaire.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 12px;">Trust Build-IA — Votre assistant IA pour les artisans du bâtiment</p>
+        <p style="color: #999; font-size: 12px;">TrustBuild-IA — Votre assistant IA pour les artisans du bâtiment</p>
       </div>
     `;
 

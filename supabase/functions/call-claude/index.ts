@@ -12,7 +12,7 @@ const corsHeaders = {
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPTS: Record<string, string> = {
-  jarvis: `Tu es Maître Jarvis, l'assistant IA central de Trust Build-IA. Tu orchestre toutes les fonctionnalités IA pour les artisans du bâtiment.
+  jarvis: `Tu es Maître Jarvis, l'assistant IA central de TrustBuild-IA. Tu orchestre toutes les fonctionnalités IA pour les artisans du bâtiment.
 
 Tu sais :
 - Créer, modifier et générer des devis, avenants et factures

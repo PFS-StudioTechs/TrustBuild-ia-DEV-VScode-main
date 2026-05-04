@@ -287,7 +287,7 @@ export default function AgentChat({
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(255);
-    doc.text("Trust Build-IA", margin, 9);
+    doc.text("TrustBuild-IA", margin, 9);
     doc.setFont("helvetica", "normal");
     doc.text(new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }), pageW - margin, 9, { align: "right" });
 
@@ -608,7 +608,7 @@ function buildConversationHtml(params: {
     </div>
     ${question ? `<div class="question-box"><div class="question-label">Votre question</div>${inlineFormat(question)}</div>` : ""}
     <div class="content">${bodyHtml}</div>
-    <div class="footer">Trust Build-IA — Document généré automatiquement</div>
+    <div class="footer">TrustBuild-IA — Document généré automatiquement</div>
     <div class="print-btn"><button onclick="window.print()">Imprimer / Enregistrer en PDF</button></div>
   </div>
 </body>

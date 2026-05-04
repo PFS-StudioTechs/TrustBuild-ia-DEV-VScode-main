@@ -5,9 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `Tu es TestBot, l'assistant IA spécialisé en stratégie de test pour Trust Build-IA.
+const SYSTEM_PROMPT = `Tu es TestBot, l'assistant IA spécialisé en stratégie de test pour TrustBuild-IA.
 
-Trust Build-IA est une application SaaS pour artisans du bâtiment avec les fonctionnalités suivantes :
+TrustBuild-IA est une application SaaS pour artisans du bâtiment avec les fonctionnalités suivantes :
 - **Authentification** : inscription, connexion, reset mot de passe, rôles (artisan, admin, super_admin, tester)
 - **Dashboard** : vue d'ensemble chantiers, finances, activité
 - **Chantiers** : création, suivi statut (prospect/en_cours/terminé/litige), clients associés

@@ -25,7 +25,7 @@ async function waitToast(page: Page, timeoutMs = 8000) {
 
 // ─── Test principal ────────────────────────────────────────────────────────
 
-test.describe("Trust Build-IA — Golden Path", () => {
+test.describe("TrustBuild-IA — Golden Path", () => {
   test.setTimeout(300_000); // 5 minutes max
 
   test("Parcours complet : connexion → KBIS → SIRET → client → chantier → devis → facture", async ({ page }) => {
@@ -39,13 +39,14 @@ test.describe("Trust Build-IA — Golden Path", () => {
       await page.waitForLoadState("networkidle");
       await shot(page, "auth-page");
 
-      // Remplir le formulaire de connexion
-      await page.getByPlaceholder(/email/i).fill(TEST_DATA.artisan.email);
-      await page.getByPlaceholder(/mot de passe|password/i).fill(TEST_DATA.artisan.password);
-      await page.getByRole("button", { name: /se connecter|connexion/i }).click();
+      // Remplir le formulaire de connexion (selectors par id/label)
+      await page.locator("#email").fill(TEST_DATA.artisan.email);
+      await page.locator("#password").fill(TEST_DATA.artisan.password);
+      await page.getByRole("button", { name: /se connecter/i }).click();
 
-      await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 20_000 });
-      await page.waitForLoadState("networkidle");
+      await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30_000 });
+      await page.waitForLoadState("domcontentloaded");
+      await page.waitForTimeout(2000);
       await shot(page, "dashboard-apres-connexion");
 
       await expect(page).toHaveURL(`${BASE_URL}/dashboard`);

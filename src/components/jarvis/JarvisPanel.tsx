@@ -233,7 +233,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
         ${messagesHtml}
       </tbody>
     </table>
-    <div class="footer">Trust Build-IA — Document généré automatiquement</div>
+    <div class="footer">TrustBuild-IA — Document généré automatiquement</div>
     <div class="print-btn">
       <button onclick="window.print()">Imprimer / Enregistrer en PDF</button>
     </div>
