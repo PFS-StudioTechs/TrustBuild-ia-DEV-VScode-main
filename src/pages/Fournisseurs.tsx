@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFournisseurs, type Fournisseur, type FournisseurForm } from "@/hooks/useFournisseurs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,11 +30,8 @@ function FournisseurDialog({
   const [form, setForm] = useState<FournisseurForm>(initial);
   const [saving, setSaving] = useState(false);
 
-  // Sync when dialog opens with new initial values
-  const handleOpenChange = (v: boolean) => {
-    if (v) setForm(initial);
-    onOpenChange(v);
-  };
+  useEffect(() => { if (open) setForm(initial); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleOpenChange = (v: boolean) => { onOpenChange(v); };
 
   const set = (field: keyof FournisseurForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [field]: e.target.value }));

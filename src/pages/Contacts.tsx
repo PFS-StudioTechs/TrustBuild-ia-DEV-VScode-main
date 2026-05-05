@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useContacts, type Contact, type ContactForm, emptyContactForm } from "@/hooks/useContacts";
 import { useFournisseurs } from "@/hooks/useFournisseurs";
 import { Button } from "@/components/ui/button";
@@ -49,10 +49,8 @@ function ContactDialog({
   const [form, setForm] = useState<ContactForm>(initial);
   const [saving, setSaving] = useState(false);
 
-  const handleOpenChange = (v: boolean) => {
-    if (v) setForm(initial);
-    onOpenChange(v);
-  };
+  useEffect(() => { if (open) setForm(initial); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleOpenChange = (v: boolean) => { onOpenChange(v); };
 
   const set = (field: keyof ContactForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>

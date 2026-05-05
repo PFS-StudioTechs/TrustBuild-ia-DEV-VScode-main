@@ -154,7 +154,8 @@ function ClientDialog({
   const [form, setForm] = useState<ClientForm>(initial);
   const [saving, setSaving] = useState(false);
 
-  const handleOpen = (v: boolean) => { if (v) setForm(initial); onOpenChange(v); };
+  useEffect(() => { if (open) setForm(initial); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleOpen = (v: boolean) => { onOpenChange(v); };
   const set = (k: keyof ClientForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
 
