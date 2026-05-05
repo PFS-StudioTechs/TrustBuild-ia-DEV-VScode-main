@@ -15,7 +15,7 @@ import {
   Plus, Trash2, Edit, Send, Bot, RefreshCw, BarChart3, Minus, FileDown
 } from "lucide-react";
 import { toast } from "sonner";
-import jsPDF from "jspdf";
+import { exportMarkdownToPdf } from "@/lib/exportToPdf";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -204,68 +204,13 @@ export default function Testing() {
     const msg = chatMessages[msgIndex];
     if (!msg || msg.role !== "assistant") return;
     const question = msgIndex > 0 ? chatMessages[msgIndex - 1]?.content : null;
-
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
-    const margin = 20;
-    const maxW = pageW - margin * 2;
-    let y = 20;
-
-    const addLine = (text: string, size: number, style: "normal" | "bold" = "normal", color = 40) => {
-      doc.setFontSize(size);
-      doc.setFont("helvetica", style);
-      doc.setTextColor(color);
-      const lines = doc.splitTextToSize(text, maxW);
-      lines.forEach((line: string) => {
-        if (y > 270) { doc.addPage(); y = 20; }
-        doc.text(line, margin, y);
-        y += size * 0.45;
-      });
-      y += 2;
-    };
-
-    doc.setFillColor(139, 92, 246);
-    doc.rect(0, 0, pageW, 14, "F");
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(255);
-    doc.text("TrustBuild-IA — TestBot", margin, 9);
-    doc.setFont("helvetica", "normal");
-    doc.text(new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }), pageW - margin, 9, { align: "right" });
-
-    y = 24;
-    addLine("TestBot — Réponse", 16, "bold", 30);
-    doc.setDrawColor(220);
-    doc.line(margin, y, pageW - margin, y);
-    y += 6;
-
-    if (question) {
-      addLine("Question", 9, "bold", 100);
-      addLine(question, 10, "normal", 60);
-      doc.line(margin, y, pageW - margin, y);
-      y += 6;
-    }
-
-    addLine("Réponse", 9, "bold", 100);
-    const lines = msg.content.split("\n");
-    for (const line of lines) {
-      if (!line.trim()) { y += 3; continue; }
-      if (line.startsWith("### ")) addLine(line.replace(/^### /, ""), 12, "bold", 30);
-      else if (line.startsWith("## ")) addLine(line.replace(/^## /, ""), 13, "bold", 30);
-      else if (/^[-*•]\s/.test(line)) addLine(`  • ${line.replace(/^[-*•]\s/, "").replace(/\*\*(.*?)\*\*/g, "$1")}`, 10, "normal", 40);
-      else addLine(line.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1"), 10, "normal", 40);
-    }
-
-    const pageCount = (doc.internal as any).getNumberOfPages();
-    for (let p = 1; p <= pageCount; p++) {
-      doc.setPage(p);
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(160);
-      doc.text(`Page ${p} / ${pageCount}`, pageW - margin, 287, { align: "right" });
-    }
-
-    doc.save(`TestBot_${new Date().toISOString().slice(0, 10)}.pdf`);
+    exportMarkdownToPdf({
+      title: "TestBot — Réponse",
+      question,
+      content: msg.content,
+      headerColor: [139, 92, 246],
+      filename: `TestBot_${new Date().toISOString().slice(0, 10)}.pdf`,
+    });
   };
 
   // ── CRUD Cas de test ───────────────────────────────────────────────────────
