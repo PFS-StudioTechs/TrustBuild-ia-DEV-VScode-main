@@ -65,7 +65,6 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
           montant_ht: totalHT,
           tva: 20,
           statut: "brouillon",
-          date_emission: new Date().toISOString().split("T")[0],
           date_echeance: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
         } as any)
         .select("id")
