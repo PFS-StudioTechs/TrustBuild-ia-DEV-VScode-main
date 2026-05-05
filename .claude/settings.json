@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",
+    "defaultMode": "default",
     "allow": [
       "PowerShell($env:PATH += \";$env:USERPROFILE\\\\scoop\\\\shims\"; cd \"c:\\\\Users\\\\kstee\\\\OneDrive\\\\Bureau\\\\Formations\\\\Formation IA\\\\Projet TrustBuild-IA\\\\trust-builder-hub-corrected\\\\trust-builder-hub-main\"; supabase functions deploy validate-siret --no-verify-jwt 2>&1)",
       "Bash(pip show *)",
@@ -29,3 +29,4 @@
     ]
   }
 }
+

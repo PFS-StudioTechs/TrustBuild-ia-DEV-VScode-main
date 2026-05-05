@@ -15,7 +15,6 @@ import {
   Plus, Trash2, Edit, Send, Bot, RefreshCw, BarChart3, Minus, FileDown
 } from "lucide-react";
 import { toast } from "sonner";
-import { streamChat } from "@/hooks/useStreamingChat";
 import jsPDF from "jspdf";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
