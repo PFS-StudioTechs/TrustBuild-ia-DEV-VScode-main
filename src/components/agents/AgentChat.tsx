@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, User, Save, CheckCircle, Mic, MicOff, Smartphone, Monitor, FileDown } from "lucide-react";
+import { Send, User, Save, CheckCircle, Mic, MicOff, Smartphone, Monitor, FileDown, Headphones, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
@@ -9,6 +9,7 @@ import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { streamChat } from "@/hooks/useStreamingChat";
+import { useVoiceMode } from "@/hooks/useVoiceMode";
 import jsPDF from "jspdf";
 
 interface Message {
@@ -47,7 +48,25 @@ export default function AgentChat({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const autoSendCancelledRef = useRef(false);
+  const autoSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { user } = useAuth();
+  const {
+    voiceModeEnabled,
+    setVoiceModeEnabled,
+    isSpeaking,
+    ttsStreamChunk,
+    ttsFlushRemaining,
+    ttsStop,
+    resetTtsStream,
+  } = useVoiceMode();
+
+  useEffect(() => {
+    return () => {
+      if (autoSendTimerRef.current) clearTimeout(autoSendTimerRef.current);
+      ttsStop();
+    };
+  }, [ttsStop]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -130,7 +149,18 @@ export default function AgentChat({
       const data = await resp.json();
       if (data.text) {
         setInput(data.text);
-        toast.success("Transcription terminée — vérifiez et envoyez");
+        if (voiceModeEnabled) {
+          autoSendCancelledRef.current = false;
+          toast.info("Envoi dans 1.5s…", {
+            action: { label: "Annuler", onClick: () => { autoSendCancelledRef.current = true; } },
+            duration: 1500,
+          });
+          autoSendTimerRef.current = setTimeout(() => {
+            if (!autoSendCancelledRef.current) send(data.text);
+          }, 1500);
+        } else {
+          toast.success("Transcription terminée — vérifiez et envoyez");
+        }
       } else {
         toast.error("Aucun texte détecté");
       }
@@ -152,10 +182,14 @@ export default function AgentChat({
     setMessages(updated);
     setInput("");
     setLoading(true);
+    resetTtsStream();
 
     // Strip DEVIS_DATA blocks from history before sending to API (évite confusion Jarvis)
     const stripDevisData = (content: string) =>
       content.replace(/<!--DEVIS_DATA[\s\S]*?DEVIS_DATA-->/g, "").trim();
+
+    // Capture voice mode state at call time to avoid stale closure in onChunk
+    const voiceActive = voiceModeEnabled;
 
     let finalContent = "";
     try {
@@ -175,8 +209,17 @@ export default function AgentChat({
             }
             return [...prev, { role: "assistant", content: accumulated, source: "app" }];
           });
+          if (voiceActive) ttsStreamChunk(accumulated);
         },
       });
+
+      // Flush remaining text, then auto-restart mic if still in voice mode
+      if (voiceActive) {
+        ttsFlushRemaining(finalContent, () => {
+          if (voiceModeEnabled) startRecording();
+        });
+      }
+
       // Auto-création du devis si Jarvis a inclus un bloc DEVIS_DATA
       if (persona === "jarvis" && finalContent.includes("<!--DEVIS_DATA")) {
         await createDevisFromJarvis(finalContent);
@@ -191,6 +234,7 @@ export default function AgentChat({
       }
     } catch (err: any) {
       toast.error(err.message || "Erreur");
+      ttsStop();
     } finally {
       setLoading(false);
     }
@@ -722,6 +766,19 @@ function buildConversationHtml(params: {
         )}
       </div>
 
+      {/* Voice mode banner */}
+      {voiceModeEnabled && (
+        <div className="px-4 py-1.5 bg-accent/10 border-t border-accent/20 text-xs text-accent flex items-center gap-2 shrink-0">
+          <Headphones className="w-3 h-3 shrink-0" />
+          <span>Mode mains-libres actif — parlez, Jarvis répondra à voix haute</span>
+          {isSpeaking && (
+            <span className="ml-auto flex items-center gap-1 animate-pulse font-medium">
+              <VolumeX className="w-3 h-3" /> En train de parler…
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Input */}
       <div className="border-t p-3 shrink-0 bg-card">
         <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-2 max-w-4xl mx-auto">
@@ -732,6 +789,31 @@ function buildConversationHtml(params: {
             className="touch-target"
             disabled={loading || transcribing}
           />
+          {/* Stop TTS */}
+          {isSpeaking && (
+            <Button
+              type="button"
+              size="icon"
+              variant="destructive"
+              onClick={ttsStop}
+              className="touch-target shrink-0 animate-pulse"
+              title="Arrêter la lecture vocale"
+            >
+              <VolumeX className="w-4 h-4" />
+            </Button>
+          )}
+          {/* Hands-free toggle */}
+          <Button
+            type="button"
+            size="icon"
+            variant={voiceModeEnabled ? "default" : "outline"}
+            onClick={() => setVoiceModeEnabled(!voiceModeEnabled)}
+            disabled={loading || transcribing}
+            className="touch-target shrink-0 transition-all"
+            title={voiceModeEnabled ? "Désactiver le mode mains-libres" : "Activer le mode mains-libres"}
+          >
+            <Headphones className="w-4 h-4" />
+          </Button>
           <Button
             type="button"
             size="icon"
