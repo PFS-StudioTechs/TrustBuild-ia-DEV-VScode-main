@@ -100,7 +100,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
       setClient(c => ({ ...c, nom: match.nom, prenom: match.prenom ?? "", email: match.email ?? "", type: (match.type as "particulier" | "pro") ?? "particulier" }));
     } else {
       setSelectedClientId(null);
-      setClient({ ...data.client, id: undefined });
+      // Ne pas réinitialiser les champs client — préserve les corrections manuelles de l'utilisateur
     }
     // Reset chantier selection when client changes
     setSelectedChantierId(null);
@@ -203,8 +203,18 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
           }).select("id").single();
           if (clErr) throw new Error(`Client: ${clErr.message}`);
           clientId = newClient.id;
+        } else {
+          // Client trouvé par email/nom — met à jour avec les valeurs corrigées par l'utilisateur
+          await supabase.from("clients").update({
+            nom: client.nom.trim(),
+            prenom: client.prenom?.trim() || null,
+            adresse: client.adresse || null,
+            email: client.email || null,
+            telephone: client.telephone || null,
+          }).eq("id", clientId);
         }
       } else {
+        // Client sélectionné explicitement — les champs nom/prenom sont désactivés, on met à jour uniquement les coordonnées
         await supabase.from("clients").update({
           adresse: client.adresse || null,
           email: client.email || null,
