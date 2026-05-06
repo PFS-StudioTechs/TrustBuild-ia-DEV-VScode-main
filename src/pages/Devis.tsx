@@ -15,8 +15,9 @@ import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
-  GitBranch, RotateCcw, ClipboardList, Layers,
+  GitBranch, RotateCcw, ClipboardList, Layers, Mail,
 } from "lucide-react";
+import SendEmailDialog from "@/components/SendEmailDialog";
 import { toast } from "sonner";
 
 // ─── Types ─────────────────────────────────────────────────
@@ -710,11 +711,15 @@ function AvoirDialog({
 function FactureCard({
   facture,
   clientNom,
+  clientEmail,
+  chantierNom,
   devisNumero,
   onRefresh,
 }: {
   facture: Facture;
   clientNom: string;
+  clientEmail?: string | null;
+  chantierNom?: string;
   devisNumero: string;
   onRefresh: () => void;
 }) {
@@ -725,6 +730,7 @@ function FactureCard({
   const [updatingStatut, setUpdatingStatut] = useState(false);
   const [lignes, setLignes] = useState<AvenantLigne[] | null>(null);
   const [lignesLoading, setLignesLoading] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
 
   const montantTTC = facture.montant_ht * (1 + facture.tva / 100);
 
@@ -842,6 +848,9 @@ function FactureCard({
             <div className="flex flex-wrap gap-2">
               {facture.statut === "brouillon" && (
                 <>
+                  <Button size="sm" variant="outline" onClick={() => setEmailOpen(true)} className="text-primary border-primary/40 hover:bg-primary/10">
+                    <Mail className="w-3.5 h-3.5 mr-1.5" /> Envoyer par email
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => changeStatut("envoyee")} disabled={updatingStatut}>
                     <Send className="w-3.5 h-3.5 mr-1.5" /> Marquer envoyée
                   </Button>
@@ -870,6 +879,9 @@ function FactureCard({
               )}
               {facture.statut === "envoyee" && (
                 <>
+                  <Button size="sm" variant="outline" onClick={() => setEmailOpen(true)} className="text-primary border-primary/40 hover:bg-primary/10">
+                    <Mail className="w-3.5 h-3.5 mr-1.5" /> Ré-envoyer
+                  </Button>
                   <Button size="sm" variant="outline" className="text-emerald-600 border-emerald-300" onClick={() => changeStatut("payee")} disabled={updatingStatut}>
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Marquer payée
                   </Button>
@@ -970,6 +982,28 @@ function FactureCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {emailOpen && (
+        <SendEmailDialog
+          type="facture"
+          doc={{
+            id: facture.id,
+            numero: facture.numero,
+            montant_ht: facture.montant_ht,
+            tva: facture.tva,
+            created_at: new Date().toISOString(),
+            date_echeance: facture.date_echeance,
+            solde_restant: facture.solde_restant ?? facture.montant_ht * (1 + facture.tva / 100),
+            chantierNom,
+          }}
+          lignes={lignes?.map(l => ({ designation: l.designation, quantite: l.quantite, unite: l.unite, prix_unitaire: l.prix_unitaire, tva: l.tva })) ?? undefined}
+          clientEmail={clientEmail ?? null}
+          clientNom={clientNom}
+          open={emailOpen}
+          onClose={() => setEmailOpen(false)}
+          onSent={() => { setEmailOpen(false); onRefresh(); }}
+        />
+      )}
     </>
   );
 }
@@ -1423,6 +1457,7 @@ function DevisCard({
   const [tsFactureSaving, setTsFactureSaving] = useState(false);
   const [avoirRectifTargetId, setAvoirRectifTargetId] = useState<string | null>(null);
   const [avoirRectifFactureId, setAvoirRectifFactureId] = useState<string>("");
+  const [emailDevisOpen, setEmailDevisOpen] = useState(false);
   const [avoirRectifEcheance, setAvoirRectifEcheance] = useState("");
   const [avoirRectifSaving, setAvoirRectifSaving] = useState(false);
 
@@ -1767,6 +1802,9 @@ function DevisCard({
               </div>
             ) : (
               <div className="flex gap-2 flex-wrap">
+                <Button size="sm" variant="outline" onClick={() => setEmailDevisOpen(true)} className="text-primary border-primary/40 hover:bg-primary/10">
+                  <Mail className="w-3.5 h-3.5 mr-1" /> Envoyer par email
+                </Button>
                 {devis.statut !== "envoye" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("envoye")}><Send className="w-3.5 h-3.5 mr-1" /> Marquer envoyé</Button>}
                 {devis.statut !== "signe" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("signe")} className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Marquer signé</Button>}
                 {devis.statut !== "refuse" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("refuse")} className="text-destructive"><XCircle className="w-3.5 h-3.5 mr-1" /> Refusé</Button>}
@@ -2060,6 +2098,7 @@ function DevisCard({
                     key={f.id}
                     facture={f}
                     clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+                    clientEmail={devis.client?.email ?? null}
                     devisNumero={devis.numero}
                     onRefresh={onRefresh}
                   />
@@ -2247,6 +2286,26 @@ function DevisCard({
           </div>
         </DialogContent>
       </Dialog>
+
+      {emailDevisOpen && (
+        <SendEmailDialog
+          type="devis"
+          doc={{
+            id: devis.id,
+            numero: devis.numero,
+            montant_ht: devis.montant_ht,
+            tva: devis.tva,
+            created_at: devis.created_at,
+            date_validite: devis.date_validite,
+          }}
+          lignes={devis.lignes?.map(l => ({ designation: l.designation, quantite: l.quantite, unite: l.unite, prix_unitaire: l.prix_unitaire, tva: l.tva, section_nom: l.section_nom }))}
+          clientEmail={devis.client?.email ?? null}
+          clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+          open={emailDevisOpen}
+          onClose={() => setEmailDevisOpen(false)}
+          onSent={() => { setEmailDevisOpen(false); onRefresh(); }}
+        />
+      )}
     </>
   );
 }
@@ -2386,6 +2445,7 @@ export default function DevisPage() {
       ...f,
       devisNumero: devisRef?.numero ?? "",
       clientNom: clientRef ? `${clientRef.nom}${clientRef.prenom ? " " + clientRef.prenom : ""}` : "",
+      clientEmail: clientRef?.email ?? null,
     };
   });
 
@@ -2480,6 +2540,7 @@ export default function DevisPage() {
                 key={f.id}
                 facture={f}
                 clientNom={(f as any).clientNom ?? ""}
+                clientEmail={(f as any).clientEmail ?? null}
                 devisNumero={(f as any).devisNumero ?? ""}
                 onRefresh={loadAll}
               />

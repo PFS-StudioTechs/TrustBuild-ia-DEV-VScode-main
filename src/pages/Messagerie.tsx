@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Mail, Plus, Send, Clock, CheckCircle2, AlertCircle, Search, Trash2 } from "lucide-react";
+import { Mail, Plus, Send, Clock, CheckCircle2, AlertCircle, Search, Trash2, FileText, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 interface Message {
@@ -20,6 +20,8 @@ interface Message {
   body: string;
   status: string;
   sent_at: string;
+  document_type?: string | null;
+  document_id?: string | null;
 }
 
 interface Recipient {
@@ -215,10 +217,22 @@ export default function Messagerie() {
                 </div>
                 <p className="text-sm font-medium mt-1">{m.subject}</p>
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{m.body}</p>
-                <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1">
-                  <Clock className="w-3 h-3" />
-                  {new Date(m.sent_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
-                </p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {new Date(m.sent_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                  </p>
+                  {m.document_type === "devis" && (
+                    <Badge className="bg-blue-500/10 text-blue-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                      <FileText className="w-2.5 h-2.5" /> Devis
+                    </Badge>
+                  )}
+                  {m.document_type === "facture" && (
+                    <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                      <Receipt className="w-2.5 h-2.5" /> Facture
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           ))}

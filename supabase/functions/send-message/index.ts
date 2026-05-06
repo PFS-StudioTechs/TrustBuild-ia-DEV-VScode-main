@@ -27,7 +27,7 @@ serve(async (req) => {
 
   const serviceClient = createClient(supabaseUrl, serviceKey);
 
-  const { to_email, to_name, subject, body } = await req.json();
+  const { to_email, to_name, subject, body, pdf_base64, pdf_filename, document_type, document_id } = await req.json();
   if (!to_email || !subject || !body) {
     return new Response(JSON.stringify({ error: "Champs manquants (to_email, subject, body)" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -39,18 +39,34 @@ serve(async (req) => {
 
   let sendStatus = "sent";
   if (sendgridApiKey) {
+    const payload: Record<string, unknown> = {
+      personalizations: [{ to: [{ email: to_email, name: to_name ?? to_email }] }],
+      from: { email: fromEmail, name: `${senderName} via ${fromName}` },
+      reply_to: { email: replyTo, name: senderName },
+      subject,
+      content: [{ type: "text/plain", value: body }],
+    };
+
+    // PDF pièce jointe
+    if (pdf_base64 && pdf_filename) {
+      payload.attachments = [{
+        content: pdf_base64,
+        filename: pdf_filename,
+        type: "application/pdf",
+        disposition: "attachment",
+      }];
+    }
+
     const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
       headers: { "Authorization": `Bearer ${sendgridApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: to_email, name: to_name ?? to_email }] }],
-        from: { email: fromEmail, name: `${senderName} via ${fromName}` },
-        reply_to: { email: replyTo, name: senderName },
-        subject,
-        content: [{ type: "text/plain", value: body }],
-      }),
+      body: JSON.stringify(payload),
     });
-    if (!sgRes.ok) sendStatus = "error";
+    if (!sgRes.ok) {
+      const errText = await sgRes.text();
+      console.error("SendGrid error:", sgRes.status, errText);
+      sendStatus = "error";
+    }
   } else {
     sendStatus = "no_sendgrid";
   }
@@ -63,6 +79,8 @@ serve(async (req) => {
     subject,
     body,
     status: sendStatus,
+    document_type: document_type ?? null,
+    document_id: document_id ?? null,
   });
 
   return new Response(JSON.stringify({ ok: true, status: sendStatus }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
