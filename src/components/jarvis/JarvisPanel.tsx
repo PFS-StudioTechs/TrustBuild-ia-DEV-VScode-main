@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { streamChat } from "@/hooks/useStreamingChat";
 import DevisCreationForm, { parseDevisData, stripDevisData, type DevisData } from "./DevisCreationForm";
+import DevisUpdateForm, { parseDevisUpdateData, stripDevisUpdateData, type DevisUpdateData } from "./DevisUpdateForm";
 import AvenantCreationForm, { parseAvenantData, stripAvenantData, type AvenantData } from "./AvenantCreationForm";
 import FactureCreationForm, { parseFactureData, stripFactureData, type FactureData } from "./FactureCreationForm";
 import AvoirCreationForm, { parseAvoirData, stripAvoirData, type AvoirData } from "./AvoirCreationForm";
@@ -21,6 +22,7 @@ interface Message {
   persona?: string;
   source?: string;
   devisData?: DevisData | null;
+  devisUpdateData?: DevisUpdateData | null;
   avenantData?: AvenantData | null;
   factureData?: FactureData | null;
   avoirData?: AvoirData | null;
@@ -302,14 +304,16 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
         persistMessage("assistant", finalText, assistantPersona, "app");
 
         const devisData = parseDevisData(finalText);
+        const devisUpdateData = parseDevisUpdateData(finalText);
         const avenantData = parseAvenantData(finalText);
         const factureData = parseFactureData(finalText);
         const avoirData = parseAvoirData(finalText);
         const tsData = parseTsData(finalText);
 
-        if (devisData || avenantData || factureData || avoirData || tsData) {
+        if (devisData || devisUpdateData || avenantData || factureData || avoirData || tsData) {
           let cleanContent = finalText;
           if (devisData) cleanContent = stripDevisData(cleanContent);
+          if (devisUpdateData) cleanContent = stripDevisUpdateData(cleanContent);
           if (avenantData) cleanContent = stripAvenantData(cleanContent);
           if (factureData) cleanContent = stripFactureData(cleanContent);
           if (avoirData) cleanContent = stripAvoirData(cleanContent);
@@ -318,7 +322,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
           setMessages((prev) =>
             prev.map((m, i) =>
               i === prev.length - 1 && m.role === "assistant"
-                ? { ...m, content: cleanContent, devisData, avenantData, factureData, avoirData, tsData }
+                ? { ...m, content: cleanContent, devisData, devisUpdateData, avenantData, factureData, avoirData, tsData }
                 : m
             )
           );
@@ -409,7 +413,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                 )}>
                   {msg.role === "assistant" ? (
                     <div className="prose prose-xs max-w-none dark:prose-invert [&_p]:my-0.5 [&_ul]:my-0.5 [&_li]:my-0 [&_h1]:text-sm [&_h2]:text-xs [&_h3]:text-xs">
-                      <ReactMarkdown>{stripTsData(stripAvoirData(stripFactureData(stripAvenantData(stripDevisData(msg.content)))))}</ReactMarkdown>
+                      <ReactMarkdown>{stripTsData(stripAvoirData(stripFactureData(stripAvenantData(stripDevisUpdateData(stripDevisData(msg.content))))))}</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -421,6 +425,14 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                     onCreated={(devisId?: string) => {
                       if (devisId) { setActiveDocId(devisId); setActiveDocType("devis"); }
                       setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisData: null } : m)));
+                    }}
+                  />
+                )}
+                {msg.devisUpdateData && (
+                  <DevisUpdateForm
+                    data={msg.devisUpdateData}
+                    onCreated={() => {
+                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisUpdateData: null } : m)));
                     }}
                   />
                 )}

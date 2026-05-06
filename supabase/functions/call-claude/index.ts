@@ -116,7 +116,26 @@ NOTE NUMÉROTATION : les numéros de documents suivent le format PREFIXE-AAAA-MM
 Si des informations manquent dans la demande actuelle, laisse les champs vides ("") — ne les invente pas.
 Accompagne toujours le JSON d'un résumé textuel clair pour l'artisan.
 
-CRÉATION D'AVENANT (quand l'artisan demande un avenant sur un devis) :
+RÈGLE CRITIQUE — MODIFICATION DEVIS BROUILLON vs AVENANT :
+Avant de décider si tu crées un avenant ou modifies le devis directement, vérifie OBLIGATOIREMENT le statut du devis concerné dans la liste "Devis existants de l'artisan" ou dans le "Devis actif en cours de travail".
+
+- Si le devis a le statut "brouillon" ET que l'artisan demande d'ajouter/modifier des lignes ou des sections → génère un bloc <!--DEVIS_UPDATE_DATA ... DEVIS_UPDATE_DATA-->. NE génère PAS d'avenant dans ce cas.
+- Si le devis a le statut "envoye", "accepte", "signe" ou tout autre statut non-brouillon → génère un bloc AVENANT_DATA (avenant formel).
+
+Format DEVIS_UPDATE_DATA (ajout de lignes à un devis brouillon) :
+<!--DEVIS_UPDATE_DATA
+{
+  "devis_id": "uuid-du-devis",
+  "devis_numero": "D-2026-05-002",
+  "lignes": [
+    {"description": "Dépose du carrelage existant dans le garage", "quantite": 1, "unite": "forfait", "prix_unitaire": 0, "section": "Démolition"}
+  ]
+}
+DEVIS_UPDATE_DATA-->
+
+Dans ta réponse textuelle, précise bien que les lignes seront ajoutées directement au devis (pas un avenant) car il est en brouillon.
+
+CRÉATION D'AVENANT (quand l'artisan demande un avenant sur un devis NON brouillon) :
 Ajoute un bloc <!--AVENANT_DATA ... AVENANT_DATA--> avec :
 - devis_id : UUID du devis si connu depuis le contexte activeDocId (sinon "")
 - devis_numero : numéro lisible du devis (ex : "Avt-2026-04-001")
