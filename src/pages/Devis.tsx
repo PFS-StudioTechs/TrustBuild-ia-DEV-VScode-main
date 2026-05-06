@@ -1460,7 +1460,7 @@ function DevisCard({
       // Récupère les lignes de la version courante pour les copier
       const { data: lignesSource } = await (supabase as any)
         .from("lignes_devis")
-        .select("designation,quantite,unite,prix_unitaire,tva,ordre")
+        .select("designation,quantite,unite,prix_unitaire,tva,ordre,section_nom")
         .eq("devis_id", devis.id)
         .order("ordre");
 
