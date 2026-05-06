@@ -12,6 +12,7 @@ import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 export interface FactureData {
   devis_id: string;
   devis_numero?: string;
+  is_acompte?: boolean;
   lignes: Array<{
     description: string;
     quantite: number;
@@ -86,6 +87,21 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
             ordre: i + 1,
           }))
         );
+      }
+
+      // Si facture d'acompte → crée aussi un enregistrement acomptes pour le suivi du solde
+      if (data.is_acompte) {
+        const acompteNumero = await generateDocumentNumber(user.id, "acompte");
+        const totalTTC = Math.round(totalHT * 1.2 * 100) / 100;
+        await supabase.from("acomptes").insert({
+          artisan_id: user.id,
+          devis_id: data.devis_id,
+          numero: acompteNumero,
+          montant: totalTTC,
+          statut: "en_attente",
+          date_echeance: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          notes: `Lié à la facture ${numero}`,
+        });
       }
 
       toast.success(`Facture ${numero} créée !`);
