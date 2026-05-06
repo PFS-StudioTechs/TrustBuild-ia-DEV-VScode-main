@@ -996,7 +996,6 @@ function FactureCard({
             solde_restant: facture.solde_restant ?? facture.montant_ht * (1 + facture.tva / 100),
             chantierNom,
           }}
-          lignes={lignes?.map(l => ({ designation: l.designation, quantite: l.quantite, unite: l.unite, prix_unitaire: l.prix_unitaire, tva: l.tva })) ?? undefined}
           clientEmail={clientEmail ?? null}
           clientNom={clientNom}
           open={emailOpen}
@@ -2298,7 +2297,6 @@ function DevisCard({
             created_at: devis.created_at,
             date_validite: devis.date_validite,
           }}
-          lignes={devis.lignes?.map(l => ({ designation: l.designation, quantite: l.quantite, unite: l.unite, prix_unitaire: l.prix_unitaire, tva: l.tva, section_nom: l.section_nom }))}
           clientEmail={devis.client?.email ?? null}
           clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
           open={emailDevisOpen}

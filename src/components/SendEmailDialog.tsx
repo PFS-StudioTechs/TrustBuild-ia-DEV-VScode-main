@@ -8,15 +8,6 @@ import { Send, Loader2, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { generateDevisPdfBytes, generateFacturePdfBytes, type LignePdf } from "@/lib/generatePdf";
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
 
 interface BaseDoc {
   id: string;
@@ -29,7 +20,6 @@ interface BaseDoc {
 export interface SendEmailDialogDevisProps {
   type: "devis";
   doc: BaseDoc & { date_validite?: string | null; chantierNom?: string };
-  lignes?: LignePdf[];
   clientEmail: string | null;
   clientNom: string;
   open: boolean;
@@ -40,7 +30,6 @@ export interface SendEmailDialogDevisProps {
 export interface SendEmailDialogFactureProps {
   type: "facture";
   doc: BaseDoc & { date_echeance: string; solde_restant: number; chantierNom?: string };
-  lignes?: LignePdf[];
   clientEmail: string | null;
   clientNom: string;
   open: boolean;
@@ -51,7 +40,7 @@ export interface SendEmailDialogFactureProps {
 type Props = SendEmailDialogDevisProps | SendEmailDialogFactureProps;
 
 export default function SendEmailDialog(props: Props) {
-  const { type, doc, lignes, clientEmail, clientNom, open, onClose, onSent } = props;
+  const { type, doc, clientEmail, clientNom, open, onClose, onSent } = props;
   const { user } = useAuth();
 
   const [toEmail, setToEmail] = useState(clientEmail ?? "");
@@ -88,8 +77,8 @@ export default function SendEmailDialog(props: Props) {
     const greeting = clientNom ? `Bonjour ${clientNom},` : "Bonjour,";
 
     const bodyText = type === "devis"
-      ? `${greeting}\n\nVeuillez trouver ci-joint le devis ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`
-      : `${greeting}\n\nVeuillez trouver ci-joint la facture ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`;
+      ? `${greeting}\n\nVeuillez trouver ci-dessous le devis ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`
+      : `${greeting}\n\nVeuillez trouver ci-dessous la facture ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`;
 
     setBody(bodyText);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,49 +91,12 @@ export default function SendEmailDialog(props: Props) {
 
     setSending(true);
     try {
-      // Génère le PDF
-      let pdfBytes: Uint8Array;
-      const pdfFilename = `${doc.numero}.pdf`;
-
-      if (type === "devis") {
-        pdfBytes = generateDevisPdfBytes({
-          numero: doc.numero,
-          montant_ht: doc.montant_ht,
-          tva: doc.tva,
-          statut: "devis",
-          created_at: doc.created_at,
-          date_validite: (props as SendEmailDialogDevisProps).doc.date_validite,
-          clientNom,
-          chantierNom: (props as SendEmailDialogDevisProps).doc.chantierNom,
-          lignes,
-        });
-      } else {
-        const fDoc = (props as SendEmailDialogFactureProps).doc;
-        pdfBytes = generateFacturePdfBytes({
-          numero: doc.numero,
-          montant_ht: doc.montant_ht,
-          tva: doc.tva,
-          statut: "facture",
-          created_at: doc.created_at,
-          date_echeance: fDoc.date_echeance,
-          solde_restant: fDoc.solde_restant,
-          clientNom,
-          chantierNom: fDoc.chantierNom,
-          lignes,
-        });
-      }
-
-      const pdf_base64 = uint8ToBase64(pdfBytes);
-
-      // Envoie via Edge Function
       const { data, error } = await supabase.functions.invoke("send-message", {
         body: {
           to_email: toEmail.trim(),
           to_name: clientNom || undefined,
           subject,
           body,
-          pdf_base64,
-          pdf_filename: pdfFilename,
           document_type: type,
           document_id: doc.id,
         },
@@ -212,7 +164,7 @@ export default function SendEmailDialog(props: Props) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Le PDF du {type === "devis" ? "devis" : "la facture"} sera joint automatiquement.
+            Le {type === "devis" ? "devis" : "la facture"} sera intégré{type === "facture" ? "e" : ""} dans l'email avec le même rendu que dans l'application.
             {type === "devis" ? " Le devis passera au statut « Envoyé »." : " La facture passera au statut « Envoyée »."}
           </p>
         </div>
@@ -222,7 +174,7 @@ export default function SendEmailDialog(props: Props) {
           <Button onClick={handleSend} disabled={sending} className="bg-primary text-primary-foreground gap-2">
             {sending
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Envoi en cours…</>
-              : <><Send className="w-4 h-4" /> Envoyer avec PDF</>
+              : <><Send className="w-4 h-4" /> Envoyer</>
             }
           </Button>
         </DialogFooter>
