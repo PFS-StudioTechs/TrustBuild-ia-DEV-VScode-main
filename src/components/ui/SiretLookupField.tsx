@@ -104,7 +104,21 @@ export default function SiretLookupField({
             result.nom_raison_sociale ||
             result.siege?.nom_complet ||
             "";
-          const adresse = result.siege?.adresse || "";
+
+          // Reconstruit l'adresse avec virgule pour parseAddress d'AddressFields
+          const siege = result.siege ?? {};
+          const numVoie = siege.numero_voie ?? "";
+          const typeVoie = siege.type_voie ?? "";
+          const libelleVoie = siege.libelle_voie ?? "";
+          const nomVoie = [typeVoie, libelleVoie].filter(Boolean).join(" ");
+          const voieComplete = [numVoie, nomVoie].filter(Boolean).join(" ");
+          const cp = siege.code_postal ?? "";
+          const ville = siege.libelle_commune ?? siege.commune ?? "";
+          const adresse =
+            voieComplete && cp && ville
+              ? `${voieComplete}, ${cp} ${ville}`
+              : siege.adresse ?? "";
+
           onResolved({ nom, adresse });
         }
       })
