@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search, Phone, Mail, MapPin, Pencil, Trash2, Users, FileText, Receipt, CheckCircle2, Circle, Building2 } from "lucide-react";
 import AddressFields from "@/components/ui/AddressFields";
+import SiretLookupField from "@/components/ui/SiretLookupField";
 import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
@@ -164,7 +165,10 @@ function ClientDialog({
     if (!form.email.trim()) { toast.error("L'email est obligatoire"); return; }
     if (!form.telephone.trim()) { toast.error("Le téléphone est obligatoire"); return; }
     if (!form.adresse.trim()) { toast.error("L'adresse est obligatoire"); return; }
-    if (form.type === "pro" && !form.siret.trim()) { toast.error("Le SIRET est obligatoire pour un professionnel"); return; }
+    if (form.type === "pro") {
+      if (!form.siret.trim()) { toast.error("Le SIRET est obligatoire pour un professionnel"); return; }
+      if (!/^\d{14}$/.test(form.siret.trim())) { toast.error("Le SIRET doit contenir exactement 14 chiffres"); return; }
+    }
     setSaving(true);
     const ok = await onSave(form);
     setSaving(false);
@@ -213,7 +217,15 @@ function ClientDialog({
           {form.type === "pro" && (
             <div className="space-y-1.5">
               <Label>SIRET <span className="text-destructive">*</span></Label>
-              <Input value={form.siret} onChange={set("siret")} placeholder="12345678901234" maxLength={14} />
+              <SiretLookupField
+                value={form.siret}
+                onChange={v => setForm(p => ({ ...p, siret: v }))}
+                onResolved={({ nom, adresse }) => setForm(p => ({
+                  ...p,
+                  nom: nom || p.nom,
+                  adresse: adresse || p.adresse,
+                }))}
+              />
             </div>
           )}
           <div className="space-y-1.5">
