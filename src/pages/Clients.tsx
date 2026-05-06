@@ -43,6 +43,7 @@ interface Chantier {
   statut: string;
   etat_projet: EtatProjet | null;
   date_debut: string | null;
+  adresse_chantier: string | null;
 }
 
 interface DevisRow { id: string; chantier_id: string; statut: string; numero: string; montant_ht: number; }
@@ -548,13 +549,17 @@ export default function Clients() {
   const [formOpen, setFormOpen]     = useState(false);
   const [editTarget, setEditTarget] = useState<Client | null>(null);
   const [detailClient, setDetailClient] = useState<Client | null>(null);
+  const [chantierUpdatePrompt, setChantierUpdatePrompt] = useState<{
+    chantiers: Chantier[];
+    newAdresse: string;
+  } | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const [cl, ch, dv, av, fa] = await Promise.all([
       supabase.from("clients").select("*").eq("artisan_id", user.id).order("nom"),
-      supabase.from("chantiers").select("id, client_id, nom, statut, etat_projet, date_debut").eq("artisan_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("chantiers").select("id, client_id, nom, statut, etat_projet, date_debut, adresse_chantier").eq("artisan_id", user.id).order("created_at", { ascending: false }),
       supabase.from("devis").select("id, chantier_id, statut, numero, montant_ht").eq("artisan_id", user.id),
       supabase.from("avenants").select("id, devis_id").eq("artisan_id", user.id),
       supabase.from("factures").select("id, devis_id, statut").eq("artisan_id", user.id),
@@ -609,6 +614,16 @@ export default function Clients() {
       const { error } = await supabase.from("clients").update(payload).eq("id", editTarget.id);
       if (error) { toast.error("Erreur lors de la modification"); return false; }
       toast.success("Client mis à jour");
+
+      // Si l'adresse a changé, proposer de mettre à jour les chantiers
+      const oldAdresse = editTarget.adresse?.trim() ?? "";
+      const newAdresse = payload.adresse ?? "";
+      if (newAdresse && newAdresse !== oldAdresse) {
+        const clientChantiers = chantiers.filter(c => c.client_id === editTarget.id);
+        if (clientChantiers.length > 0) {
+          setChantierUpdatePrompt({ chantiers: clientChantiers, newAdresse });
+        }
+      }
     } else {
       const { error } = await supabase.from("clients").insert({ ...payload, artisan_id: user.id });
       if (error) { toast.error("Erreur lors de l'ajout"); return false; }
@@ -616,6 +631,19 @@ export default function Clients() {
     }
     await fetchAll();
     return true;
+  };
+
+  const handleChantierUpdateConfirm = async () => {
+    if (!chantierUpdatePrompt) return;
+    const ids = chantierUpdatePrompt.chantiers.map(c => c.id);
+    const { error } = await supabase
+      .from("chantiers")
+      .update({ adresse_chantier: chantierUpdatePrompt.newAdresse })
+      .in("id", ids);
+    if (error) { toast.error("Erreur mise à jour adresse chantier(s)"); }
+    else { toast.success(`Adresse mise à jour sur ${ids.length} chantier(s)`); }
+    setChantierUpdatePrompt(null);
+    await fetchAll();
   };
 
   const handleDelete = async (id: string) => {
@@ -738,6 +766,41 @@ export default function Clients() {
         initial={formInitial}
         onSave={handleSave}
       />
+
+      {/* Dialog confirmation mise à jour adresse chantier(s) */}
+      <AlertDialog open={!!chantierUpdatePrompt} onOpenChange={v => { if (!v) setChantierUpdatePrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mettre à jour l'adresse des chantiers ?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>L'adresse du client a changé. Souhaitez-vous aussi mettre à jour l'adresse des chantiers suivants ?</p>
+                <div className="space-y-2">
+                  {chantierUpdatePrompt?.chantiers.map(ch => (
+                    <div key={ch.id} className="rounded-lg border bg-muted/40 px-3 py-2 text-xs space-y-0.5">
+                      <p className="font-semibold text-foreground">{ch.nom}</p>
+                      {ch.adresse_chantier ? (
+                        <p className="text-muted-foreground">Actuelle : {ch.adresse_chantier}</p>
+                      ) : (
+                        <p className="text-muted-foreground italic">Aucune adresse renseignée</p>
+                      )}
+                      <p className="text-primary">→ Nouvelle : {chantierUpdatePrompt.newAdresse}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setChantierUpdatePrompt(null)}>
+              Non, laisser tel quel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleChantierUpdateConfirm} className="bg-primary text-primary-foreground">
+              Oui, mettre à jour
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog détail client */}
       {detailClient && (
