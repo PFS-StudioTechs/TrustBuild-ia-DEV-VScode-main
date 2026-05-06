@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
@@ -792,6 +793,18 @@ function FactureCard({
     }
   };
 
+  const deleteFacture = async () => {
+    try {
+      await (supabase as any).from("lignes_facture").delete().eq("facture_id", facture.id);
+      const { error } = await supabase.from("factures").delete().eq("id", facture.id);
+      if (error) throw error;
+      toast.success(`Facture ${facture.numero} supprimée`);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   return (
     <>
       <div className={`forge-card space-y-0 p-0 overflow-hidden ${facture.statut === "annulee" ? "opacity-60" : ""}`}>
@@ -828,9 +841,32 @@ function FactureCard({
             {/* Actions statut */}
             <div className="flex flex-wrap gap-2">
               {facture.statut === "brouillon" && (
-                <Button size="sm" variant="outline" onClick={() => changeStatut("envoyee")} disabled={updatingStatut}>
-                  <Send className="w-3.5 h-3.5 mr-1.5" /> Marquer envoyée
-                </Button>
+                <>
+                  <Button size="sm" variant="outline" onClick={() => changeStatut("envoyee")} disabled={updatingStatut}>
+                    <Send className="w-3.5 h-3.5 mr-1.5" /> Marquer envoyée
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="outline" className="text-destructive border-destructive/40 hover:bg-destructive/10">
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Supprimer
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Supprimer cette facture ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          La facture {facture.numero} sera supprimée définitivement. Cette action est irréversible.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction onClick={deleteFacture} className="bg-destructive text-destructive-foreground">
+                          Supprimer
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
               )}
               {facture.statut === "envoyee" && (
                 <>
