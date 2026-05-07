@@ -75,7 +75,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
 
   const [selectedClientId, setSelectedClientId] = useState<string | null>(data.client.id ?? null);
   const [client, setClient] = useState(data.client);
-  const [lignes, setLignes] = useState(data.lignes);
+  const [lignes, setLignes] = useState(data.lignes ?? []);
   const [saving, setSaving] = useState(false);
 
   // Sections

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { X, Send, Bot, User, Scale, Wrench, Mic, MicOff, Smartphone, Monitor, FilePlus, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,24 @@ import AvenantCreationForm, { parseAvenantData, stripAvenantData, type AvenantDa
 import FactureCreationForm, { parseFactureData, stripFactureData, type FactureData } from "./FactureCreationForm";
 import AvoirCreationForm, { parseAvoirData, stripAvoirData, type AvoirData } from "./AvoirCreationForm";
 import TsCreationForm, { parseTsData, stripTsData, type TsData } from "./TsCreationForm";
+
+class JarvisFormBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="my-2 p-3 rounded-xl border border-destructive/30 bg-destructive/5 text-xs text-destructive">
+          Erreur d'affichage du formulaire — réessayez votre demande.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface Message {
   role: "user" | "assistant";
@@ -420,55 +438,67 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
                 {msg.devisData && (
-                  <DevisCreationForm
-                    data={msg.devisData}
-                    onCreated={(devisId?: string) => {
-                      if (devisId) { setActiveDocId(devisId); setActiveDocType("devis"); }
-                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisData: null } : m)));
-                    }}
-                  />
+                  <JarvisFormBoundary>
+                    <DevisCreationForm
+                      data={msg.devisData}
+                      onCreated={(devisId?: string) => {
+                        if (devisId) { setActiveDocId(devisId); setActiveDocType("devis"); }
+                        setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisData: null } : m)));
+                      }}
+                    />
+                  </JarvisFormBoundary>
                 )}
                 {msg.devisUpdateData && (
-                  <DevisUpdateForm
-                    data={msg.devisUpdateData}
-                    onCreated={() => {
-                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisUpdateData: null } : m)));
-                    }}
-                  />
+                  <JarvisFormBoundary>
+                    <DevisUpdateForm
+                      data={msg.devisUpdateData}
+                      onCreated={() => {
+                        setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisUpdateData: null } : m)));
+                      }}
+                    />
+                  </JarvisFormBoundary>
                 )}
                 {msg.avenantData && (
-                  <AvenantCreationForm
-                    data={msg.avenantData}
-                    onCreated={() => {
-                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avenantData: null } : m)));
-                    }}
-                  />
+                  <JarvisFormBoundary>
+                    <AvenantCreationForm
+                      data={msg.avenantData}
+                      onCreated={() => {
+                        setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avenantData: null } : m)));
+                      }}
+                    />
+                  </JarvisFormBoundary>
                 )}
                 {msg.factureData && (
-                  <FactureCreationForm
-                    data={msg.factureData}
-                    onCreated={(factureId: string) => {
-                      setActiveDocId(factureId);
-                      setActiveDocType("facture");
-                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, factureData: null } : m)));
-                    }}
-                  />
+                  <JarvisFormBoundary>
+                    <FactureCreationForm
+                      data={msg.factureData}
+                      onCreated={(factureId: string) => {
+                        setActiveDocId(factureId);
+                        setActiveDocType("facture");
+                        setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, factureData: null } : m)));
+                      }}
+                    />
+                  </JarvisFormBoundary>
                 )}
                 {msg.avoirData && (
-                  <AvoirCreationForm
-                    data={msg.avoirData}
-                    onCreated={() => {
-                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avoirData: null } : m)));
-                    }}
-                  />
+                  <JarvisFormBoundary>
+                    <AvoirCreationForm
+                      data={msg.avoirData}
+                      onCreated={() => {
+                        setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avoirData: null } : m)));
+                      }}
+                    />
+                  </JarvisFormBoundary>
                 )}
                 {msg.tsData && (
-                  <TsCreationForm
-                    data={msg.tsData}
-                    onCreated={() => {
-                      setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, tsData: null } : m)));
-                    }}
-                  />
+                  <JarvisFormBoundary>
+                    <TsCreationForm
+                      data={msg.tsData}
+                      onCreated={() => {
+                        setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, tsData: null } : m)));
+                      }}
+                    />
+                  </JarvisFormBoundary>
                 )}
                 <SourceBadge source={msg.source} />
               </div>

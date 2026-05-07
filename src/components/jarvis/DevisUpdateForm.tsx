@@ -37,7 +37,7 @@ interface Props {
 
 export default function DevisUpdateForm({ data, onCreated }: Props) {
   const { user } = useAuth();
-  const [lignes, setLignes] = useState(data.lignes);
+  const [lignes, setLignes] = useState(data.lignes ?? []);
   const [saving, setSaving] = useState(false);
 
   const updateLigne = (i: number, field: string, value: string | number) =>

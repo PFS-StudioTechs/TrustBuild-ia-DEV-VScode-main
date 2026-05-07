@@ -39,8 +39,8 @@ interface Props {
 
 export default function AvenantCreationForm({ data, onCreated }: Props) {
   const { user } = useAuth();
-  const [motif, setMotif] = useState(data.motif);
-  const [lignes, setLignes] = useState(data.lignes);
+  const [motif, setMotif] = useState(data.motif ?? "");
+  const [lignes, setLignes] = useState(data.lignes ?? []);
   const [saving, setSaving] = useState(false);
 
   const updateLigne = (i: number, field: string, value: string | number) =>

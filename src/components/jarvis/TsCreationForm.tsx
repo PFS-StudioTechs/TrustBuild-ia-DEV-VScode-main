@@ -39,8 +39,8 @@ interface Props {
 
 export default function TsCreationForm({ data, onCreated }: Props) {
   const { user } = useAuth();
-  const [description, setDescription] = useState(data.description);
-  const [lignes, setLignes] = useState(data.lignes);
+  const [description, setDescription] = useState(data.description ?? "");
+  const [lignes, setLignes] = useState(data.lignes ?? []);
   const [saving, setSaving] = useState(false);
 
   const updateLigne = (i: number, field: string, value: string | number) =>
