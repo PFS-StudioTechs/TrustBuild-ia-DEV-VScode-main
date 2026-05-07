@@ -47,12 +47,6 @@ interface Message {
   tsData?: TsData | null;
 }
 
-function detectPersonaFromContent(content: string): string {
-  if (content.startsWith("[Robert B]")) return "robert_b";
-  if (content.startsWith("[Auguste P]")) return "auguste_p";
-  return "jarvis";
-}
-
 const personaConfig: Record<string, { label: string; icon: typeof Bot; color: string }> = {
   jarvis: { label: "Jarvis", icon: Bot, color: "text-accent" },
   robert_b: { label: "Robert B", icon: Scale, color: "text-amber-600" },
@@ -304,7 +298,8 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
           context: { page: location.pathname, activeDocId, activeDocType },
         },
         onChunk: (accumulated) => {
-          const persona = detectPersonaFromContent(accumulated);
+          const persona = accumulated.startsWith("[Robert B]") ? "robert_b"
+            : accumulated.startsWith("[Auguste P]") ? "auguste_p" : "jarvis";
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant") {
@@ -318,7 +313,8 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       });
 
       if (finalText) {
-        const assistantPersona = detectPersonaFromContent(finalText);
+        const assistantPersona = finalText.startsWith("[Robert B]") ? "robert_b"
+          : finalText.startsWith("[Auguste P]") ? "auguste_p" : "jarvis";
         persistMessage("assistant", finalText, assistantPersona, "app");
 
         const devisData = parseDevisData(finalText);
