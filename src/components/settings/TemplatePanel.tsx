@@ -380,7 +380,7 @@ export default function TemplatePanel() {
         <p className="text-xs text-muted-foreground mb-3">
           Uploadez un ancien devis ou facture (PDF ou image). Claude analysera automatiquement les couleurs, la structure et les mentions légales.
         </p>
-        <input ref={fileInputRef} type="file" accept=".pdf,image/*" className="hidden" onChange={handleDocumentAnalysis} />
+        <input ref={fileInputRef} type="file" accept=".pdf,image/*" className="sr-only" onChange={handleDocumentAnalysis} />
         <Button
           variant="outline"
           className="w-full gap-2 border-dashed"
@@ -414,7 +414,7 @@ export default function TemplatePanel() {
               </div>
             )}
             <div className="flex-1">
-              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+              <input ref={logoInputRef} type="file" accept="image/*" className="sr-only" onChange={handleLogoUpload} />
               <Button
                 variant="outline"
                 size="sm"

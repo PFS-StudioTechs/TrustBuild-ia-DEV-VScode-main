@@ -377,8 +377,8 @@ export default function MesDocuments() {
             <Plus className="w-4 h-4 mr-1" /> Ajouter
           </Button>
         </div>
-        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
-        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
+        <input ref={fileInputRef} type="file" multiple className="sr-only" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
       </div>
 
       {/* Section KBIS */}

@@ -415,7 +415,7 @@ export default function Knowledge() {
         type="file"
         multiple
         accept=".pdf,.docx,.xlsx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
-        className="hidden"
+        className="sr-only"
         onChange={(e) => e.target.files && handleFiles(e.target.files)}
       />
 
