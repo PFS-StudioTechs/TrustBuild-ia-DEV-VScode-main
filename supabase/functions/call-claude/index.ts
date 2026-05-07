@@ -122,18 +122,55 @@ Avant de décider si tu crées un avenant ou modifies le devis directement, vér
 - Si le devis a le statut "brouillon" ET que l'artisan demande d'ajouter/modifier des lignes ou des sections → génère un bloc <!--DEVIS_UPDATE_DATA ... DEVIS_UPDATE_DATA-->. NE génère PAS d'avenant dans ce cas.
 - Si le devis a le statut "envoye", "accepte", "signe" ou tout autre statut non-brouillon → génère un bloc AVENANT_DATA (avenant formel).
 
-Format DEVIS_UPDATE_DATA (ajout de lignes à un devis brouillon) :
+Format DEVIS_UPDATE_DATA (modification d'un devis brouillon — ajout, suppression, déplacement de lignes, changement TVA) :
+
+Champs disponibles (tous optionnels sauf devis_id) :
+- "tva" : nouveau taux TVA en % (ex: 5.5, 10, 20)
+- "lignes" : nouvelles lignes à ajouter (tableau, peut être vide [])
+- "operations" : opérations sur lignes existantes (utilise les IDs des "Lignes actuelles du devis brouillon")
+
+Types d'opérations :
+- {"type": "delete", "ligne_id": "uuid"} → supprime la ligne
+- {"type": "update_section", "ligne_id": "uuid", "section_nom": "Maçonnerie"} → déplace la ligne dans une section
+- {"type": "update", "ligne_id": "uuid", "changes": {"designation": "...", "quantite": 2, "prix_unitaire": 50, "unite": "m²", "section_nom": "Peinture"}} → modifie les champs
+
+Exemple changement TVA seul :
 <!--DEVIS_UPDATE_DATA
 {
   "devis_id": "uuid-du-devis",
-  "devis_numero": "D-2026-05-002",
-  "lignes": [
-    {"description": "Dépose du carrelage existant dans le garage", "quantite": 1, "unite": "forfait", "prix_unitaire": 0, "section": "Démolition"}
+  "devis_numero": "DEV-2026-05-001",
+  "tva": 5.5,
+  "lignes": []
+}
+DEVIS_UPDATE_DATA-->
+
+Exemple déplacement de ligne dans une section :
+<!--DEVIS_UPDATE_DATA
+{
+  "devis_id": "uuid-du-devis",
+  "devis_numero": "DEV-2026-05-001",
+  "lignes": [],
+  "operations": [
+    {"type": "update_section", "ligne_id": "uuid-de-la-ligne", "section_nom": "Maçonnerie"}
   ]
 }
 DEVIS_UPDATE_DATA-->
 
-Dans ta réponse textuelle, précise bien que les lignes seront ajoutées directement au devis (pas un avenant) car il est en brouillon.
+Exemple suppression + ajout de nouvelles lignes :
+<!--DEVIS_UPDATE_DATA
+{
+  "devis_id": "uuid-du-devis",
+  "devis_numero": "DEV-2026-05-001",
+  "lignes": [
+    {"description": "Nouvelle prestation", "quantite": 1, "unite": "u", "prix_unitaire": 150, "section": "Maçonnerie"}
+  ],
+  "operations": [
+    {"type": "delete", "ligne_id": "uuid-ligne-a-supprimer"}
+  ]
+}
+DEVIS_UPDATE_DATA-->
+
+Dans ta réponse textuelle, précise bien ce qui sera fait directement sur le devis (pas un avenant) car il est en brouillon. Si l'artisan demande de MODIFIER la TVA, utilise TOUJOURS le champ "tva" dans DEVIS_UPDATE_DATA avec "lignes": []. Si l'artisan demande de déplacer/supprimer/modifier des lignes existantes, utilise "operations" avec les IDs des "Lignes actuelles du devis brouillon".
 
 CRÉATION D'AVENANT (quand l'artisan demande un avenant sur un devis NON brouillon) :
 Ajoute un bloc <!--AVENANT_DATA ... AVENANT_DATA--> avec :
@@ -635,7 +672,18 @@ serve(async (req) => {
               .eq("id", activeDocId)
               .maybeSingle();
             if (activeDevis) {
-              systemContent += `\n\n---\n## Devis actif en cours de travail\nCe devis est le document actif. Utilise son ID dans les blocs AVENANT_DATA et FACTURE_DATA.\n${JSON.stringify(activeDevis)}\n---`;
+              systemContent += `\n\n---\n## Devis actif en cours de travail\nCe devis est le document actif. Utilise son ID dans les blocs AVENANT_DATA, FACTURE_DATA et DEVIS_UPDATE_DATA.\n${JSON.stringify(activeDevis)}\n---`;
+              // Inject existing lines so Jarvis can reference them by ID for updates/deletes/moves
+              if (activeDevis.statut === "brouillon") {
+                const { data: lignesDevis } = await supabase
+                  .from("lignes_devis")
+                  .select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre")
+                  .eq("devis_id", activeDocId)
+                  .order("ordre");
+                if (lignesDevis && lignesDevis.length > 0) {
+                  systemContent += `\n\n---\n## Lignes actuelles du devis brouillon (${lignesDevis.length} lignes)\nUtilise ces IDs dans les "operations" du bloc DEVIS_UPDATE_DATA pour modifier, supprimer ou déplacer des lignes existantes.\n${JSON.stringify(lignesDevis)}\n---`;
+                }
+              }
             }
           } else if (activeDocId && activeDocType === "facture") {
             const { data: activeFacture } = await supabase
