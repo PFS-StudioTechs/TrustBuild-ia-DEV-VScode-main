@@ -122,15 +122,13 @@ export default function KbisUploadSection({ onSuccess, forceUpload = false }: Kb
   return (
     <div className="space-y-3">
       <label
-        htmlFor="kbis-upload-input"
-        className="block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-colors"
+        className="relative block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-colors"
       >
         <input
           ref={inputRef}
-          id="kbis-upload-input"
           type="file"
           accept=".pdf,.jpg,.jpeg,.png"
-          className="hidden"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           onChange={handleFile}
         />
         {file ? (
