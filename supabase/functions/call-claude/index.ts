@@ -309,6 +309,21 @@ serve(async (req) => {
 
           if (devisList && devisList.length > 0) {
             systemContent += `\n\n---\n## Devis existants de l'artisan (${devisList.length})\nUtilise cette liste pour retrouver le devis_id quand l'artisan demande un avenant, TS ou facture sans avoir de document actif ouvert.\n${JSON.stringify(devisList)}\n---`;
+
+            // Inject lines for all brouillon devis (no activeDocId needed)
+            const brouillons = (devisList as { id: string; numero: string; statut: string }[])
+              .filter((d) => d.statut === "brouillon")
+              .slice(0, 5);
+            for (const d of brouillons) {
+              const { data: lignesBrouillon } = await supabase
+                .from("lignes_devis")
+                .select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre")
+                .eq("devis_id", d.id)
+                .order("ordre");
+              if (lignesBrouillon && lignesBrouillon.length > 0) {
+                systemContent += `\n\n---\n## Lignes du devis brouillon ${d.numero} (${lignesBrouillon.length} lignes)\nUtilise ces IDs dans les "operations" du bloc DEVIS_UPDATE_DATA.\n${JSON.stringify(lignesBrouillon)}\n---`;
+              }
+            }
           }
 
           // Injection du document actif (devis ou facture en cours)
