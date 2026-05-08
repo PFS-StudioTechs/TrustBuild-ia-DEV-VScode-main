@@ -60,6 +60,18 @@ interface DevisRow {
   lignes?: LigneDevis[];
 }
 
+function groupLignesBySection(lignes: LigneDevis[]): LigneDevis[] {
+  const noSection = lignes.filter(l => !l.section_nom);
+  const sections: Record<string, LigneDevis[]> = {};
+  const sectionOrder: string[] = [];
+  for (const l of lignes) {
+    if (!l.section_nom) continue;
+    if (!sections[l.section_nom]) { sections[l.section_nom] = []; sectionOrder.push(l.section_nom); }
+    sections[l.section_nom].push(l);
+  }
+  return [...noSection, ...sectionOrder.flatMap(s => sections[s])];
+}
+
 interface AvenantLigne {
   id?: string;
   designation: string;
@@ -911,8 +923,9 @@ function FactureCard({
                     <div className="space-y-1">
                       {(() => {
                         const hasSections = lignes.some(l => l.section_nom);
-                        return lignes.map((l, i) => {
-                          const isNewSection = hasSections && l.section_nom && (i === 0 || l.section_nom !== lignes[i - 1].section_nom);
+                        const sorted = groupLignesBySection(lignes);
+                        return sorted.map((l, i) => {
+                          const isNewSection = hasSections && l.section_nom && (i === 0 || l.section_nom !== sorted[i - 1].section_nom);
                           return (
                             <Fragment key={i}>
                               {isNewSection && (
@@ -1835,8 +1848,9 @@ function DevisCard({
                 <div className="space-y-1">
                   {(() => {
                     const hasSections = devis.lignes.some(l => l.section_nom);
-                    return devis.lignes.map((l, i) => {
-                      const isNewSection = hasSections && l.section_nom && (i === 0 || l.section_nom !== devis.lignes[i - 1].section_nom);
+                    const sorted = groupLignesBySection(devis.lignes);
+                    return sorted.map((l, i) => {
+                      const isNewSection = hasSections && l.section_nom && (i === 0 || l.section_nom !== sorted[i - 1].section_nom);
                       return (
                         <Fragment key={i}>
                           {isNewSection && (

@@ -321,7 +321,18 @@ serve(async (req) => {
                 .eq("devis_id", d.id)
                 .order("ordre");
               if (lignesBrouillon && lignesBrouillon.length > 0) {
-                systemContent += `\n\n---\n## Lignes du devis brouillon ${d.numero} (${lignesBrouillon.length} lignes)\nUtilise ces IDs dans les "operations" du bloc DEVIS_UPDATE_DATA.\n${JSON.stringify(lignesBrouillon)}\n---`;
+                // Group: null-section lines first, then each named section together
+                type Ligne = { id: string; designation: string; section_nom: string | null; ordre: number; [k: string]: unknown };
+                const noSec = (lignesBrouillon as Ligne[]).filter(l => !l.section_nom);
+                const secMap: Record<string, Ligne[]> = {};
+                const secOrder: string[] = [];
+                for (const l of lignesBrouillon as Ligne[]) {
+                  if (!l.section_nom) continue;
+                  if (!secMap[l.section_nom]) { secMap[l.section_nom] = []; secOrder.push(l.section_nom); }
+                  secMap[l.section_nom].push(l);
+                }
+                const grouped = [...noSec, ...secOrder.flatMap(s => secMap[s])];
+                systemContent += `\n\n---\n## Lignes du devis brouillon ${d.numero} (${grouped.length} lignes)\nUtilise ces IDs dans les "operations" du bloc DEVIS_UPDATE_DATA.\n${JSON.stringify(grouped)}\n---`;
               }
             }
           }
