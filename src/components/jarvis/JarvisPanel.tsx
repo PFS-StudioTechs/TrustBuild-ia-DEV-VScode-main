@@ -99,6 +99,17 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  // Listen for active doc set by DevisCard / FactureCard expand
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id, type } = (e as CustomEvent<{ id: string | null; type: "devis" | "facture" | null }>).detail;
+      setActiveDocId(id);
+      setActiveDocType(type);
+    };
+    window.addEventListener("jarvis:activeDoc", handler);
+    return () => window.removeEventListener("jarvis:activeDoc", handler);
+  }, []);
+
   // Realtime subscription for Telegram messages
   useEffect(() => {
     if (!user) return;

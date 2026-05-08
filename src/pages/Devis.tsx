@@ -1725,7 +1725,13 @@ function DevisCard({
     <>
       <div className={`forge-card space-y-0 p-0 overflow-hidden ${expired ? "border-amber-300 dark:border-amber-700" : ""} ${isRemplace ? "opacity-60" : ""}`}>
         {/* Header de la carte */}
-        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => {
+          const next = !expanded;
+          setExpanded(next);
+          window.dispatchEvent(new CustomEvent("jarvis:activeDoc", {
+            detail: next ? { id: devis.id, type: "devis" } : { id: null, type: null },
+          }));
+        }}>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono font-semibold text-sm">{devis.numero}</span>
