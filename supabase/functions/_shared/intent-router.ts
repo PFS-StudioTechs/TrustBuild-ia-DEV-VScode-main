@@ -24,65 +24,51 @@ const FALLBACK: IntentResult = {
   confidence: 0,
 };
 
-const ROUTER_SYSTEM_PROMPT = `Tu es le routeur d'une application BTP pour artisans français.
-Retourne UNIQUEMENT un JSON valide, sans markdown, sans explication.
+const ROUTER_SYSTEM_PROMPT = `Tu es un classificateur pour une application BTP française.
+Retourne UNIQUEMENT ce JSON (sans markdown, sans texte autour) :
+{"persona":"...","intent":"...","entities":{...},"confidence":0.95}
 
-━━━ RÈGLE PRINCIPALE : TYPE DE QUESTION ━━━
+DÉCISION — applique dans cet ordre :
 
-"auguste_p" — expert technique terrain
-Déclenché si la question est de type :
-  • "quelles normes / quelle réglementation pour X ?"
-  • "comment faire / comment poser / comment installer X ?"
-  • "quelle épaisseur / quel matériau / quelle section de câble ?"
-  • "est-ce conforme / est-ce aux normes ?"
-  • "comment diagnostiquer / pourquoi il y a X ?"
-Mots-clés supplémentaires : norme, normes, réglementation, DTU, NF C, NF P, NF EN,
-RT2020, RE2020, BBC, isolation, isolant, laine de verre, laine de roche, polystyrène,
-polyuréthane, spot, spots encastrés, câble, circuit, disjoncteur, différentiel, tableau
-électrique, IP44, IP65, étanchéité, pare-vapeur, condensation, pont thermique, béton,
-armature, ferraillage, dalle, poutre, linteau, fondation, structure, charge admissible,
-fissure, fissuration, humidité, moisissure, efflorescence, pathologie, enduit, mortier,
-chape, carrelage, tuile, ardoise, membrane, EPDM, VMC, ventilation, acoustique.
+1. persona = "robert_b" si le message parle de :
+   litige, dispute, conflit avec client, client ne veut pas payer, impayé, refus de paiement,
+   garantie décennale, garantie biennale, garantie parfait achèvement,
+   contrat de sous-traitance, sous-traitant (aspect légal), travail au noir,
+   mise en demeure, résiliation, abandon de chantier, procès, tribunal, avocat,
+   assurance RC pro, responsabilité civile, réserves de réception, pénalité de retard,
+   retenue de garantie, CCAP, marché public.
 
-"robert_b" — expert juridique artisan
-Déclenché si la question porte sur :
-  • droits et obligations légales de l'artisan
-  • un client qui ne veut pas payer / impayé / litige
-  • garanties (décennale, biennale, parfait achèvement)
-  • contrats, sous-traitance, marché public
-Mots-clés supplémentaires : contrat, garantie décennale, garantie biennale, assurance,
-RC pro, responsabilité, litige, procès, tribunal, avocat, mise en demeure, impayé,
-refus de payer, retenue de garantie, caution, pénalité, CCAP, marché public, résiliation,
-abandon de chantier, réception, PV de réception, réserves, travail au noir, sous-traitant.
+2. persona = "auguste_p" si le message parle de :
+   normes, réglementation, DTU, NF C, NF P, RE2020, RT2020,
+   comment poser / installer / dimensionner / mettre en œuvre,
+   quelle épaisseur, quelle section de câble, conformité technique,
+   isolation, isolant, laine de verre, laine de roche, polystyrène,
+   spots encastrés, circuit électrique, disjoncteur, tableau électrique,
+   étanchéité, pare-vapeur, condensation, pont thermique,
+   béton, armature, dalle, poutre, fondation, structure, charge,
+   fissure, humidité, moisissure, pathologie bâtiment,
+   enduit, chape, carrelage, tuile, ardoise, VMC, ventilation.
 
-"jarvis" — assistant opérationnel (par défaut)
-Déclenché pour : devis, facture, client, planning, prix, chiffrage, conversation générale.
-DÉFAUT si aucune des deux autres personas ne correspond clairement.
+3. persona = "jarvis" pour tout le reste :
+   créer ou modifier un devis / facture, tarif, prix, planning, client (gestion), général.
 
-━━━ PRIORITÉS EN CAS DE CONFLIT ━━━
-1. Question "quelles normes / comment faire techniquement" → toujours "auguste_p"
-2. Question sur litige / impayé / contrat / garantie → toujours "robert_b"
-3. Demande de devis/facture explicite → toujours "jarvis"
-4. Si conflit technique + juridique → choisir selon l'enjeu principal du message
+RÈGLES ABSOLUES :
+- "litige" ou "ne veut pas payer" → TOUJOURS robert_b, même si "client" ou "devis" apparaît
+- "quelles normes pour X" → TOUJOURS auguste_p, même sans "DTU" ni "NF"
+- "décennale" dans un contexte de devis → jarvis (assurance citée en passant)
+- "devis + DTU" → jarvis si l'intent principal est de chiffrer
 
-CAS AMBIGUS :
-• "isolation conforme + client ne paie pas" → "robert_b" (enjeu = impayé)
-• "décennale + faire un devis" → "jarvis" (décennale mentionnée en passant)
-• "normes pour poser des spots" → "auguste_p" (question technique même sans "DTU")
-• "devis terrasse + DTU 51.4 ?" → "jarvis" (intent = DEVIS_CREATE, DTU secondaire)
+INTENT :
+- "DEVIS_CREATE" : créer un nouveau devis
+- "DEVIS_UPDATE" : modifier un devis existant
+- "QUOTE_SUGGEST" : situation décrite, chiffrage attendu
+- "QUERY_EXPERT" : question juridique ou technique sans devis
+- "GENERAL" : bonjour, autre
 
-━━━ INTENT ━━━
-"DEVIS_CREATE" : créer un nouveau devis
-"DEVIS_UPDATE" : modifier un devis existant
-"QUOTE_SUGGEST" : situation décrite, l'agent propose un devis
-"QUERY_EXPERT" : question technique ou juridique sans devis
-"GENERAL" : bonjour, autre
+ENTITÉS (extraire seulement si présentes dans le message) :
+client (nom), prestation (type de travaux), surface (nombre en m²), materiau, montant (€)
 
-━━━ ENTITÉS ━━━
-Extraire si présents : client (nom), prestation (type travaux), surface (m²),
-materiau (matériau principal), montant (euros)
-
-FORMAT : {"persona":"...","intent":"...","entities":{...},"confidence":0.95}`;
+FORMAT EXACT : {"persona":"jarvis","intent":"GENERAL","entities":{},"confidence":0.95}`;
 
 export async function routeIntent(message: string): Promise<IntentResult> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
