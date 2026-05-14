@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS devis_annotations (
 
 ALTER TABLE devis_annotations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "artisan_select_annotations" ON devis_annotations;
 CREATE POLICY "artisan_select_annotations" ON devis_annotations
   FOR SELECT
   USING (EXISTS (
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS devis_signatures (
 
 ALTER TABLE devis_signatures ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "artisan_select_signatures" ON devis_signatures;
 CREATE POLICY "artisan_select_signatures" ON devis_signatures
   FOR SELECT
   USING (EXISTS (
