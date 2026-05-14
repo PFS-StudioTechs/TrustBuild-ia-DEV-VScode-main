@@ -166,32 +166,15 @@ export default function Dashboard() {
         <h2 className="text-small font-semibold text-muted-foreground mb-3 uppercase tracking-wider text-center">Actions rapides</h2>
         <div className="flex flex-col items-center gap-3">
           <div className="flex gap-3 justify-center flex-wrap">
-            {/* Nouveau avec sous-menu */}
-            <div className="relative">
-              <Button
-                variant="outline"
-                onClick={() => setNouveauOpen(v => !v)}
-                className="touch-target flex items-center gap-2 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Nouveau
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${nouveauOpen ? "rotate-180" : ""}`} />
-              </Button>
-              {nouveauOpen && (
-                <div className="absolute top-full left-0 mt-1 z-50 bg-card border border-border rounded-xl shadow-lg p-1 min-w-[180px]">
-                  {nouveauSubActions.map((sub) => (
-                    <button
-                      key={sub.label}
-                      onClick={sub.action}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-primary/10 hover:text-primary transition-colors text-left"
-                    >
-                      <sub.icon className="w-4 h-4" />
-                      {sub.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Button
+              variant="outline"
+              onClick={() => setNouveauOpen(v => !v)}
+              className="touch-target flex items-center gap-2 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Nouveau
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${nouveauOpen ? "rotate-180" : ""}`} />
+            </Button>
             <Button
               variant="outline"
               onClick={() => navigate("/messagerie")}
@@ -209,6 +192,20 @@ export default function Dashboard() {
               Assistants IA
             </Button>
           </div>
+          {nouveauOpen && (
+            <div className="w-full max-w-xs bg-card border border-border rounded-xl shadow-sm p-1">
+              {nouveauSubActions.map((sub) => (
+                <button
+                  key={sub.label}
+                  onClick={sub.action}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-primary/10 hover:text-primary transition-colors text-left"
+                >
+                  <sub.icon className="w-4 h-4" />
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       {/* Jarvis briefing banner */}
