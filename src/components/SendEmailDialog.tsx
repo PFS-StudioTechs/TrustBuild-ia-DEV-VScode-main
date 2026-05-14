@@ -48,6 +48,7 @@ export default function SendEmailDialog(props: Props) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [artisanNom, setArtisanNom] = useState("");
+  const [tokenPublic, setTokenPublic] = useState<string | null>(null);
 
   const montantTTC = doc.montant_ht * (1 + doc.tva / 100);
 
@@ -57,7 +58,11 @@ export default function SendEmailDialog(props: Props) {
       const nom = data ? `${data.prenom ?? ""} ${data.nom ?? ""}`.trim() : "";
       setArtisanNom(nom);
     });
-  }, [open, user]);
+    if (type === "devis") {
+      (supabase.from("devis" as any).select("token_public").eq("id", doc.id).single() as any)
+        .then(({ data }: any) => setTokenPublic(data?.token_public ?? null));
+    }
+  }, [open, user, type, doc.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -76,8 +81,12 @@ export default function SendEmailDialog(props: Props) {
 
     const greeting = clientNom ? `Bonjour ${clientNom},` : "Bonjour,";
 
+    const publicLink = type === "devis" && tokenPublic
+      ? `\n\n👉 Consulter, annoter et signer votre devis en ligne :\n${window.location.origin}/devis/view/${tokenPublic}`
+      : "";
+
     const bodyText = type === "devis"
-      ? `${greeting}\n\nVeuillez trouver ci-dessous le devis ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`
+      ? `${greeting}\n\nVeuillez trouver ci-dessous le devis ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}${publicLink}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`
       : `${greeting}\n\nVeuillez trouver ci-dessous la facture ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`;
 
     setBody(bodyText);

@@ -28,6 +28,7 @@ import Clients from "@/pages/Clients";
 import Fournisseurs from "@/pages/Fournisseurs";
 import Contacts from "@/pages/Contacts";
 import Messagerie from "@/pages/Messagerie";
+import DevisPublic from "@/pages/DevisPublic";
 import { Button } from "@/components/ui/button";
 
 const queryClient = new QueryClient();
@@ -161,6 +162,7 @@ const App = () => {
             <Toaster />
             <BrowserRouter>
               <Routes>
+                <Route path="/devis/view/:token" element={<DevisPublic />} />
                 <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/complete-profile" element={<AuthRequiredRoute><CompleteProfile /></AuthRequiredRoute>} />
