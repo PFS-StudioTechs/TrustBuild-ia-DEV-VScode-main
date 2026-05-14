@@ -1,0 +1,162 @@
+{
+  "name": "Notification Devis Signé",
+  "nodes": [
+    {
+      "id": "b1c2d3e4-0001-0001-0001-000000000001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "devis-signe",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "b1c2d3e4-0002-0002-0002-000000000002",
+      "name": "IF Statut Signe",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.record.statut }}",
+              "operation": "equal",
+              "value2": "signe"
+            },
+            {
+              "value1": "={{ $json.body.old_record.statut }}",
+              "operation": "notEqual",
+              "value2": "signe"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b1c2d3e4-0003-0003-0003-000000000003",
+      "name": "Get Chantier Client",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://ralsqmyubficxdlpwuod.supabase.co/rest/v1/chantiers?id=eq.{{$json.body.record.chantier_id}}&select=nom,clients(nom,email)",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "{{SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1c2d3e4-0004-0004-0004-000000000004",
+      "name": "Get Artisan Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 420],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://ralsqmyubficxdlpwuod.supabase.co/auth/v1/admin/users/{{$('Webhook Trigger').first().json.body.record.artisan_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "{{SUPABASE_SERVICE_ROLE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1c2d3e4-0005-0005-0005-000000000005",
+      "name": "Merge et Prepare Emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300],
+      "parameters": {
+        "jsCode": "const webhookData = $('Webhook Trigger').first().json;\nconst chantierClient = $('Get Chantier Client').first().json;\nconst artisanUser = $('Get Artisan Email').first().json;\n\nconst devis = webhookData.body.record;\nconst client = chantierClient.clients;\nconst artisanEmail = artisanUser.email;\nconst chantierNom = chantierClient.nom;\nconst montant_ttc = (parseFloat(devis.montant_ht) * (1 + parseFloat(devis.tva) / 100)).toFixed(2);\n\nreturn [{ json: {\n  client_body: JSON.stringify({\n    personalizations: [{ to: [{ email: client.email, name: client.nom }], subject: `Confirmation — Votre devis ${devis.numero} a \\u00e9t\\u00e9 sign\\u00e9` }],\n    from: { email: 'k.steeve.dorival@gmail.com', name: 'TrustBuild-IA' },\n    content: [{ type: 'text/plain', value: `Bonjour ${client.nom},\\n\\nNous confirmons la signature de votre devis n\\u00b0${devis.numero} pour un montant de ${montant_ttc} \\u20ac TTC.\\n\\nChantier : ${chantierNom}\\n\\nMerci pour votre confiance. Nous reviendrons vers vous tr\\u00e8s prochainement pour planifier les travaux.\\n\\nCordialement,\\nTrustBuild-IA` }]\n  }),\n  artisan_body: JSON.stringify({\n    personalizations: [{ to: [{ email: artisanEmail }], subject: `Devis ${devis.numero} sign\\u00e9 par ${client.nom}` }],\n    from: { email: 'k.steeve.dorival@gmail.com', name: 'TrustBuild-IA' },\n    content: [{ type: 'text/plain', value: `Le devis n\\u00b0${devis.numero} vient d'\\u00eatre sign\\u00e9 par ${client.nom}.\\n\\nMontant : ${montant_ttc} \\u20ac TTC\\nChantier : ${chantierNom}\\n\\nVous pouvez maintenant planifier les travaux.` }]\n  })\n}}];"
+      }
+    },
+    {
+      "id": "b1c2d3e4-0006-0006-0006-000000000006",
+      "name": "SendGrid Client",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 180],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{SENDGRID_API_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "rawBody": "={{ $json.client_body }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "b1c2d3e4-0007-0007-0007-000000000007",
+      "name": "SendGrid Artisan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{SENDGRID_API_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "rawBody": "={{ $json.artisan_body }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "IF Statut Signe", "type": "main", "index": 0 }]]
+    },
+    "IF Statut Signe": {
+      "main": [
+        [
+          { "node": "Get Chantier Client", "type": "main", "index": 0 },
+          { "node": "Get Artisan Email", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Get Chantier Client": {
+      "main": [[{ "node": "Merge et Prepare Emails", "type": "main", "index": 0 }]]
+    },
+    "Get Artisan Email": {
+      "main": [[{ "node": "Merge et Prepare Emails", "type": "main", "index": 1 }]]
+    },
+    "Merge et Prepare Emails": {
+      "main": [[
+        { "node": "SendGrid Client", "type": "main", "index": 0 },
+        { "node": "SendGrid Artisan", "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

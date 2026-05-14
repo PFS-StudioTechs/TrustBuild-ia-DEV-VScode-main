@@ -1,0 +1,133 @@
+import { useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
+
+export interface Produit {
+  id: string;
+  artisan_id: string;
+  fournisseur_id: string;
+  import_id: string | null;
+  reference: string | null;
+  designation: string;
+  unite: string;
+  prix_achat: number;
+  actif: boolean;
+  statut_import: "ia" | "valide" | "manuel";
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProduitUpdate = Pick<Produit, "reference" | "designation" | "unite" | "prix_achat">;
+
+const db = supabase as any;
+
+export function useProduits() {
+  const { user } = useAuth();
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const fetchProduits = useCallback(async (fournisseurId: string) => {
+    if (!user) return;
+    setLoading(true);
+    const { data, error } = await db
+      .from("produits")
+      .select("*")
+      .eq("artisan_id", user.id)
+      .eq("fournisseur_id", fournisseurId)
+      .eq("actif", true)
+      .order("statut_import")
+      .order("designation");
+    if (error) toast.error("Erreur lors du chargement du catalogue");
+    else setProduits((data as Produit[]) ?? []);
+    setLoading(false);
+  }, [user]);
+
+  const updateProduit = async (id: string, fields: ProduitUpdate): Promise<boolean> => {
+    const { error } = await db
+      .from("produits")
+      .update({ ...fields, statut_import: "valide" })
+      .eq("id", id);
+    if (error) { toast.error("Erreur lors de la modification"); return false; }
+    setProduits(prev => prev.map(p => p.id === id ? { ...p, ...fields, statut_import: "valide" } : p));
+    return true;
+  };
+
+  const validerProduit = async (id: string): Promise<void> => {
+    const { error } = await db
+      .from("produits")
+      .update({ statut_import: "valide" })
+      .eq("id", id);
+    if (error) { toast.error("Erreur lors de la validation"); return; }
+    setProduits(prev => prev.map(p => p.id === id ? { ...p, statut_import: "valide" } : p));
+  };
+
+  const validerProduits = async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+    const { error } = await db.from("produits").update({ statut_import: "valide" }).in("id", ids);
+    if (error) { toast.error("Erreur lors de la validation"); return; }
+    setProduits(prev => prev.map(p => ids.includes(p.id) ? { ...p, statut_import: "valide" } : p));
+  };
+
+  const deleteProduit = async (id: string): Promise<void> => {
+    const { error } = await db.from("produits").update({ actif: false }).eq("id", id);
+    if (error) { toast.error("Erreur lors de la suppression"); return; }
+    setProduits(prev => prev.filter(p => p.id !== id));
+  };
+
+  const uploadCatalogue = async (fournisseurId: string, file: File): Promise<void> => {
+    if (!user) return;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const fichier_type: "csv" | "image" | "pdf" =
+      ext === "csv" ? "csv" : file.type.startsWith("image/") ? "image" : "pdf";
+
+    const storagePath = `${user.id}/catalogues/${fournisseurId}/${Date.now()}-${file.name}`;
+    setImporting(true);
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from("artisan-documents")
+        .upload(storagePath, file, { upsert: false });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const { data: importRow, error: importError } = await db
+        .from("catalogue_imports")
+        .insert({
+          artisan_id: user.id,
+          fournisseur_id: fournisseurId,
+          fichier_url: storagePath,
+          fichier_type,
+          statut: "en_cours",
+        })
+        .select("id")
+        .single();
+      if (importError) throw new Error(importError.message);
+
+      const { data: result, error: fnError } = await supabase.functions.invoke("extract-catalogue", {
+        body: { import_id: importRow.id, storage_path: storagePath, fichier_type },
+      });
+      if (fnError) {
+        let msg = fnError.message;
+        try {
+          const ctx = (fnError as any).context;
+          const text = typeof ctx?.text === "function" ? await ctx.text() : null;
+          if (text) {
+            const body = JSON.parse(text);
+            if (body?.error) msg = body.error;
+          }
+        } catch {}
+        throw new Error(msg);
+      }
+
+      const nb = result?.nb_produits ?? 0;
+      toast.success(`${nb} produit${nb !== 1 ? "s" : ""} extrait${nb !== 1 ? "s" : ""}`);
+      await fetchProduits(fournisseurId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erreur lors de l'import");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return { produits, loading, importing, fetchProduits, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue };
+}

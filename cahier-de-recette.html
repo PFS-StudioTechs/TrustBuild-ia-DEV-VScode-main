@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Cahier de Recette — TrustBuild-IA</title>
+<style>
+  :root {
+    --primary: #6366f1;
+    --primary-light: #e0e7ff;
+    --ok: #10b981;
+    --ok-light: #d1fae5;
+    --fail: #ef4444;
+    --fail-light: #fee2e2;
+    --warn: #f59e0b;
+    --warn-light: #fef3c7;
+    --gray: #94a3b8;
+    --gray-light: #f1f5f9;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --bg: #f8fafc;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* TOP BAR */
+  #topbar {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--primary); color: white;
+    padding: 12px 16px 8px;
+    box-shadow: 0 2px 8px rgba(99,102,241,.3);
+  }
+  #topbar-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  #topbar-title h1 { font-size: 16px; font-weight: 700; }
+  #topbar-title span { font-size: 11px; opacity: .8; background: rgba(255,255,255,.2); padding: 2px 8px; border-radius: 999px; }
+  #progress-text { font-size: 12px; opacity: .9; margin-bottom: 4px; }
+  #progress-bar-wrap { background: rgba(255,255,255,.25); border-radius: 999px; height: 6px; }
+  #progress-bar { background: white; height: 6px; border-radius: 999px; transition: width .4s ease; width: 0%; }
+
+  /* NAV CHIPS */
+  #nav { display: flex; gap: 6px; padding: 10px 16px; overflow-x: auto; background: white; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+  #nav::-webkit-scrollbar { display: none; }
+  .nav-chip { flex-shrink: 0; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border); color: var(--muted); background: white; transition: all .15s; }
+  .nav-chip.active, .nav-chip:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+
+  /* FILTER BAR */
+  #filterbar { display: flex; gap: 6px; padding: 10px 16px; background: white; border-bottom: 1px solid var(--border); }
+  .filter-btn { flex: 1; padding: 6px 4px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--border); background: white; color: var(--muted); text-align: center; transition: all .15s; }
+  .filter-btn.active-all { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+  .filter-btn.active-ok { background: var(--ok-light); border-color: var(--ok); color: var(--ok); }
+  .filter-btn.active-fail { background: var(--fail-light); border-color: var(--fail); color: var(--fail); }
+  .filter-btn.active-warn { background: var(--warn-light); border-color: var(--warn); color: var(--warn); }
+  .filter-btn.active-pending { background: var(--gray-light); border-color: var(--gray); color: var(--muted); }
+
+  /* MODULES */
+  .module { margin: 12px 12px 4px; }
+  .module-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-radius: 12px 12px 0 0; cursor: pointer;
+    background: var(--primary); color: white; user-select: none;
+  }
+  .module-header h2 { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .module-header .mod-badge { font-size: 10px; background: rgba(255,255,255,.25); padding: 2px 8px; border-radius: 999px; }
+  .module-header .mod-progress { font-size: 11px; opacity: .85; }
+  .module-body { background: var(--card); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; overflow: hidden; }
+  .module-body.collapsed { display: none; }
+
+  /* COLORS PER MODULE */
+  .mod-auth .module-header { background: #6366f1; }
+  .mod-dash .module-header { background: #0ea5e9; }
+  .mod-devis .module-header { background: #10b981; }
+  .mod-chantier .module-header { background: #f59e0b; }
+  .mod-clients .module-header { background: #ec4899; }
+  .mod-ia .module-header { background: #8b5cf6; }
+  .mod-params .module-header { background: #64748b; }
+  .mod-admin .module-header { background: #ef4444; }
+  .mod-mobile .module-header { background: #06b6d4; }
+
+  /* TEST CASES */
+  .test-case { border-bottom: 1px solid var(--border); }
+  .test-case:last-child { border-bottom: none; }
+  .test-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; }
+  .test-id { font-size: 10px; font-weight: 700; color: var(--muted); font-family: monospace; flex-shrink: 0; padding-top: 1px; min-width: 56px; }
+  .test-content { flex: 1; min-width: 0; }
+  .test-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .test-expected { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .test-status-btn {
+    flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px;
+    border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;
+    transition: all .15s; background: var(--gray-light);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .test-status-btn.ok { background: var(--ok-light); }
+  .test-status-btn.fail { background: var(--fail-light); }
+  .test-status-btn.warn { background: var(--warn-light); }
+
+  /* EXPAND DETAIL */
+  .test-expand-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 2px 0 0; font-size: 11px; display: flex; align-items: center; gap: 3px; margin-top: 3px; }
+  .test-detail { display: none; padding: 0 14px 12px 80px; }
+  .test-detail.open { display: block; }
+  .test-steps { font-size: 11px; color: var(--muted); background: var(--gray-light); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; line-height: 1.7; }
+  .test-steps ol { padding-left: 14px; }
+  .test-steps li { margin-bottom: 2px; }
+  .note-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .note-input { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; color: var(--text); resize: vertical; min-height: 56px; background: white; }
+  .note-input:focus { outline: none; border-color: var(--primary); }
+
+  /* HIDDEN */
+  .test-case.hidden { display: none; }
+
+  /* FOOTER */
+  #footer { padding: 20px 16px; text-align: center; }
+  #reset-btn { background: none; border: 1.5px solid var(--border); color: var(--muted); padding: 8px 20px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-right: 8px; }
+  #print-btn { background: var(--primary); border: none; color: white; padding: 8px 20px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+  #footer-note { margin-top: 12px; font-size: 11px; color: var(--muted); }
+
+  @media print {
+    #topbar, #nav, #filterbar, #footer, .test-expand-btn, .test-status-btn { display: none !important; }
+    .module { break-inside: avoid; }
+    .module-body.collapsed { display: block !important; }
+    body { font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="topbar-title">
+    <h1>📋 Cahier de Recette</h1>
+    <span>TrustBuild-IA</span>
+  </div>
+  <div id="progress-text">Chargement…</div>
+  <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+</div>
+
+<!-- NAV CHIPS -->
+<div id="nav">
+  <div class="nav-chip active" onclick="scrollToModule('auth')">🔐 Auth</div>
+  <div class="nav-chip" onclick="scrollToModule('dash')">📊 Dashboard</div>
+  <div class="nav-chip" onclick="scrollToModule('devis')">📄 Devis</div>
+  <div class="nav-chip" onclick="scrollToModule('chantier')">🏗️ Chantiers</div>
+  <div class="nav-chip" onclick="scrollToModule('clients')">👥 Clients</div>
+  <div class="nav-chip" onclick="scrollToModule('ia')">🤖 IA</div>
+  <div class="nav-chip" onclick="scrollToModule('params')">⚙️ Réglages</div>
+  <div class="nav-chip" onclick="scrollToModule('admin')">🛡️ Admin</div>
+  <div class="nav-chip" onclick="scrollToModule('mobile')">📱 Mobile</div>
+</div>
+
+<!-- FILTER BAR -->
+<div id="filterbar">
+  <button class="filter-btn active-all" onclick="setFilter('all')">Tous</button>
+  <button class="filter-btn" onclick="setFilter('ok')">✅ OK</button>
+  <button class="filter-btn" onclick="setFilter('fail')">❌ Échec</button>
+  <button class="filter-btn" onclick="setFilter('warn')">⚠️ Partiel</button>
+  <button class="filter-btn" onclick="setFilter('pending')">⏳ À tester</button>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- MODULE AUTH -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="module mod-auth" id="mod-auth">
+  <div class="module-header" onclick="toggleModule('auth')">
+    <h2>🔐 <span>Authentification & Compte</span></h2>
+    <span class="mod-progress" id="prog-auth">0/10</span>
+  </div>
+  <div class="module-body" id="body-auth">
+
+    <div class="test-case" data-id="AUTH-01" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-01</span>
+        <div class="test-content">
+          <div class="test-title">Inscription nouveau compte</div>
+          <div class="test-expected">✦ Compte créé, email de confirmation reçu, redirection vers CompleteProfile</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-01')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-01" onclick="cycleStatus('AUTH-01')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-01">
+        <div class="test-steps"><ol><li>Aller sur la page d'inscription</li><li>Saisir email + mot de passe valide</li><li>Cliquer "S'inscrire"</li><li>Vérifier l'email de confirmation</li><li>Cliquer le lien de confirmation</li></ol></div>
+        <div class="note-label">Notes / Observations</div>
+        <textarea class="note-input" id="note-AUTH-01" placeholder="Saisir vos observations…" oninput="saveNote('AUTH-01')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-02" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-02</span>
+        <div class="test-content">
+          <div class="test-title">Connexion compte existant</div>
+          <div class="test-expected">✦ Connexion réussie, redirection vers Dashboard ou CompleteProfile selon état</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-02')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-02" onclick="cycleStatus('AUTH-02')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-02">
+        <div class="test-steps"><ol><li>Aller sur la page de connexion</li><li>Saisir email + mot de passe</li><li>Cliquer "Se connecter"</li><li>Vérifier la redirection</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-02" placeholder="…" oninput="saveNote('AUTH-02')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-03" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-03</span>
+        <div class="test-content">
+          <div class="test-title">Déconnexion</div>
+          <div class="test-expected">✦ Session terminée, redirection vers page de connexion</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-03')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-03" onclick="cycleStatus('AUTH-03')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-03">
+        <div class="test-steps"><ol><li>Être connecté sur n'importe quelle page</li><li>Cliquer "Déconnexion" dans la sidebar (desktop) ou le header (mobile)</li><li>Vérifier la redirection vers /login</li><li>Vérifier qu'un retour en arrière ne reconnecte pas</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-03" placeholder="…" oninput="saveNote('AUTH-03')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-04" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-04</span>
+        <div class="test-content">
+          <div class="test-title">Complétion de profil (SIRET + infos entreprise)</div>
+          <div class="test-expected">✦ Données sauvegardées, profil marqué completed, redirection dashboard</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-04')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-04" onclick="cycleStatus('AUTH-04')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-04">
+        <div class="test-steps"><ol><li>Connexion avec compte sans profil complété</li><li>Vérifier redirection vers /complete-profile</li><li>Saisir le numéro SIRET valide</li><li>Cliquer "Vérifier" — les champs s'auto-remplissent</li><li>Compléter les champs manquants</li><li>Sauvegarder</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-04" placeholder="…" oninput="saveNote('AUTH-04')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-05" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-05</span>
+        <div class="test-content">
+          <div class="test-title">Vérification SIRET valide (INSEE API)</div>
+          <div class="test-expected">✦ Nom entreprise, adresse, type auto-remplis depuis INSEE</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-05')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-05" onclick="cycleStatus('AUTH-05')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-05">
+        <div class="test-steps"><ol><li>Dans CompleteProfile ou Réglages (admin)</li><li>Saisir un SIRET valide à 14 chiffres</li><li>Cliquer "Vérifier le SIRET"</li><li>Observer le remplissage automatique</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-05" placeholder="SIRET testé : _______________" oninput="saveNote('AUTH-05')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-06" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-06</span>
+        <div class="test-content">
+          <div class="test-title">SIRET invalide → message d'erreur</div>
+          <div class="test-expected">✦ Message d'erreur clair, pas de remplissage auto</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-06')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-06" onclick="cycleStatus('AUTH-06')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-06">
+        <div class="test-steps"><ol><li>Saisir un SIRET fictif (ex : 12345678901234)</li><li>Cliquer "Vérifier"</li><li>Vérifier le message d'erreur</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-06" placeholder="…" oninput="saveNote('AUTH-06')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-07" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-07</span>
+        <div class="test-content">
+          <div class="test-title">Dépôt KBIS valide (PDF ≤ 10 Mo)</div>
+          <div class="test-expected">✦ Fichier uploadé, profil débloqué, redirection dashboard</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-07')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-07" onclick="cycleStatus('AUTH-07')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-07">
+        <div class="test-steps"><ol><li>Aller sur /upload-kbis</li><li>Sélectionner un PDF valide &lt; 10 Mo</li><li>Cliquer "Déposer mon KBIS"</li><li>Vérifier le toast de succès</li><li>Vérifier la redirection vers /dashboard</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-07" placeholder="…" oninput="saveNote('AUTH-07')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-08" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-08</span>
+        <div class="test-content">
+          <div class="test-title">Fichier KBIS > 10 Mo → erreur</div>
+          <div class="test-expected">✦ Erreur "Fichier trop volumineux", pas d'upload</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-08')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-08" onclick="cycleStatus('AUTH-08')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-08">
+        <div class="test-steps"><ol><li>Aller sur /upload-kbis</li><li>Sélectionner un fichier &gt; 10 Mo</li><li>Observer le message d'erreur immédiat (avant upload)</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-08" placeholder="…" oninput="saveNote('AUTH-08')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-09" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-09</span>
+        <div class="test-content">
+          <div class="test-title">Compte bloqué (délai 6 mois dépassé) → redirection KBIS</div>
+          <div class="test-expected">✦ Toute navigation redirige vers /upload-kbis, message d'alerte affiché</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-09')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-09" onclick="cycleStatus('AUTH-09')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-09">
+        <div class="test-steps"><ol><li>Simuler un compte avec kbis_deadline dans le passé et kbis_url null (via SQL)</li><li>Se connecter avec ce compte</li><li>Tenter de naviguer vers /dashboard, /devis, etc.</li><li>Vérifier la redirection forcée vers /upload-kbis</li><li>Vérifier le message d'alerte en rouge</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-09" placeholder="…" oninput="saveNote('AUTH-09')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="AUTH-10" data-module="auth">
+      <div class="test-row">
+        <span class="test-id">AUTH-10</span>
+        <div class="test-content">
+          <div class="test-title">KBIS déposé → accès restauré</div>
+          <div class="test-expected">✦ Après upload KBIS sur compte bloqué, accès complet rétabli</div>
+          <button class="test-expand-btn" onclick="toggleDetail('AUTH-10')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-AUTH-10" onclick="cycleStatus('AUTH-10')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-AUTH-10">
+        <div class="test-steps"><ol><li>Depuis le compte bloqué (AUTH-09)</li><li>Déposer un KBIS valide</li><li>Vérifier la redirection vers /dashboard</li><li>Naviguer librement dans l'app</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-AUTH-10" placeholder="…" oninput="saveNote('AUTH-10')"></textarea>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE DASH -->
+<div class="module mod-dash" id="mod-dash">
+  <div class="module-header" onclick="toggleModule('dash')">
+    <h2>📊 <span>Tableau de bord</span></h2>
+    <span class="mod-progress" id="prog-dash">0/3</span>
+  </div>
+  <div class="module-body collapsed" id="body-dash">
+
+    <div class="test-case" data-id="DASH-01" data-module="dash">
+      <div class="test-row">
+        <span class="test-id">DASH-01</span>
+        <div class="test-content">
+          <div class="test-title">Affichage des indicateurs clés</div>
+          <div class="test-expected">✦ Nombre de devis, chantiers actifs, factures en attente affichés</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DASH-01')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DASH-01" onclick="cycleStatus('DASH-01')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DASH-01">
+        <div class="test-steps"><ol><li>Se connecter avec un compte ayant des données</li><li>Aller sur /dashboard</li><li>Vérifier la cohérence des chiffres avec les autres modules</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DASH-01" placeholder="…" oninput="saveNote('DASH-01')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DASH-02" data-module="dash">
+      <div class="test-row">
+        <span class="test-id">DASH-02</span>
+        <div class="test-content">
+          <div class="test-title">Liens rapides vers modules</div>
+          <div class="test-expected">✦ Chaque lien navigue vers le bon module</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DASH-02')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DASH-02" onclick="cycleStatus('DASH-02')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DASH-02">
+        <div class="test-steps"><ol><li>Cliquer chaque raccourci du dashboard</li><li>Vérifier la destination</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DASH-02" placeholder="…" oninput="saveNote('DASH-02')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DASH-03" data-module="dash">
+      <div class="test-row">
+        <span class="test-id">DASH-03</span>
+        <div class="test-content">
+          <div class="test-title">Bulle Jarvis flottante visible</div>
+          <div class="test-expected">✦ Bulle Jarvis présente et cliquable sur toutes les pages internes</div>
+        </div>
+        <button class="test-status-btn" id="btn-DASH-03" onclick="cycleStatus('DASH-03')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE DEVIS -->
+<div class="module mod-devis" id="mod-devis">
+  <div class="module-header" onclick="toggleModule('devis')">
+    <h2>📄 <span>Devis & Factures</span></h2>
+    <span class="mod-progress" id="prog-devis">0/20</span>
+  </div>
+  <div class="module-body collapsed" id="body-devis">
+
+    <div class="test-case" data-id="DEVIS-01" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-01</span>
+        <div class="test-content">
+          <div class="test-title">Création devis — client existant</div>
+          <div class="test-expected">✦ Devis créé avec numéro auto, client et lignes enregistrés</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-01')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-01" onclick="cycleStatus('DEVIS-01')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-01">
+        <div class="test-steps"><ol><li>Aller sur /devis → "Nouveau devis"</li><li>Rechercher et sélectionner un client existant</li><li>Ajouter 2-3 lignes de prestations</li><li>Vérifier le calcul HT / TTC automatique</li><li>Cliquer "Créer le devis"</li><li>Vérifier l'apparition dans la liste</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-01" placeholder="…" oninput="saveNote('DEVIS-01')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-02" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-02</span>
+        <div class="test-content">
+          <div class="test-title">Création devis — nouveau client inline</div>
+          <div class="test-expected">✦ Client créé puis devis créé, visible dans module Clients</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-02')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-02" onclick="cycleStatus('DEVIS-02')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-02">
+        <div class="test-steps"><ol><li>Nouveau devis → bouton "Nouveau" client</li><li>Remplir nom, email, téléphone, adresse</li><li>Ajouter des lignes au devis</li><li>Sauvegarder</li><li>Aller dans Chantiers → Clients et vérifier la présence du nouveau client</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-02" placeholder="…" oninput="saveNote('DEVIS-02')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-03" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-03</span>
+        <div class="test-content">
+          <div class="test-title">Numérotation avec préfixe configuré</div>
+          <div class="test-expected">✦ Le numéro suit le format PREFIX-AAAA-XXXX configuré dans Réglages</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-03" onclick="cycleStatus('DEVIS-03')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-04" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-04</span>
+        <div class="test-content">
+          <div class="test-title">Date de validité J+30 par défaut</div>
+          <div class="test-expected">✦ Champ date pré-rempli à aujourd'hui + 30 jours à la création</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-04" onclick="cycleStatus('DEVIS-04')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-05" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-05</span>
+        <div class="test-content">
+          <div class="test-title">Gestion des lignes (ajout / modif / suppression)</div>
+          <div class="test-expected">✦ Chaque action sur les lignes met à jour les totaux en temps réel</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-05')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-05" onclick="cycleStatus('DEVIS-05')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-05">
+        <div class="test-steps"><ol><li>Ouvrir un devis en mode édition</li><li>Ajouter une ligne, modifier quantité et prix</li><li>Vérifier le recalcul HT/TTC</li><li>Supprimer une ligne</li><li>Vérifier le recalcul</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-05" placeholder="…" oninput="saveNote('DEVIS-05')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-06" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-06</span>
+        <div class="test-content">
+          <div class="test-title">Cycle de statut complet</div>
+          <div class="test-expected">✦ Brouillon → Envoyé → Signé (verrouillage) ou Refusé</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-06')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-06" onclick="cycleStatus('DEVIS-06')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-06">
+        <div class="test-steps"><ol><li>Sur un devis Brouillon → cliquer "Marquer envoyé"</li><li>Vérifier badge "Envoyé"</li><li>Cliquer "Marquer signé"</li><li>Vérifier badge "Signé" + icône cadenas</li><li>Vérifier que les champs sont en lecture seule</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-06" placeholder="…" oninput="saveNote('DEVIS-06')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-07" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-07</span>
+        <div class="test-content">
+          <div class="test-title">Badge "Expiré" si date dépassée</div>
+          <div class="test-expected">✦ Devis dont la date de validité est passée affiche le badge ambré "Expiré"</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-07" onclick="cycleStatus('DEVIS-07')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-08" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-08</span>
+        <div class="test-content">
+          <div class="test-title">Création avenant (lignes, calcul)</div>
+          <div class="test-expected">✦ Avenant créé, total ajusté TTC augmente en conséquence dans le récap</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-08')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-08" onclick="cycleStatus('DEVIS-08')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-08">
+        <div class="test-steps"><ol><li>Ouvrir un devis → onglet "Avenants"</li><li>Cliquer "Nouvel avenant"</li><li>Ajouter des lignes (ex: éclairage 500€)</li><li>Créer l'avenant</li><li>Vérifier que le récapitulatif "Total ajusté TTC" est mis à jour</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-08" placeholder="Devis initial : ___ € / Après avenant : ___ €" oninput="saveNote('DEVIS-08')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-09" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-09</span>
+        <div class="test-content">
+          <div class="test-title">Création avoir (déduction négative)</div>
+          <div class="test-expected">✦ Avoir créé (fond ambré), total ajusté TTC diminue du montant de l'avoir</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-09')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-09" onclick="cycleStatus('DEVIS-09')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-09">
+        <div class="test-steps"><ol><li>Ouvrir un devis → onglet "Avoirs"</li><li>Cliquer "Nouvel avoir"</li><li>Ajouter la ligne à retirer (ex: peinture −1000€)</li><li>Créer l'avoir</li><li>Vérifier le récapitulatif : déduction visible, total ajusté diminué</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-09" placeholder="Devis initial : ___ € / Avoir : ___ € / Ajusté : ___ €" oninput="saveNote('DEVIS-09')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-10" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-10</span>
+        <div class="test-content">
+          <div class="test-title">Récapitulatif ajusté (Devis + Avenants − Avoirs)</div>
+          <div class="test-expected">✦ Le bloc récap affiche les 3 lignes et le total correct (ex: 10000 + 500 − 1000 = 9500 €)</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-10" onclick="cycleStatus('DEVIS-10')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-11" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-11</span>
+        <div class="test-content">
+          <div class="test-title">Création acompte (% du TTC ajusté)</div>
+          <div class="test-expected">✦ Acompte calculé sur le TTC ajusté, validation si % ≤ 100%</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-11')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-11" onclick="cycleStatus('DEVIS-11')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-11">
+        <div class="test-steps"><ol><li>Onglet "Acomptes" d'un devis</li><li>Cliquer "Nouvel acompte"</li><li>Saisir 30%</li><li>Vérifier le montant calculé = TTC ajusté × 30%</li><li>Sauvegarder</li><li>Tenter de créer un 2e acompte qui dépasse 100% total → erreur attendue</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-11" placeholder="…" oninput="saveNote('DEVIS-11')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-12" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-12</span>
+        <div class="test-content">
+          <div class="test-title">Acompte encaissé</div>
+          <div class="test-expected">✦ Statut passe à "Encaissé", date d'encaissement renseignée</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-12" onclick="cycleStatus('DEVIS-12')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-13" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-13</span>
+        <div class="test-content">
+          <div class="test-title">Émission de facture (montant = Ajusté − Acomptes encaissés)</div>
+          <div class="test-expected">✦ Facture créée avec solde correct affiché dans le dialog de confirmation</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-13')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-13" onclick="cycleStatus('DEVIS-13')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-13">
+        <div class="test-steps"><ol><li>Sur un devis avec avenants, avoirs et acomptes encaissés</li><li>Onglet "Factures" → "Émettre la facture"</li><li>Vérifier le récap : Ajusté TTC − Acomptes = Solde</li><li>Saisir une date d'échéance</li><li>Créer la facture</li><li>Vérifier la facture dans la liste</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-13" placeholder="Ajusté : ___ € / Acomptes : ___ € / Facture : ___ €" oninput="saveNote('DEVIS-13')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-14" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-14</span>
+        <div class="test-content">
+          <div class="test-title">Filtre par client</div>
+          <div class="test-expected">✦ Seuls les devis du client sélectionné sont affichés</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-14" onclick="cycleStatus('DEVIS-14')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-15" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-15</span>
+        <div class="test-content">
+          <div class="test-title">Filtre par statut</div>
+          <div class="test-expected">✦ Le sélecteur de statut filtre correctement la liste</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-15" onclick="cycleStatus('DEVIS-15')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-16" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-16</span>
+        <div class="test-content">
+          <div class="test-title">Bouton "Créer le chantier" depuis devis signé</div>
+          <div class="test-expected">✦ Redirection vers /chantiers avec formulaire pré-rempli (nom, client, date)</div>
+          <button class="test-expand-btn" onclick="toggleDetail('DEVIS-16')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-16" onclick="cycleStatus('DEVIS-16')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-DEVIS-16">
+        <div class="test-steps"><ol><li>Sur un devis signé → bouton "Créer le chantier"</li><li>Vérifier redirection vers /chantiers</li><li>Vérifier que le dialog "Nouveau chantier" s'ouvre automatiquement</li><li>Vérifier le bandeau info "Lancé depuis le devis DEV-xxx"</li><li>Vérifier le pré-remplissage : nom, client, statut "En cours", date début = aujourd'hui</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-DEVIS-16" placeholder="…" oninput="saveNote('DEVIS-16')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-17" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-17</span>
+        <div class="test-content">
+          <div class="test-title">Modification avenant existant</div>
+          <div class="test-expected">✦ Lignes modifiables, montant recalculé, récap mis à jour</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-17" onclick="cycleStatus('DEVIS-17')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-18" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-18</span>
+        <div class="test-content">
+          <div class="test-title">Suppression avoir</div>
+          <div class="test-expected">✦ Avoir supprimé, total ajusté recalculé immédiatement</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-18" onclick="cycleStatus('DEVIS-18')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-19" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-19</span>
+        <div class="test-content">
+          <div class="test-title">Devis signé verrouillé (champs non modifiables)</div>
+          <div class="test-expected">✦ Toutes les entrées sont désactivées, seuls les boutons "avancés" sont visibles</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-19" onclick="cycleStatus('DEVIS-19')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="DEVIS-20" data-module="devis">
+      <div class="test-row">
+        <span class="test-id">DEVIS-20</span>
+        <div class="test-content">
+          <div class="test-title">Statut Refusé</div>
+          <div class="test-expected">✦ Badge "Refusé" en rouge, aucun verrouillage</div>
+        </div>
+        <button class="test-status-btn" id="btn-DEVIS-20" onclick="cycleStatus('DEVIS-20')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE CHANTIER -->
+<div class="module mod-chantier" id="mod-chantier">
+  <div class="module-header" onclick="toggleModule('chantier')">
+    <h2>🏗️ <span>Suivi des chantiers</span></h2>
+    <span class="mod-progress" id="prog-chantier">0/8</span>
+  </div>
+  <div class="module-body collapsed" id="body-chantier">
+
+    <div class="test-case" data-id="CHANTIER-01" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-01</span>
+        <div class="test-content">
+          <div class="test-title">Création nouveau chantier (client existant)</div>
+          <div class="test-expected">✦ Chantier créé, visible dans la vue Kanban colonne "Prospect"</div>
+          <button class="test-expand-btn" onclick="toggleDetail('CHANTIER-01')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-01" onclick="cycleStatus('CHANTIER-01')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-CHANTIER-01">
+        <div class="test-steps"><ol><li>Aller sur /chantiers → "Nouveau chantier"</li><li>Sélectionner client existant</li><li>Remplir nom et adresse chantier</li><li>Choisir statut "Prospect"</li><li>Sauvegarder</li><li>Vérifier l'apparition dans la colonne Prospect du Kanban</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-CHANTIER-01" placeholder="…" oninput="saveNote('CHANTIER-01')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CHANTIER-02" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-02</span>
+        <div class="test-content">
+          <div class="test-title">Pré-remplissage depuis devis signé</div>
+          <div class="test-expected">✦ Bandeau info affiché, nom/client/statut/date pré-remplis</div>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-02" onclick="cycleStatus('CHANTIER-02')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CHANTIER-03" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-03</span>
+        <div class="test-content">
+          <div class="test-title">Vue Kanban — 4 colonnes</div>
+          <div class="test-expected">✦ Colonnes Prospect / En cours / Terminé / Litige visibles avec compteurs</div>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-03" onclick="cycleStatus('CHANTIER-03')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CHANTIER-04" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-04</span>
+        <div class="test-content">
+          <div class="test-title">Drag & drop entre colonnes</div>
+          <div class="test-expected">✦ Le déplacement met à jour le statut en base en temps réel</div>
+          <button class="test-expand-btn" onclick="toggleDetail('CHANTIER-04')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-04" onclick="cycleStatus('CHANTIER-04')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-CHANTIER-04">
+        <div class="test-steps"><ol><li>En vue Kanban (desktop de préférence)</li><li>Glisser une carte de "Prospect" vers "En cours"</li><li>Vérifier le toast de confirmation</li><li>Recharger la page — vérifier que le changement est persisté</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-CHANTIER-04" placeholder="…" oninput="saveNote('CHANTIER-04')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CHANTIER-05" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-05</span>
+        <div class="test-content">
+          <div class="test-title">Vue Liste des chantiers</div>
+          <div class="test-expected">✦ Tous les chantiers listés avec client, statut et dates</div>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-05" onclick="cycleStatus('CHANTIER-05')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CHANTIER-06" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-06</span>
+        <div class="test-content">
+          <div class="test-title">Fiche chantier — onglets Infos / Devis / Factures</div>
+          <div class="test-expected">✦ La fiche s'ouvre, les 3 onglets sont fonctionnels et affichent les données liées</div>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-06" onclick="cycleStatus('CHANTIER-06')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CHANTIER-07" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-07</span>
+        <div class="test-content">
+          <div class="test-title">Modification d'un chantier</div>
+          <div class="test-expected">✦ Champs modifiables, sauvegarde réussie</div>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-07" onclick="cycleStatus('CHANTIER-07')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CHANTIER-08" data-module="chantier">
+      <div class="test-row">
+        <span class="test-id">CHANTIER-08</span>
+        <div class="test-content">
+          <div class="test-title">Suppression chantier (avec confirmation)</div>
+          <div class="test-expected">✦ Dialog de confirmation, chantier supprimé de la liste</div>
+        </div>
+        <button class="test-status-btn" id="btn-CHANTIER-08" onclick="cycleStatus('CHANTIER-08')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE CLIENTS -->
+<div class="module mod-clients" id="mod-clients">
+  <div class="module-header" onclick="toggleModule('clients')">
+    <h2>👥 <span>Gestion clients</span></h2>
+    <span class="mod-progress" id="prog-clients">0/5</span>
+  </div>
+  <div class="module-body collapsed" id="body-clients">
+
+    <div class="test-case" data-id="CLIENTS-01" data-module="clients">
+      <div class="test-row">
+        <span class="test-id">CLIENTS-01</span>
+        <div class="test-content">
+          <div class="test-title">Création client Particulier</div>
+          <div class="test-expected">✦ Client créé sans SIRET, visible dans la liste</div>
+        </div>
+        <button class="test-status-btn" id="btn-CLIENTS-01" onclick="cycleStatus('CLIENTS-01')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CLIENTS-02" data-module="clients">
+      <div class="test-row">
+        <span class="test-id">CLIENTS-02</span>
+        <div class="test-content">
+          <div class="test-title">Création client Professionnel (avec SIRET)</div>
+          <div class="test-expected">✦ Client pro créé, SIRET affiché, erreur si SIRET manquant</div>
+        </div>
+        <button class="test-status-btn" id="btn-CLIENTS-02" onclick="cycleStatus('CLIENTS-02')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CLIENTS-03" data-module="clients">
+      <div class="test-row">
+        <span class="test-id">CLIENTS-03</span>
+        <div class="test-content">
+          <div class="test-title">Modification client</div>
+          <div class="test-expected">✦ Données mises à jour, changements persistés</div>
+        </div>
+        <button class="test-status-btn" id="btn-CLIENTS-03" onclick="cycleStatus('CLIENTS-03')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CLIENTS-04" data-module="clients">
+      <div class="test-row">
+        <span class="test-id">CLIENTS-04</span>
+        <div class="test-content">
+          <div class="test-title">Suppression client</div>
+          <div class="test-expected">✦ Client supprimé de la liste</div>
+        </div>
+        <button class="test-status-btn" id="btn-CLIENTS-04" onclick="cycleStatus('CLIENTS-04')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="CLIENTS-05" data-module="clients">
+      <div class="test-row">
+        <span class="test-id">CLIENTS-05</span>
+        <div class="test-content">
+          <div class="test-title">Unicité email client</div>
+          <div class="test-expected">✦ Impossible de créer deux clients avec le même email</div>
+        </div>
+        <button class="test-status-btn" id="btn-CLIENTS-05" onclick="cycleStatus('CLIENTS-05')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE IA -->
+<div class="module mod-ia" id="mod-ia">
+  <div class="module-header" onclick="toggleModule('ia')">
+    <h2>🤖 <span>Assistants IA (Jarvis / Robert B / Auguste P)</span></h2>
+    <span class="mod-progress" id="prog-ia">0/8</span>
+  </div>
+  <div class="module-body collapsed" id="body-ia">
+
+    <div class="test-case" data-id="IA-01" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">IA-01</span>
+        <div class="test-content">
+          <div class="test-title">Conversation Jarvis — question générale</div>
+          <div class="test-expected">✦ Réponse cohérente commençant par [Jarvis]</div>
+          <button class="test-expand-btn" onclick="toggleDetail('IA-01')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-IA-01" onclick="cycleStatus('IA-01')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-IA-01">
+        <div class="test-steps"><ol><li>Ouvrir l'assistant Jarvis (bulle ou page /assistant)</li><li>Poser une question sur les artisans du bâtiment</li><li>Vérifier le préfixe [Jarvis] en début de réponse</li><li>Vérifier la qualité de la réponse</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-IA-01" placeholder="Question testée : _______________" oninput="saveNote('IA-01')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="IA-02" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">IA-02</span>
+        <div class="test-content">
+          <div class="test-title">Jarvis — demande création devis → DEVIS_DATA généré</div>
+          <div class="test-expected">✦ Formulaire de confirmation apparaît avec les données extraites de la demande</div>
+          <button class="test-expand-btn" onclick="toggleDetail('IA-02')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-IA-02" onclick="cycleStatus('IA-02')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-IA-02">
+        <div class="test-steps"><ol><li>Dans Jarvis, écrire : "Crée un devis pour M. Martin, pose de carrelage 20m² à 45€/m²"</li><li>Vérifier que le formulaire de confirmation apparaît sous la réponse</li><li>Vérifier que les données sont pré-remplies (client, lignes, montants)</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-IA-02" placeholder="Données extraites correctes ? Oui / Non / Partiel" oninput="saveNote('IA-02')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="IA-03" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">CLIENTS-03</span>
+        <div class="test-content">
+          <div class="test-title">Jarvis — client existant proposé dans les correspondances</div>
+          <div class="test-expected">✦ La card "Clients existants correspondants" apparaît avec les boutons de sélection</div>
+          <button class="test-expand-btn" onclick="toggleDetail('IA-03')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-IA-03" onclick="cycleStatus('IA-03')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-IA-03">
+        <div class="test-steps"><ol><li>S'assurer qu'un client "Dupont" existe dans la base</li><li>Demander à Jarvis : "Fais un devis pour M. Dupont, peinture salon 800€"</li><li>Dans le formulaire de confirmation, vérifier la card de sélection client</li><li>Vérifier que "M. Dupont" apparaît comme correspondance</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-IA-03" placeholder="Client proposé correct ? ___" oninput="saveNote('IA-03')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="IA-04" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">IA-04</span>
+        <div class="test-content">
+          <div class="test-title">Jarvis — sélection client existant → devis créé sans doublon</div>
+          <div class="test-expected">✦ Devis créé avec client_id existant, pas de nouveau client créé en base</div>
+        </div>
+        <button class="test-status-btn" id="btn-IA-04" onclick="cycleStatus('IA-04')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="IA-05" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">IA-05</span>
+        <div class="test-content">
+          <div class="test-title">Jarvis — "Nouveau client" → formulaire client vide</div>
+          <div class="test-expected">✦ Champs nom/type déverrouillés, client créé à la validation</div>
+        </div>
+        <button class="test-status-btn" id="btn-IA-05" onclick="cycleStatus('IA-05')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="IA-06" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">IA-06</span>
+        <div class="test-content">
+          <div class="test-title">Détection automatique Robert B (question juridique)</div>
+          <div class="test-expected">✦ Réponse préfixée [Robert B] avec références légales (articles de loi)</div>
+          <button class="test-expand-btn" onclick="toggleDetail('IA-06')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-IA-06" onclick="cycleStatus('IA-06')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-IA-06">
+        <div class="test-steps"><ol><li>Dans Jarvis, poser une question juridique : "Quelle est la durée de la garantie décennale ?"</li><li>Vérifier le préfixe [Robert B]</li><li>Vérifier la citation d'articles de loi</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-IA-06" placeholder="…" oninput="saveNote('IA-06')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="IA-07" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">IA-07</span>
+        <div class="test-content">
+          <div class="test-title">Détection automatique Auguste P (question technique DTU)</div>
+          <div class="test-expected">✦ Réponse préfixée [Auguste P] avec références DTU/NF</div>
+          <button class="test-expand-btn" onclick="toggleDetail('IA-07')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-IA-07" onclick="cycleStatus('IA-07')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-IA-07">
+        <div class="test-steps"><ol><li>Poser : "Quelle est l'épaisseur minimale d'isolation thermique sous dalle selon la RE2020 ?"</li><li>Vérifier le préfixe [Auguste P]</li><li>Vérifier les références normatives</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-IA-07" placeholder="…" oninput="saveNote('IA-07')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="IA-08" data-module="ia">
+      <div class="test-row">
+        <span class="test-id">IA-08</span>
+        <div class="test-content">
+          <div class="test-title">Bulle Jarvis — accessible depuis toutes les pages</div>
+          <div class="test-expected">✦ La bulle flottante est visible et ouvre le panel IA depuis n'importe quel module</div>
+        </div>
+        <button class="test-status-btn" id="btn-IA-08" onclick="cycleStatus('IA-08')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE PARAMS -->
+<div class="module mod-params" id="mod-params">
+  <div class="module-header" onclick="toggleModule('params')">
+    <h2>⚙️ <span>Réglages</span></h2>
+    <span class="mod-progress" id="prog-params">0/6</span>
+  </div>
+  <div class="module-body collapsed" id="body-params">
+
+    <div class="test-case" data-id="PARAMS-01" data-module="params">
+      <div class="test-row">
+        <span class="test-id">PARAMS-01</span>
+        <div class="test-content">
+          <div class="test-title">Modification informations profil</div>
+          <div class="test-expected">✦ Nom, prénom, téléphone mis à jour et persistés</div>
+        </div>
+        <button class="test-status-btn" id="btn-PARAMS-01" onclick="cycleStatus('PARAMS-01')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="PARAMS-02" data-module="params">
+      <div class="test-row">
+        <span class="test-id">PARAMS-02</span>
+        <div class="test-content">
+          <div class="test-title">Modification SIRET (admin uniquement)</div>
+          <div class="test-expected">✦ Le champ SIRET est éditable et le bouton "Vérifier" visible pour un admin</div>
+        </div>
+        <button class="test-status-btn" id="btn-PARAMS-02" onclick="cycleStatus('PARAMS-02')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="PARAMS-03" data-module="params">
+      <div class="test-row">
+        <span class="test-id">PARAMS-03</span>
+        <div class="test-content">
+          <div class="test-title">SIRET en lecture seule pour non-admin</div>
+          <div class="test-expected">✦ Le champ SIRET est désactivé, pas de bouton "Vérifier"</div>
+        </div>
+        <button class="test-status-btn" id="btn-PARAMS-03" onclick="cycleStatus('PARAMS-03')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="PARAMS-04" data-module="params">
+      <div class="test-row">
+        <span class="test-id">PARAMS-04</span>
+        <div class="test-content">
+          <div class="test-title">Configuration des 5 préfixes (DEV, FAC, AVN, ACP, AVO)</div>
+          <div class="test-expected">✦ Tous les préfixes sauvegardés, aperçu affiché en temps réel</div>
+          <button class="test-expand-btn" onclick="toggleDetail('PARAMS-04')">▸ Étapes</button>
+        </div>
+        <button class="test-status-btn" id="btn-PARAMS-04" onclick="cycleStatus('PARAMS-04')">⏳</button>
+      </div>
+      <div class="test-detail" id="detail-PARAMS-04">
+        <div class="test-steps"><ol><li>Réglages → onglet "Mon template"</li><li>Modifier chaque préfixe</li><li>Vérifier l'aperçu (ex: "MON-2026-001")</li><li>Sauvegarder</li><li>Créer un devis et vérifier le nouveau préfixe appliqué</li></ol></div>
+        <div class="note-label">Notes</div>
+        <textarea class="note-input" id="note-PARAMS-04" placeholder="…" oninput="saveNote('PARAMS-04')"></textarea>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="PARAMS-05" data-module="params">
+      <div class="test-row">
+        <span class="test-id">PARAMS-05</span>
+        <div class="test-content">
+          <div class="test-title">Préfixes appliqués à la création</div>
+          <div class="test-expected">✦ Devis, factures, avenants, acomptes et avoirs créés utilisent le bon préfixe</div>
+        </div>
+        <button class="test-status-btn" id="btn-PARAMS-05" onclick="cycleStatus('PARAMS-05')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="PARAMS-06" data-module="params">
+      <div class="test-row">
+        <span class="test-id">PARAMS-06</span>
+        <div class="test-content">
+          <div class="test-title">Affichage statut KBIS dans les réglages</div>
+          <div class="test-expected">✦ Date limite affichée, lien vers upload si KBIS absent</div>
+        </div>
+        <button class="test-status-btn" id="btn-PARAMS-06" onclick="cycleStatus('PARAMS-06')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE ADMIN -->
+<div class="module mod-admin" id="mod-admin">
+  <div class="module-header" onclick="toggleModule('admin')">
+    <h2>🛡️ <span>Administration</span></h2>
+    <span class="mod-progress" id="prog-admin">0/4</span>
+  </div>
+  <div class="module-body collapsed" id="body-admin">
+
+    <div class="test-case" data-id="ADMIN-01" data-module="admin">
+      <div class="test-row">
+        <span class="test-id">ADMIN-01</span>
+        <div class="test-content">
+          <div class="test-title">Accès page Admin (admin uniquement)</div>
+          <div class="test-expected">✦ Un compte admin accède à /admin, voit la liste des utilisateurs</div>
+        </div>
+        <button class="test-status-btn" id="btn-ADMIN-01" onclick="cycleStatus('ADMIN-01')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="ADMIN-02" data-module="admin">
+      <div class="test-row">
+        <span class="test-id">ADMIN-02</span>
+        <div class="test-content">
+          <div class="test-title">Accès refusé pour non-admin</div>
+          <div class="test-expected">✦ Un compte artisan standard ne voit pas l'onglet Admin et ne peut pas accéder à /admin</div>
+        </div>
+        <button class="test-status-btn" id="btn-ADMIN-02" onclick="cycleStatus('ADMIN-02')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="ADMIN-03" data-module="admin">
+      <div class="test-row">
+        <span class="test-id">ADMIN-03</span>
+        <div class="test-content">
+          <div class="test-title">Gestion des rôles utilisateurs</div>
+          <div class="test-expected">✦ Possible de modifier le rôle d'un utilisateur (artisan / admin / testeur)</div>
+        </div>
+        <button class="test-status-btn" id="btn-ADMIN-03" onclick="cycleStatus('ADMIN-03')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="ADMIN-04" data-module="admin">
+      <div class="test-row">
+        <span class="test-id">ADMIN-04</span>
+        <div class="test-content">
+          <div class="test-title">Badge rôle dans la sidebar</div>
+          <div class="test-expected">✦ Badge "Super Admin" ou "Mode Test" visible selon le rôle connecté</div>
+        </div>
+        <button class="test-status-btn" id="btn-ADMIN-04" onclick="cycleStatus('ADMIN-04')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE MOBILE -->
+<div class="module mod-mobile" id="mod-mobile">
+  <div class="module-header" onclick="toggleModule('mobile')">
+    <h2>📱 <span>Expérience Mobile</span></h2>
+    <span class="mod-progress" id="prog-mobile">0/5</span>
+  </div>
+  <div class="module-body collapsed" id="body-mobile">
+
+    <div class="test-case" data-id="MOBILE-01" data-module="mobile">
+      <div class="test-row">
+        <span class="test-id">MOBILE-01</span>
+        <div class="test-content">
+          <div class="test-title">Navigation bottom bar — 5 onglets principaux</div>
+          <div class="test-expected">✦ Tableau / Devis / Chantiers / Finances / Assistants visibles, onglet actif mis en évidence</div>
+        </div>
+        <button class="test-status-btn" id="btn-MOBILE-01" onclick="cycleStatus('MOBILE-01')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="MOBILE-02" data-module="mobile">
+      <div class="test-row">
+        <span class="test-id">MOBILE-02</span>
+        <div class="test-content">
+          <div class="test-title">Menu "Plus" — autres modules accessibles</div>
+          <div class="test-expected">✦ Tap sur "Plus" ouvre la grille des modules secondaires (Clients, Fournisseurs, Réglages…)</div>
+        </div>
+        <button class="test-status-btn" id="btn-MOBILE-02" onclick="cycleStatus('MOBILE-02')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="MOBILE-03" data-module="mobile">
+      <div class="test-row">
+        <span class="test-id">MOBILE-03</span>
+        <div class="test-content">
+          <div class="test-title">Dialogs et formulaires lisibles sur mobile</div>
+          <div class="test-expected">✦ Aucun champ coupé, scroll interne fonctionnel, pas de zoom forcé</div>
+        </div>
+        <button class="test-status-btn" id="btn-MOBILE-03" onclick="cycleStatus('MOBILE-03')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="MOBILE-04" data-module="mobile">
+      <div class="test-row">
+        <span class="test-id">MOBILE-04</span>
+        <div class="test-content">
+          <div class="test-title">Taille des boutons d'action (touch targets)</div>
+          <div class="test-expected">✦ Boutons facilement cliquables au doigt, pas de clic accidentel</div>
+        </div>
+        <button class="test-status-btn" id="btn-MOBILE-04" onclick="cycleStatus('MOBILE-04')">⏳</button>
+      </div>
+    </div>
+
+    <div class="test-case" data-id="MOBILE-05" data-module="mobile">
+      <div class="test-row">
+        <span class="test-id">MOBILE-05</span>
+        <div class="test-content">
+          <div class="test-title">Kanban chantiers sur mobile (tactile)</div>
+          <div class="test-expected">✦ Appui long → drag & drop fonctionne sur écran tactile</div>
+        </div>
+        <button class="test-status-btn" id="btn-MOBILE-05" onclick="cycleStatus('MOBILE-05')">⏳</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div id="footer">
+  <button id="reset-btn" onclick="resetAll()">↺ Réinitialiser</button>
+  <button id="print-btn" onclick="window.print()">🖨️ Imprimer / PDF</button>
+  <div id="footer-note">TrustBuild-IA — Cahier de recette v1.0 · Données sauvegardées localement dans le navigateur</div>
+</div>
+
+<script>
+const STATUSES = ['⏳', '✅', '❌', '⚠️'];
+const STATUS_CLASSES = ['', 'ok', 'fail', 'warn'];
+const STATUS_LABELS = ['Non testé', 'Validé', 'Échec', 'Partiel'];
+
+const MODULES = {
+  auth: 10, dash: 3, devis: 20, chantier: 8,
+  clients: 5, ia: 8, params: 6, admin: 4, mobile: 5
+};
+
+function getAllIds() {
+  return [...document.querySelectorAll('.test-case')].map(el => el.dataset.id);
+}
+
+function getStatus(id) { return localStorage.getItem('tbcr_' + id) || '0'; }
+function setStatus(id, idx) { localStorage.setItem('tbcr_' + id, String(idx)); }
+
+function cycleStatus(id) {
+  const cur = parseInt(getStatus(id));
+  const next = (cur + 1) % STATUSES.length;
+  setStatus(id, next);
+  renderStatus(id);
+  updateProgress();
+  applyFilter(currentFilter);
+}
+
+function renderStatus(id) {
+  const idx = parseInt(getStatus(id));
+  const btn = document.getElementById('btn-' + id);
+  if (!btn) return;
+  btn.textContent = STATUSES[idx];
+  btn.className = 'test-status-btn ' + STATUS_CLASSES[idx];
+}
+
+function toggleDetail(id) {
+  const d = document.getElementById('detail-' + id);
+  if (d) d.classList.toggle('open');
+}
+
+function toggleModule(mod) {
+  const body = document.getElementById('body-' + mod);
+  if (body) body.classList.toggle('collapsed');
+}
+
+function updateProgress() {
+  const ids = getAllIds();
+  const total = ids.length;
+  let ok = 0, fail = 0, warn = 0;
+  ids.forEach(id => {
+    const s = parseInt(getStatus(id));
+    if (s === 1) ok++;
+    else if (s === 2) fail++;
+    else if (s === 3) warn++;
+  });
+  const done = ok + fail + warn;
+  const pct = total ? Math.round(ok / total * 100) : 0;
+  document.getElementById('progress-text').textContent =
+    `${ok}/${total} validés (${pct}%)  ·  ❌ ${fail}  ·  ⚠️ ${warn}  ·  ⏳ ${total - done}`;
+  document.getElementById('progress-bar').style.width = pct + '%';
+
+  // Module progress
+  Object.keys(MODULES).forEach(mod => {
+    const modIds = [...document.querySelectorAll(`.test-case[data-module="${mod}"]`)].map(el => el.dataset.id);
+    const modOk = modIds.filter(id => parseInt(getStatus(id)) === 1).length;
+    const el = document.getElementById('prog-' + mod);
+    if (el) el.textContent = `${modOk}/${modIds.length}`;
+  });
+}
+
+let currentFilter = 'all';
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.className = 'filter-btn';
+    if ((f === 'all' && b.textContent.trim() === 'Tous') ||
+        (f === 'ok' && b.textContent.includes('OK')) ||
+        (f === 'fail' && b.textContent.includes('Échec')) ||
+        (f === 'warn' && b.textContent.includes('Partiel')) ||
+        (f === 'pending' && b.textContent.includes('tester'))) {
+      b.className = 'filter-btn active-' + f;
+    }
+  });
+  applyFilter(f);
+}
+
+function applyFilter(f) {
+  document.querySelectorAll('.test-case').forEach(el => {
+    const id = el.dataset.id;
+    const s = parseInt(getStatus(id));
+    let show = true;
+    if (f === 'ok') show = s === 1;
+    else if (f === 'fail') show = s === 2;
+    else if (f === 'warn') show = s === 3;
+    else if (f === 'pending') show = s === 0;
+    el.classList.toggle('hidden', !show);
+  });
+}
+
+function saveNote(id) {
+  const ta = document.getElementById('note-' + id);
+  if (ta) localStorage.setItem('tbcr_note_' + id, ta.value);
+}
+
+function loadNotes() {
+  document.querySelectorAll('.note-input').forEach(ta => {
+    const id = ta.id.replace('note-', '');
+    const saved = localStorage.getItem('tbcr_note_' + id);
+    if (saved) ta.value = saved;
+  });
+}
+
+function scrollToModule(mod) {
+  const el = document.getElementById('mod-' + mod);
+  if (el) {
+    const body = document.getElementById('body-' + mod);
+    if (body && body.classList.contains('collapsed')) body.classList.remove('collapsed');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.nav-chip').forEach(c => c.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+}
+
+function resetAll() {
+  if (!confirm('Réinitialiser tous les statuts et notes ?')) return;
+  getAllIds().forEach(id => {
+    localStorage.removeItem('tbcr_' + id);
+    localStorage.removeItem('tbcr_note_' + id);
+  });
+  init();
+}
+
+function init() {
+  getAllIds().forEach(id => renderStatus(id));
+  loadNotes();
+  updateProgress();
+}
+
+init();
+</script>
+</body>
+</html>
