@@ -77,7 +77,7 @@ function EmailUnverifiedScreen({ email }: { email: string }) {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, profile, profileLoading } = useAuth();
 
-  if (loading || profileLoading) return loadingSkeleton;
+  if ((loading || profileLoading) && !user) return loadingSkeleton;
   if (!user) return <Navigate to="/auth" replace />;
 
   if (!user.email_confirmed_at) {
