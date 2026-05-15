@@ -177,9 +177,11 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       const mt = mimeTypeRef.current;
       const ext = mt.includes("mp4") ? "m4a" : mt.includes("ogg") ? "ogg" : "webm";
       formData.append("audio", blob, `recording.${ext}`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
       if (!resp.ok) throw new Error("Transcription failed");
