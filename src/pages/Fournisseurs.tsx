@@ -245,7 +245,16 @@ export default function Fournisseurs() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Fournisseur | null>(null);
-  const [catalogueTarget, setCatalogueTarget] = useState<Fournisseur | null>(null);
+  const [catalogueTarget, _setCatalogueTarget] = useState<Fournisseur | null>(null);
+  const setCatalogueTarget = (v: import("@/hooks/useFournisseurs").Fournisseur | null) => {
+    console.log('[Fournisseurs] setCatalogueTarget →', v?.nom ?? 'null', new Error().stack?.split('\n').slice(1, 5).join(' | '));
+    _setCatalogueTarget(v);
+  };
+
+  useEffect(() => {
+    console.log('[Fournisseurs] MONTÉ');
+    return () => { console.log('[Fournisseurs] DÉMONTÉ ← SUSPECT'); };
+  }, []);
 
   const filtered = fournisseurs.filter(f => {
     const q = search.toLowerCase();

@@ -49,6 +49,7 @@ export default function CatalogueDialog({
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    console.log('[CatalogueDialog] open prop =', open);
     if (open) {
       setFiltre("tous");
       setEditingId(null);
@@ -58,6 +59,11 @@ export default function CatalogueDialog({
       fetchProduits(fournisseur.id);
     }
   }, [open, fournisseur.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    console.log('[CatalogueDialog] MONTÉ');
+    return () => { console.log('[CatalogueDialog] DÉMONTÉ'); };
+  }, []);
 
   useEffect(() => { setSelectedIds(new Set()); }, [filtre]);
 
