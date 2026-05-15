@@ -137,6 +137,7 @@ export default function Auth() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Min. 6 caractères"
+                      autoComplete="new-password"
                       className="touch-target pr-10"
                     />
                     <button
@@ -198,6 +199,7 @@ export default function Auth() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 className="touch-target pr-10"
               />
               <button

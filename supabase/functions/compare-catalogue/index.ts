@@ -24,12 +24,16 @@ type EcartPrix = {
   delta: number;
 };
 
+const SONNET = "claude-sonnet-4-6";
+const MAX_TOKENS = 32000;
+const MAX_PDF_PAGES = 90;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey     = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey      = Deno.env.get("SUPABASE_ANON_KEY")!;
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
   try {
@@ -42,12 +46,10 @@ serve(async (req) => {
 
     const db = createClient(supabaseUrl, serviceKey);
     const { import_id } = await req.json();
-
     if (!import_id) {
       return new Response(JSON.stringify({ error: "import_id requis" }), { status: 400, headers: cors });
     }
 
-    // Récupérer l'import
     const { data: imp, error: impErr } = await db
       .from("catalogue_imports")
       .select("fichier_url, fichier_type, artisan_id")
@@ -58,7 +60,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Import introuvable" }), { status: 404, headers: cors });
     }
 
-    // Télécharger le fichier source
     const { data: fileData, error: dlErr } = await db.storage
       .from("artisan-documents")
       .download(imp.fichier_url);
@@ -67,10 +68,21 @@ serve(async (req) => {
       throw new Error(`Téléchargement fichier: ${dlErr?.message}`);
     }
 
-    // Extraire les produits du fichier source
-    const produitsPDF = await extractFromFile(fileData, imp.fichier_type, anthropicKey);
+    const buffer = await fileData.arrayBuffer();
+    let produitsPDF: ProduitExtrait[] = [];
+    let extraction_method = "unknown";
 
-    // Récupérer les produits en base
+    if (imp.fichier_type === "csv") {
+      produitsPDF = parseCSV(await new Blob([buffer]).text());
+      extraction_method = "csv";
+    } else if (imp.fichier_type === "pdf") {
+      produitsPDF = await extractWithClaudePDF(buffer, anthropicKey);
+      extraction_method = "pdf_sonnet";
+    } else {
+      produitsPDF = await callClaude(buffer, "image", anthropicKey);
+      extraction_method = "image_sonnet";
+    }
+
     const { data: produitsDB } = await db
       .from("produits")
       .select("reference, designation, unite, prix_achat")
@@ -78,8 +90,6 @@ serve(async (req) => {
       .eq("actif", true);
 
     const dbList = (produitsDB ?? []) as ProduitExtrait[];
-
-    // Index par référence pour comparaison rapide
     const indexPDF = buildIndex(produitsPDF);
     const indexDB  = buildIndex(dbList);
 
@@ -87,7 +97,6 @@ serve(async (req) => {
     const fantomes: ProduitExtrait[]  = [];
     const ecarts_prix: EcartPrix[]    = [];
 
-    // Articles dans PDF mais pas en DB
     for (const [key, p] of indexPDF) {
       if (!indexDB.has(key)) {
         manquants.push(p);
@@ -108,7 +117,6 @@ serve(async (req) => {
       }
     }
 
-    // Articles en DB mais pas dans PDF
     for (const [key, d] of indexDB) {
       if (!indexPDF.has(key)) {
         fantomes.push(d);
@@ -116,13 +124,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        total_pdf: produitsPDF.length,
-        total_db: dbList.length,
-        manquants,
-        fantomes,
-        ecarts_prix,
-      }),
+      JSON.stringify({ total_pdf: produitsPDF.length, total_db: dbList.length, extraction_method, manquants, fantomes, ecarts_prix }),
       { headers: { ...cors, "Content-Type": "application/json" } }
     );
   } catch (e) {
@@ -134,74 +136,35 @@ serve(async (req) => {
   }
 });
 
-function buildIndex(list: ProduitExtrait[]): Map<string, ProduitExtrait> {
-  const map = new Map<string, ProduitExtrait>();
-  for (const p of list) {
-    const key = p.reference
-      ? p.reference.trim().toLowerCase()
-      : p.designation.trim().toLowerCase().slice(0, 40);
-    map.set(key, p);
+async function extractWithClaudePDF(buffer: ArrayBuffer, anthropicKey: string): Promise<ProduitExtrait[]> {
+  const pdfDoc = await PDFDocument.load(buffer);
+  const totalPages = pdfDoc.getPageCount();
+
+  if (totalPages <= MAX_PDF_PAGES) {
+    return callClaude(buffer, "pdf", anthropicKey);
   }
-  return map;
+
+  const all: ProduitExtrait[] = [];
+  for (let start = 0; start < totalPages; start += MAX_PDF_PAGES) {
+    const end = Math.min(start + MAX_PDF_PAGES, totalPages);
+    const chunk = await PDFDocument.create();
+    const pages = await chunk.copyPages(pdfDoc, Array.from({ length: end - start }, (_, i) => start + i));
+    pages.forEach(p => chunk.addPage(p));
+    const chunkBytes = await chunk.save();
+    all.push(...await callClaude(chunkBytes.buffer, "pdf", anthropicKey));
+    if (start + MAX_PDF_PAGES < totalPages) await new Promise(r => setTimeout(r, 3000));
+  }
+  return deduplicate(all);
 }
 
-const MAX_PDF_PAGES = 90;
-
-async function extractFromFile(
-  fileData: Blob,
-  fichier_type: string,
-  anthropicKey: string
-): Promise<ProduitExtrait[]> {
-  if (fichier_type === "csv") {
-    return parseCSV(await fileData.text());
-  }
-
-  if (fichier_type !== "pdf") {
-    return callClaude(fileData, "image", anthropicKey);
-  }
-
-  try {
-    const buffer = await fileData.arrayBuffer();
-    const pdfDoc = await PDFDocument.load(buffer);
-    const totalPages = pdfDoc.getPageCount();
-
-    if (totalPages <= MAX_PDF_PAGES) {
-      return callClaude(fileData, "pdf", anthropicKey);
-    }
-
-    const all: ProduitExtrait[] = [];
-    for (let start = 0; start < totalPages; start += MAX_PDF_PAGES) {
-      const end = Math.min(start + MAX_PDF_PAGES, totalPages);
-      const chunk = await PDFDocument.create();
-      const pages = await chunk.copyPages(pdfDoc, Array.from({ length: end - start }, (_, i) => start + i));
-      pages.forEach(p => chunk.addPage(p));
-      const blob = new Blob([await chunk.save()], { type: "application/pdf" });
-      all.push(...await callClaude(blob, "pdf", anthropicKey));
-      if (start + MAX_PDF_PAGES < totalPages) await new Promise(r => setTimeout(r, 3000));
-    }
-    return deduplicate(all);
-  } catch {
-    return callClaude(fileData, "pdf", anthropicKey);
-  }
-}
-
-function toBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 8192) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  }
-  return btoa(bin);
-}
-
-async function callClaude(fileData: Blob, type: "pdf" | "image", anthropicKey: string): Promise<ProduitExtrait[]> {
-  const base64 = toBase64(await fileData.arrayBuffer());
+async function callClaude(buffer: ArrayBuffer, type: "pdf" | "image", anthropicKey: string): Promise<ProduitExtrait[]> {
+  const base64 = toBase64(buffer);
   const contentItem = type === "pdf"
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
     : { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } };
 
-  const prompt = `Extrais tous les produits de ce catalogue fournisseur.
-Pour chaque produit : référence article, désignation, unité de vente, prix HT en euros.
+  const prompt = `Extrais TOUS les produits de ce catalogue fournisseur sans en omettre aucun.
+Pour chaque produit : référence article, désignation complète, unité de vente, prix HT en euros.
 Réponds UNIQUEMENT en JSON compact sur une seule ligne, sans aucun texte avant ou après :
 {"p":[{"r":"ref_ou_null","d":"designation","u":"unite","pa":0.00}]}
 Règles : r=null si absent, u="u" si absente, pa=0 si absent.`;
@@ -217,8 +180,8 @@ Règles : r=null si absent, u="u" si absente, pa=0 si absent.`;
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 8192,
+      model: SONNET,
+      max_tokens: MAX_TOKENS,
       messages: [{ role: "user", content: [contentItem, { type: "text", text: prompt }] }],
     }),
   });
@@ -228,6 +191,26 @@ Règles : r=null si absent, u="u" si absente, pa=0 si absent.`;
   return parseAI((data.content?.[0]?.text ?? "").trim());
 }
 
+function buildIndex(list: ProduitExtrait[]): Map<string, ProduitExtrait> {
+  const map = new Map<string, ProduitExtrait>();
+  for (const p of list) {
+    const key = p.reference
+      ? p.reference.trim().toLowerCase()
+      : p.designation.trim().toLowerCase().slice(0, 40);
+    map.set(key, p);
+  }
+  return map;
+}
+
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 8192) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(bin);
+}
+
 function parseAI(text: string): ProduitExtrait[] {
   const match = text.match(/\{[\s\S]*\}/);
   if (match) {
@@ -235,11 +218,14 @@ function parseAI(text: string): ProduitExtrait[] {
       const parsed = JSON.parse(match[0]);
       const items: unknown[] = Array.isArray(parsed.p) ? parsed.p : [];
       if (items.length > 0) return items.map(normalize).filter(p => p.designation);
-    } catch { /* fall through */ }
+    } catch { }
   }
   const result: ProduitExtrait[] = [];
   for (const m of text.matchAll(/\{[^{}]+\}/g)) {
-    try { const p = normalize(JSON.parse(m[0])); if (p.designation) result.push(p); } catch { /* skip */ }
+    try {
+      const p = normalize(JSON.parse(m[0]));
+      if (p.designation) result.push(p);
+    } catch { }
   }
   return result;
 }
@@ -271,8 +257,10 @@ function parseCSV(text: string): ProduitExtrait[] {
   const sep = lines[0].includes(";") ? ";" : ",";
   const headers = lines[0].split(sep).map(h => h.trim().toLowerCase().replace(/"/g, ""));
   const col = (...names: string[]) => names.map(n => headers.findIndex(h => h.includes(n))).find(i => i !== -1) ?? -1;
-  const refCol = col("ref", "code", "article"); const desCol = col("désignation", "designation", "libellé", "nom");
-  const uCol = col("unité", "unite"); const pCol = col("prix", "pa", "tarif");
+  const refCol = col("ref", "code", "article");
+  const desCol = col("désignation", "designation", "libellé", "nom");
+  const uCol = col("unité", "unite");
+  const pCol = col("prix", "pa", "tarif");
   if (desCol === -1) return [];
   return lines.slice(1).map(l => {
     const c = l.split(sep).map(x => x.trim().replace(/"/g, ""));
