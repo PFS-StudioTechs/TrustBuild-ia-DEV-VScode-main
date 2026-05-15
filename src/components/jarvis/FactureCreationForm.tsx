@@ -201,6 +201,26 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
 
       toast.success(`Facture ${numero} créée !`);
       onCreated(newFacture.id);
+
+      const { data: pdfData, error: pdfErr } = await supabase.functions.invoke("generate-facturx-pdf", {
+        body: { facture_id: newFacture.id },
+      });
+      if (pdfErr || !pdfData?.pdf_base64) {
+        toast.warning("PDF FacturX non disponible — la facture a bien été créée.");
+      } else {
+        const blob = new Blob(
+          [Uint8Array.from(atob(pdfData.pdf_base64), (c) => c.charCodeAt(0))],
+          { type: "application/pdf" }
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${pdfData.numero ?? numero}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de la création");
     } finally {
