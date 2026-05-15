@@ -115,16 +115,15 @@ serve(async (req) => {
       .filter((e: any) => e.reference)
       .map((e: any) => [e.reference.trim().toLowerCase(), e]));
     const byDes = new Map((existants ?? [])
-      .filter((e: any) => !e.reference)
-      .map((e: any) => [e.designation.trim().toLowerCase().slice(0, 40), e]));
+      .map((e: any) => [e.designation.trim().toLowerCase().slice(0, 50), e]));
 
     const toInsert: any[] = [];
     const statutImport = fichier_type === "csv" ? "valide" : "ia";
 
     for (const p of produits) {
       const refKey = p.reference?.trim().toLowerCase() ?? null;
-      const desKey = p.designation.trim().toLowerCase().slice(0, 40);
-      const existing = refKey ? byRef.get(refKey) : byDes.get(desKey);
+      const desKey = p.designation.trim().toLowerCase().slice(0, 50);
+      const existing = (refKey ? byRef.get(refKey) : null) ?? byDes.get(desKey);
 
       if (existing) {
         await supabase.from("produits").update({
@@ -161,19 +160,21 @@ serve(async (req) => {
       .eq("id", import_id);
 
     const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
-    if (sendgridKey) {
+    const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
+    console.log("[email] SENDGRID_API_KEY présent:", !!sendgridKey, "| SENDGRID_FROM_EMAIL:", fromEmail ?? "NON DÉFINI");
+    if (sendgridKey && fromEmail) {
       const [{ data: fournisseur }, { data: profile }] = await Promise.all([
         supabase.from("fournisseurs").select("nom").eq("id", fournisseurId).single(),
         supabase.from("profiles").select("prenom, nom").eq("user_id", artisanId).single(),
       ]);
       const artisanNom = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() : artisanId;
       const fournisseurNom = fournisseur?.nom ?? fournisseurId;
-      await fetch("https://api.sendgrid.com/v3/mail/send", {
+      const emailRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
         method: "POST",
         headers: { "Authorization": `Bearer ${sendgridKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: "contact@pfs-studio-techs.fr" }] }],
-          from: { email: Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia", name: "TrustBuild-IA" },
+          from: { email: fromEmail, name: "TrustBuild-IA" },
           subject: `[Cataverif] Nouveau catalogue à vérifier — ${fournisseurNom}`,
           content: [{
             type: "text/plain",
@@ -181,6 +182,7 @@ serve(async (req) => {
           }],
         }),
       });
+      console.log("[email] SendGrid status:", emailRes.status, await emailRes.text());
     }
 
     return new Response(

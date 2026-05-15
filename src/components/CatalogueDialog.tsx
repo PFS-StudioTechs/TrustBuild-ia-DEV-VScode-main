@@ -122,6 +122,7 @@ export default function CatalogueDialog({
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
         className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0"
+        hideCloseButton
         onInteractOutside={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={() => onOpenChange(false)}
@@ -141,7 +142,7 @@ export default function CatalogueDialog({
               {importing ? "Extraction…" : "Importer un catalogue"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              {importing ? "Analyse IA en cours, cela peut prendre quelques secondes…" : "PDF, CSV ou image acceptés — les produits extraits apparaîtront ci-dessous"}
+              {importing ? "Analyse IA en cours, cela peut prendre quelques minutes…" : "PDF, CSV ou image acceptés — les produits extraits apparaîtront ci-dessous"}
             </p>
           </div>
 
