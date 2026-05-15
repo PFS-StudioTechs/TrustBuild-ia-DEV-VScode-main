@@ -31,8 +31,8 @@ dist-ssr
 # Supabase temp files (contient des infos de connexion)
 supabase/.temp/
 
-# Claude Code settings (peut contenir des tokens et chemins locaux)
-.claude/
+# Claude Code settings locaux (tokens et chemins personnels — ne jamais commiter)
+.claude/settings.local.json
 
 # Fichiers système Windows
 desktop.ini
