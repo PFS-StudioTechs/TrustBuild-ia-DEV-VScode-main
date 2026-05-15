@@ -104,27 +104,36 @@ serve(async (req) => {
       );
     }
 
-    const { data: manuels } = await supabase
+    const { data: existants } = await supabase
       .from("produits")
-      .select("id, reference, prix_achat")
+      .select("id, reference, designation, prix_achat, prix_negocie, statut_import")
       .eq("artisan_id", artisanId)
       .eq("fournisseur_id", fournisseurId)
-      .eq("statut_import", "manuel")
       .eq("actif", true);
 
-    const manuelsByRef = new Map((manuels ?? []).map((m: any) => [m.reference?.trim().toLowerCase(), m]));
+    const byRef = new Map((existants ?? [])
+      .filter((e: any) => e.reference)
+      .map((e: any) => [e.reference.trim().toLowerCase(), e]));
+    const byDes = new Map((existants ?? [])
+      .filter((e: any) => !e.reference)
+      .map((e: any) => [e.designation.trim().toLowerCase().slice(0, 40), e]));
 
     const toInsert: any[] = [];
+    const statutImport = fichier_type === "csv" ? "valide" : "ia";
+
     for (const p of produits) {
       const refKey = p.reference?.trim().toLowerCase() ?? null;
-      const existing = refKey ? manuelsByRef.get(refKey) : null;
+      const desKey = p.designation.trim().toLowerCase().slice(0, 40);
+      const existing = refKey ? byRef.get(refKey) : byDes.get(desKey);
+
       if (existing) {
+        const prixNegocie = existing.prix_negocie === true;
         await supabase.from("produits").update({
           import_id,
           designation: p.designation,
           unite: p.unite,
-          statut_import: fichier_type === "csv" ? "valide" : "ia",
-          prix_negocie: true,
+          ...(prixNegocie ? {} : { prix_achat: p.prix_achat }),
+          statut_import: statutImport,
         }).eq("id", existing.id);
       } else {
         toInsert.push({
@@ -136,7 +145,7 @@ serve(async (req) => {
           unite: p.unite,
           prix_achat: p.prix_achat,
           prix_negocie: false,
-          statut_import: fichier_type === "csv" ? "valide" : "ia",
+          statut_import: statutImport,
         });
       }
     }
