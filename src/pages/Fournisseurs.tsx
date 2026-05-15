@@ -249,11 +249,14 @@ export default function Fournisseurs() {
   const windowBlurred = useRef(false);
 
   useEffect(() => {
-    const onBlur = () => { windowBlurred.current = true; };
-    const onFocus = () => { setTimeout(() => { windowBlurred.current = false; }, 300); };
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", onFocus);
-    return () => { window.removeEventListener("blur", onBlur); window.removeEventListener("focus", onFocus); };
+    const onFocusOut = (e: FocusEvent) => {
+      if (!e.relatedTarget) {
+        windowBlurred.current = true;
+        setTimeout(() => { windowBlurred.current = false; }, 500);
+      }
+    };
+    document.addEventListener("focusout", onFocusOut, true);
+    return () => { document.removeEventListener("focusout", onFocusOut, true); };
   }, []);
 
   const filtered = fournisseurs.filter(f => {
