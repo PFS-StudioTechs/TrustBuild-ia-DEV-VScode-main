@@ -104,19 +104,47 @@ serve(async (req) => {
       );
     }
 
-    const rows = produits.map((p) => ({
-      artisan_id: artisanId,
-      fournisseur_id: fournisseurId,
-      import_id,
-      reference: p.reference,
-      designation: p.designation,
-      unite: p.unite,
-      prix_achat: p.prix_achat,
-      statut_import: fichier_type === "csv" ? "valide" : "ia",
-    }));
+    const { data: manuels } = await supabase
+      .from("produits")
+      .select("id, reference, prix_achat")
+      .eq("artisan_id", artisanId)
+      .eq("fournisseur_id", fournisseurId)
+      .eq("statut_import", "manuel")
+      .eq("actif", true);
 
-    const { error: insertError } = await supabase.from("produits").insert(rows);
-    if (insertError) throw new Error(`Erreur insertion produits: ${insertError.message}`);
+    const manuelsByRef = new Map((manuels ?? []).map((m: any) => [m.reference?.trim().toLowerCase(), m]));
+
+    const toInsert: any[] = [];
+    for (const p of produits) {
+      const refKey = p.reference?.trim().toLowerCase() ?? null;
+      const existing = refKey ? manuelsByRef.get(refKey) : null;
+      if (existing) {
+        await supabase.from("produits").update({
+          import_id,
+          designation: p.designation,
+          unite: p.unite,
+          statut_import: fichier_type === "csv" ? "valide" : "ia",
+          prix_negocie: true,
+        }).eq("id", existing.id);
+      } else {
+        toInsert.push({
+          artisan_id: artisanId,
+          fournisseur_id: fournisseurId,
+          import_id,
+          reference: p.reference,
+          designation: p.designation,
+          unite: p.unite,
+          prix_achat: p.prix_achat,
+          prix_negocie: false,
+          statut_import: fichier_type === "csv" ? "valide" : "ia",
+        });
+      }
+    }
+
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase.from("produits").insert(toInsert);
+      if (insertError) throw new Error(`Erreur insertion produits: ${insertError.message}`);
+    }
 
     await supabase
       .from("catalogue_imports")

@@ -12,13 +12,14 @@ export interface Produit {
   designation: string;
   unite: string;
   prix_achat: number;
+  prix_negocie: boolean;
   actif: boolean;
   statut_import: "ia" | "valide" | "manuel";
   created_at: string;
   updated_at: string;
 }
 
-export type ProduitUpdate = Pick<Produit, "reference" | "designation" | "unite" | "prix_achat">;
+export type ProduitUpdate = Pick<Produit, "reference" | "designation" | "unite" | "prix_achat" | "prix_negocie">;
 
 const db = supabase as any;
 
@@ -44,34 +45,15 @@ export function useProduits() {
     setLoading(false);
   }, [user]);
 
-  const updateProduit = async (id: string, fields: ProduitUpdate): Promise<boolean> => {
-    const { error } = await db
-      .from("produits")
-      .update({ ...fields, statut_import: "valide" })
-      .eq("id", id);
-    if (error) { toast.error("Erreur lors de la modification"); return false; }
-    setProduits(prev => prev.map(p => p.id === id ? { ...p, ...fields, statut_import: "valide" } : p));
-    return true;
-  };
-
-  const validerProduit = async (id: string): Promise<void> => {
-    const { error } = await db
-      .from("produits")
-      .update({ statut_import: "valide" })
-      .eq("id", id);
-    if (error) { toast.error("Erreur lors de la validation"); return; }
-    setProduits(prev => prev.map(p => p.id === id ? { ...p, statut_import: "valide" } : p));
-  };
-
-  const validerProduits = async (ids: string[]): Promise<void> => {
-    if (ids.length === 0) return;
-    const { error } = await db.from("produits").update({ statut_import: "valide" }).in("id", ids);
-    if (error) { toast.error("Erreur lors de la validation"); return; }
-    setProduits(prev => prev.map(p => ids.includes(p.id) ? { ...p, statut_import: "valide" } : p));
-  };
-
   const createProduit = async (fournisseurId: string, fields: ProduitUpdate): Promise<boolean> => {
     if (!user) return false;
+    if (fields.reference) {
+      const existing = produits.find(p => p.reference?.trim().toLowerCase() === fields.reference!.trim().toLowerCase());
+      if (existing) {
+        toast.error(`Référence "${fields.reference}" déjà existante — modifiez l'article existant.`);
+        return false;
+      }
+    }
     const { error } = await db.from("produits").insert({
       artisan_id: user.id,
       fournisseur_id: fournisseurId,
@@ -83,6 +65,29 @@ export function useProduits() {
     if (error) { toast.error("Erreur lors de la création"); return false; }
     await fetchProduits(fournisseurId);
     return true;
+  };
+
+  const updateProduit = async (id: string, fields: ProduitUpdate): Promise<boolean> => {
+    const { error } = await db
+      .from("produits")
+      .update({ ...fields, statut_import: "valide" })
+      .eq("id", id);
+    if (error) { toast.error("Erreur lors de la modification"); return false; }
+    setProduits(prev => prev.map(p => p.id === id ? { ...p, ...fields, statut_import: "valide" } : p));
+    return true;
+  };
+
+  const validerProduit = async (id: string): Promise<void> => {
+    const { error } = await db.from("produits").update({ statut_import: "valide" }).eq("id", id);
+    if (error) { toast.error("Erreur lors de la validation"); return; }
+    setProduits(prev => prev.map(p => p.id === id ? { ...p, statut_import: "valide" } : p));
+  };
+
+  const validerProduits = async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+    const { error } = await db.from("produits").update({ statut_import: "valide" }).in("id", ids);
+    if (error) { toast.error("Erreur lors de la validation"); return; }
+    setProduits(prev => prev.map(p => ids.includes(p.id) ? { ...p, statut_import: "valide" } : p));
   };
 
   const deleteProduit = async (id: string): Promise<void> => {
@@ -107,13 +112,7 @@ export function useProduits() {
 
       const { data: importRow, error: importError } = await db
         .from("catalogue_imports")
-        .insert({
-          artisan_id: user.id,
-          fournisseur_id: fournisseurId,
-          fichier_url: storagePath,
-          fichier_type,
-          statut: "en_cours",
-        })
+        .insert({ artisan_id: user.id, fournisseur_id: fournisseurId, fichier_url: storagePath, fichier_type, statut: "en_cours" })
         .select("id")
         .single();
       if (importError) throw new Error(importError.message);
@@ -126,10 +125,7 @@ export function useProduits() {
         try {
           const ctx = (fnError as any).context;
           const text = typeof ctx?.text === "function" ? await ctx.text() : null;
-          if (text) {
-            const body = JSON.parse(text);
-            if (body?.error) msg = body.error;
-          }
+          if (text) { const body = JSON.parse(text); if (body?.error) msg = body.error; }
         } catch {}
         throw new Error(msg);
       }

@@ -12,6 +12,7 @@ type ProduitExtrait = {
   designation: string;
   unite: string;
   prix_achat: number;
+  prix_negocie?: boolean;
 };
 
 type EcartPrix = {
@@ -85,7 +86,7 @@ serve(async (req) => {
 
     const { data: produitsDB } = await db
       .from("produits")
-      .select("reference, designation, unite, prix_achat")
+      .select("reference, designation, unite, prix_achat, prix_negocie")
       .eq("import_id", import_id)
       .eq("actif", true);
 
@@ -96,6 +97,7 @@ serve(async (req) => {
     const manquants: ProduitExtrait[] = [];
     const fantomes: ProduitExtrait[]  = [];
     const ecarts_prix: EcartPrix[]    = [];
+    const prix_negocie_list: EcartPrix[] = [];
 
     for (const [key, p] of indexPDF) {
       if (!indexDB.has(key)) {
@@ -104,7 +106,7 @@ serve(async (req) => {
         const d = indexDB.get(key)!;
         const delta = Math.abs(p.prix_achat - d.prix_achat);
         if (delta > 0.02) {
-          ecarts_prix.push({
+          const ecart = {
             reference: p.reference,
             designation: p.designation,
             unite_pdf: p.unite,
@@ -112,7 +114,9 @@ serve(async (req) => {
             prix_pdf: p.prix_achat,
             prix_db: d.prix_achat,
             delta: Math.round(delta * 100) / 100,
-          });
+          };
+          if (d.prix_negocie) prix_negocie_list.push(ecart);
+          else ecarts_prix.push(ecart);
         }
       }
     }
@@ -124,7 +128,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ total_pdf: produitsPDF.length, total_db: dbList.length, extraction_method, manquants, fantomes, ecarts_prix }),
+      JSON.stringify({ total_pdf: produitsPDF.length, total_db: dbList.length, extraction_method, manquants, fantomes, ecarts_prix, prix_negocie: prix_negocie_list }),
       { headers: { ...cors, "Content-Type": "application/json" } }
     );
   } catch (e) {

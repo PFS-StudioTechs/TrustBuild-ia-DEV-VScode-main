@@ -11,5 +11,24 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(pip show *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(npm list *)",
+      "Bash(npm search *)",
+      "Bash(npm info *)",
+      "Write(src/**)",
+      "Edit(src/**)",
+      "Write(supabase/**)",
+      "Edit(supabase/**)",
+      "Bash(supabase *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
   }
 }

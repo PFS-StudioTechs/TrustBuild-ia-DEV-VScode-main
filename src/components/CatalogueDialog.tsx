@@ -22,31 +22,22 @@ const STATUT_CLASS: Record<Produit["statut_import"], string> = {
 };
 
 const ACCEPT = ".csv,.pdf,.jpg,.jpeg,.png,.webp";
-const EMPTY_FORM: ProduitUpdate = { reference: null, designation: "", unite: "u", prix_achat: 0 };
+const EMPTY_FORM: ProduitUpdate = { reference: null, designation: "", unite: "u", prix_achat: 0, prix_negocie: false };
 
 function IndeterminateCheckbox({ checked, indeterminate, onChange }: {
-  checked: boolean;
-  indeterminate: boolean;
-  onChange: () => void;
+  checked: boolean; indeterminate: boolean; onChange: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminate;
-  }, [indeterminate]);
+  useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate; }, [indeterminate]);
   return <input type="checkbox" ref={ref} checked={checked} onChange={onChange} className="cursor-pointer" />;
 }
 
 export default function CatalogueDialog({
-  fournisseur,
-  open,
-  onOpenChange,
+  fournisseur, open, onOpenChange,
 }: {
-  fournisseur: Fournisseur;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
+  fournisseur: Fournisseur; open: boolean; onOpenChange: (v: boolean) => void;
 }) {
-  const { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue } =
-    useProduits();
+  const { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue } = useProduits();
 
   const [filtre, setFiltre] = useState<Filtre>("tous");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -68,13 +59,11 @@ export default function CatalogueDialog({
     }
   }, [open, fournisseur.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [filtre]);
+  useEffect(() => { setSelectedIds(new Set()); }, [filtre]);
 
   const startEdit = (p: Produit) => {
     setEditingId(p.id);
-    setEditForm({ reference: p.reference, designation: p.designation, unite: p.unite, prix_achat: p.prix_achat });
+    setEditForm({ reference: p.reference, designation: p.designation, unite: p.unite, prix_achat: p.prix_achat, prix_negocie: p.prix_negocie });
   };
 
   const cancelEdit = () => setEditingId(null);
@@ -93,11 +82,7 @@ export default function CatalogueDialog({
     setSaving(true);
     const ok = await createProduit(fournisseur.id, { ...newForm, designation: newForm.designation.trim() });
     setSaving(false);
-    if (ok) {
-      setAdding(false);
-      setNewForm(EMPTY_FORM);
-      toast.success("Article ajouté");
-    }
+    if (ok) { setAdding(false); setNewForm(EMPTY_FORM); }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,23 +94,16 @@ export default function CatalogueDialog({
 
   const nbIA = produits.filter(p => p.statut_import === "ia").length;
   const filtered = filtre === "tous" ? produits : produits.filter(p => p.statut_import === filtre);
-
   const selectableFiltered = filtered.filter(p => p.id !== editingId);
   const allSelected = selectableFiltered.length > 0 && selectableFiltered.every(p => selectedIds.has(p.id));
   const someSelected = selectableFiltered.some(p => selectedIds.has(p.id));
   const selectedIACount = filtered.filter(p => selectedIds.has(p.id) && p.statut_import === "ia").length;
 
   const toggleAll = () => {
-    if (allSelected) {
-      setSelectedIds(prev => { const next = new Set(prev); selectableFiltered.forEach(p => next.delete(p.id)); return next; });
-    } else {
-      setSelectedIds(prev => { const next = new Set(prev); selectableFiltered.forEach(p => next.add(p.id)); return next; });
-    }
+    if (allSelected) setSelectedIds(prev => { const n = new Set(prev); selectableFiltered.forEach(p => n.delete(p.id)); return n; });
+    else setSelectedIds(prev => { const n = new Set(prev); selectableFiltered.forEach(p => n.add(p.id)); return n; });
   };
-
-  const toggleOne = (id: string) => {
-    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  };
+  const toggleOne = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const handleBulkValidate = async () => {
     const ids = filtered.filter(p => selectedIds.has(p.id) && p.statut_import === "ia").map(p => p.id);
@@ -136,83 +114,48 @@ export default function CatalogueDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0" onInteractOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
+      <DialogContent
+        className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0"
+        onInteractOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader className="px-6 pt-5 pb-4 border-b">
-          <DialogTitle className="font-display text-lg">
-            Catalogue — {fournisseur.nom}
-          </DialogTitle>
+          <DialogTitle className="font-display text-lg">Catalogue — {fournisseur.nom}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 px-6 py-4 overflow-y-auto flex-1">
           <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-border bg-muted/30">
             <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={handleFileChange} />
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 shrink-0"
-              disabled={importing}
-              onClick={() => fileRef.current?.click()}
-            >
+            <Button variant="outline" size="sm" className="gap-2 shrink-0" disabled={importing} onClick={() => fileRef.current?.click()}>
               {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               {importing ? "Extraction…" : "Importer un catalogue"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              {importing
-                ? "Analyse IA en cours, cela peut prendre quelques secondes…"
-                : "PDF, CSV ou image acceptés — les produits extraits apparaîtront ci-dessous"}
+              {importing ? "Analyse IA en cours, cela peut prendre quelques secondes…" : "PDF, CSV ou image acceptés — les produits extraits apparaîtront ci-dessous"}
             </p>
           </div>
 
           <div className="flex gap-2 flex-wrap items-center">
             {(["tous", "ia", "valide", "manuel"] as Filtre[]).map(f => (
-              <button
-                key={f}
-                onClick={() => setFiltre(f)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  filtre === f
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border text-muted-foreground hover:border-primary/50"
-                }`}
-              >
+              <button key={f} onClick={() => setFiltre(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filtre === f ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}>
                 {f === "tous" ? "Tous" : f === "ia" ? "En cours de validation" : f === "valide" ? "Validés" : "Manuels"}
-                {f === "ia" && nbIA > 0 && (
-                  <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">
-                    {nbIA}
-                  </span>
-                )}
+                {f === "ia" && nbIA > 0 && <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbIA}</span>}
               </button>
             ))}
             {selectedIACount > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-7 text-xs"
-                onClick={handleBulkValidate}
-              >
-                <Check className="w-3.5 h-3.5" />
-                Valider ({selectedIACount})
+              <Button size="sm" variant="outline" className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-7 text-xs" onClick={handleBulkValidate}>
+                <Check className="w-3.5 h-3.5" /> Valider ({selectedIACount})
               </Button>
             )}
-            <span className="ml-auto text-xs text-muted-foreground self-center">
-              {filtered.length} produit{filtered.length !== 1 ? "s" : ""}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50 h-7 text-xs"
-              onClick={() => { setAdding(true); setFiltre("tous"); }}
-              disabled={adding}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Ajouter un article
+            <span className="ml-auto text-xs text-muted-foreground self-center">{filtered.length} produit{filtered.length !== 1 ? "s" : ""}</span>
+            <Button size="sm" variant="outline" className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50 h-7 text-xs" onClick={() => { setAdding(true); setFiltre("tous"); }} disabled={adding}>
+              <Plus className="w-3.5 h-3.5" /> Ajouter un article
             </Button>
           </div>
 
           {adding && (
             <div className="border rounded-lg overflow-hidden bg-blue-50/50">
-              <div className="px-3 py-2 bg-blue-100 text-xs font-medium text-blue-800 border-b border-blue-200">
-                Nouvel article manuel
-              </div>
+              <div className="px-3 py-2 bg-blue-100 text-xs font-medium text-blue-800 border-b border-blue-200">Nouvel article manuel</div>
               <div className="flex gap-2 p-3 items-end flex-wrap">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-muted-foreground">Référence</span>
@@ -241,18 +184,12 @@ export default function CatalogueDialog({
           )}
 
           {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-10 rounded" />)}
-            </div>
+            <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-10 rounded" />)}</div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <PackageOpen className="w-10 h-10 text-muted-foreground mb-3" />
-              <p className="font-medium text-sm">
-                {filtre === "tous" ? "Aucun produit dans ce catalogue" : "Aucun produit pour ce filtre"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {filtre === "tous" ? "Importez un catalogue ou ajoutez des produits manuellement" : ""}
-              </p>
+              <p className="font-medium text-sm">{filtre === "tous" ? "Aucun produit dans ce catalogue" : "Aucun produit pour ce filtre"}</p>
+              <p className="text-xs text-muted-foreground mt-1">{filtre === "tous" ? "Importez un catalogue ou ajoutez des produits manuellement" : ""}</p>
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
@@ -260,14 +197,12 @@ export default function CatalogueDialog({
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-muted/50">
                     <tr className="border-b">
-                      <th className="w-8 px-3 py-2">
-                        <IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} />
-                      </th>
+                      <th className="w-8 px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Référence</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-20">Unité</th>
                       <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-28">PA HT (€)</th>
-                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">Statut</th>
+                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-36">Statut</th>
                       <th className="w-24" />
                     </tr>
                   </thead>
@@ -277,57 +212,44 @@ export default function CatalogueDialog({
                         {editingId === p.id ? (
                           <>
                             <td className="px-3 py-1.5" />
-                            <td className="px-2 py-1.5">
-                              <Input value={editForm.reference ?? ""} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs" placeholder="Réf." />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <Input value={editForm.designation} onChange={e => setEditForm(f => ({ ...f, designation: e.target.value }))} className="h-7 text-xs" placeholder="Désignation" />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <Input value={editForm.unite} onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-16" placeholder="u" />
-                            </td>
+                            <td className="px-2 py-1.5"><Input value={editForm.reference ?? ""} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs" placeholder="Réf." /></td>
+                            <td className="px-2 py-1.5"><Input value={editForm.designation} onChange={e => setEditForm(f => ({ ...f, designation: e.target.value }))} className="h-7 text-xs" placeholder="Désignation" /></td>
+                            <td className="px-2 py-1.5"><Input value={editForm.unite} onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-16" placeholder="u" /></td>
                             <td className="px-2 py-1.5">
                               <Input type="number" min="0" step="0.01" value={editForm.prix_achat} onChange={e => setEditForm(f => ({ ...f, prix_achat: parseFloat(e.target.value) || 0 }))} className="h-7 text-xs text-right" />
+                              <label className="flex items-center gap-1 mt-1 cursor-pointer">
+                                <input type="checkbox" checked={editForm.prix_negocie} onChange={e => setEditForm(f => ({ ...f, prix_negocie: e.target.checked }))} className="cursor-pointer" />
+                                <span className="text-[10px] text-muted-foreground">Prix négocié</span>
+                              </label>
                             </td>
                             <td />
                             <td className="px-2 py-1.5">
                               <div className="flex gap-1 justify-end">
-                                <Button size="icon" variant="ghost" className="w-7 h-7 text-emerald-600" onClick={saveEdit} disabled={saving}>
-                                  <Check className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="w-7 h-7" onClick={cancelEdit}>
-                                  <X className="w-3.5 h-3.5" />
-                                </Button>
+                                <Button size="icon" variant="ghost" className="w-7 h-7 text-emerald-600" onClick={saveEdit} disabled={saving}><Check className="w-3.5 h-3.5" /></Button>
+                                <Button size="icon" variant="ghost" className="w-7 h-7" onClick={cancelEdit}><X className="w-3.5 h-3.5" /></Button>
                               </div>
                             </td>
                           </>
                         ) : (
                           <>
-                            <td className="px-3 py-1.5">
-                              <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" />
-                            </td>
+                            <td className="px-3 py-1.5"><input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" /></td>
                             <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{p.reference ?? "—"}</td>
                             <td className="px-3 py-2 text-xs">{p.designation}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground">{p.unite}</td>
-                            <td className="px-3 py-2 text-xs text-right font-mono">{p.prix_achat.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-xs text-right font-mono">
+                              {p.prix_achat.toFixed(2)}
+                              {p.prix_negocie && <span className="ml-1 text-[9px] text-blue-600 font-medium">négocié</span>}
+                            </td>
                             <td className="px-3 py-2 text-center">
-                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${STATUT_CLASS[p.statut_import]}`}>
-                                {STATUT_LABEL[p.statut_import]}
-                              </span>
+                              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${STATUT_CLASS[p.statut_import]}`}>{STATUT_LABEL[p.statut_import]}</span>
                             </td>
                             <td className="px-2 py-1.5">
                               <div className="flex gap-1 justify-end">
                                 {p.statut_import === "ia" && (
-                                  <Button size="icon" variant="ghost" className="w-7 h-7 text-emerald-600" title="Valider" onClick={() => validerProduit(p.id)}>
-                                    <Check className="w-3.5 h-3.5" />
-                                  </Button>
+                                  <Button size="icon" variant="ghost" className="w-7 h-7 text-emerald-600" title="Valider" onClick={() => validerProduit(p.id)}><Check className="w-3.5 h-3.5" /></Button>
                                 )}
-                                <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => startEdit(p)}>
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteProduit(p.id)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
+                                <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => startEdit(p)}><Pencil className="w-3.5 h-3.5" /></Button>
+                                <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteProduit(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                               </div>
                             </td>
                           </>
