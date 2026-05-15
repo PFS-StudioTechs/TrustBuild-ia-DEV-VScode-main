@@ -121,7 +121,7 @@ export default function CatalogueDialog({
   };
 
   const handleBulkDelete = async () => {
-    const ids = filtered.filter(p => selectedIds.has(p.id)).map(p => p.id);
+    const ids = filtered.filter(p => selectedIds.has(p.id) && p.statut_import !== "valide").map(p => p.id);
     if (ids.length === 0) return;
     await deleteProduits(ids);
     setSelectedIds(new Set());
@@ -164,11 +164,6 @@ export default function CatalogueDialog({
                 {f === "ia" && nbIA > 0 && <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbIA}</span>}
               </button>
             ))}
-            {selectedIACount > 0 && (
-              <Button size="sm" variant="outline" className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-7 text-xs" onClick={handleBulkValidate}>
-                <Check className="w-3.5 h-3.5" /> Valider ({selectedIACount})
-              </Button>
-            )}
             {selectedIds.size > 0 && (
               <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 h-7 text-xs" onClick={() => setConfirmDeleteOpen(true)}>
                 <Trash2 className="w-3.5 h-3.5" /> Supprimer ({selectedIds.size})
@@ -183,7 +178,7 @@ export default function CatalogueDialog({
           {adding && (
             <div className="border rounded-lg overflow-hidden bg-blue-50/50">
               <div className="px-3 py-2 bg-blue-100 text-xs font-medium text-blue-800 border-b border-blue-200">Nouvel article manuel</div>
-              <div className="flex gap-2 p-3 items-end flex-wrap">
+              <div className="flex gap-2 p-3 items-end">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-muted-foreground">Référence</span>
                   <Input value={newForm.reference ?? ""} onChange={e => setNewForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs w-28" placeholder="Optionnel" />
@@ -270,7 +265,7 @@ export default function CatalogueDialog({
                           </>
                         ) : (
                           <>
-                            <td className="px-3 py-1.5"><input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" /></td>
+                            <td className="px-3 py-1.5">{p.statut_import !== "valide" && <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" />}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{p.reference ?? "—"}</td>
                             <td className="px-3 py-2 text-xs">{p.designation}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground">{p.unite}</td>
@@ -285,11 +280,10 @@ export default function CatalogueDialog({
                             </td>
                             <td className="px-2 py-1.5">
                               <div className="flex gap-1 justify-end">
-                                {p.statut_import === "ia" && (
-                                  <Button size="icon" variant="ghost" className="w-7 h-7 text-emerald-600" title="Valider" onClick={() => validerProduit(p.id)}><Check className="w-3.5 h-3.5" /></Button>
-                                )}
                                 <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => startEdit(p)}><Pencil className="w-3.5 h-3.5" /></Button>
-                                <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteProduit(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                {p.statut_import !== "valide" && (
+                                  <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteProduit(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                )}
                               </div>
                             </td>
                           </>
