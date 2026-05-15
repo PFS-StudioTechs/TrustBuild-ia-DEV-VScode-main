@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFournisseurs, type Fournisseur, type FournisseurForm } from "@/hooks/useFournisseurs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -246,6 +246,15 @@ export default function Fournisseurs() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Fournisseur | null>(null);
   const [catalogueTarget, setCatalogueTarget] = useState<Fournisseur | null>(null);
+  const windowBlurred = useRef(false);
+
+  useEffect(() => {
+    const onBlur = () => { windowBlurred.current = true; };
+    const onFocus = () => { setTimeout(() => { windowBlurred.current = false; }, 300); };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => { window.removeEventListener("blur", onBlur); window.removeEventListener("focus", onFocus); };
+  }, []);
 
   const filtered = fournisseurs.filter(f => {
     const q = search.toLowerCase();
@@ -347,7 +356,7 @@ export default function Fournisseurs() {
         <CatalogueDialog
           fournisseur={catalogueTarget}
           open={!!catalogueTarget}
-          onOpenChange={v => { if (!v) setCatalogueTarget(null); }}
+          onOpenChange={v => { if (!v && !windowBlurred.current) setCatalogueTarget(null); }}
         />
       )}
     </div>
