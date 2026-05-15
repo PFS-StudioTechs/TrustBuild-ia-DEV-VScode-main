@@ -197,8 +197,8 @@ export default function CatalogueDialog({
                   <Input value={newForm.unite} onChange={e => setNewForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-16" placeholder="u" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">PA HT (€)</span>
-                  <Input type="number" min="0" step="0.01" value={newForm.prix_achat} onChange={e => setNewForm(f => ({ ...f, prix_achat: parseFloat(e.target.value) || 0 }))} className="h-7 text-xs text-right w-24" />
+                  <span className="text-xs text-muted-foreground">Prix catalogue (€)</span>
+                  <Input type="number" min="0" step="0.01" value={newForm.prix_achat} onChange={e => setNewForm(f => ({ ...f, prix_achat: parseFloat(e.target.value) || 0 }))} className="h-7 text-xs text-right w-28" />
                 </div>
                 <Button size="sm" className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700" onClick={handleCreate} disabled={saving}>
                   <Check className="w-3.5 h-3.5" /> Enregistrer
