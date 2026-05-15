@@ -10,7 +10,7 @@ import type { Fournisseur } from "@/hooks/useFournisseurs";
 type Filtre = "tous" | "ia" | "valide" | "manuel";
 
 const STATUT_LABEL: Record<Produit["statut_import"], string> = {
-  ia: "À réviser",
+  ia: "En cours de validation",
   valide: "Validé",
   manuel: "Manuel",
 };
@@ -172,7 +172,7 @@ export default function CatalogueDialog({
                     : "bg-background border-border text-muted-foreground hover:border-primary/50"
                 }`}
               >
-                {f === "tous" ? "Tous" : f === "ia" ? "À réviser" : f === "valide" ? "Validés" : "Manuels"}
+                {f === "tous" ? "Tous" : f === "ia" ? "En cours de validation" : f === "valide" ? "Validés" : "Manuels"}
                 {f === "ia" && nbIA > 0 && (
                   <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">
                     {nbIA}

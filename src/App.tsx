@@ -31,7 +31,7 @@ import Messagerie from "@/pages/Messagerie";
 import DevisPublic from "@/pages/DevisPublic";
 import { Button } from "@/components/ui/button";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
 
 const loadingSkeleton = (
   <div className="flex items-center justify-center h-[100dvh] bg-background">
