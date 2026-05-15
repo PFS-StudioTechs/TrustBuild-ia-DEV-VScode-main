@@ -359,7 +359,7 @@ export default function Fournisseurs() {
         <CatalogueDialog
           fournisseur={catalogueTarget}
           open={!!catalogueTarget}
-          onOpenChange={v => { if (!v && !windowBlurred.current) setCatalogueTarget(null); }}
+          onOpenChange={v => { if (!v) { console.log('[catalogue] close demandé — windowBlurred:', windowBlurred.current, new Error().stack?.split('\n').slice(1,4).join(' | ')); if (!windowBlurred.current) setCatalogueTarget(null); } }}
         />
       )}
     </div>
