@@ -27,6 +27,19 @@
       "C:\\Users\\kstee\\.claude",
       "C:\\Users\\kstee\\AppData\\Local\\Temp"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -NoProfile -File \".claude/hooks/hello-status.ps1\""
+          }
+        ]
+      }
+    ]
   }
 }
 
