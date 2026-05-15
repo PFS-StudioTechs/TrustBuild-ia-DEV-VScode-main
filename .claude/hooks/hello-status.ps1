@@ -8,7 +8,7 @@ if (-not $rawInput) { Write-Output '{"continue":true}'; exit 0 }
 try { $payload = $rawInput | ConvertFrom-Json }
 catch { Write-Output '{"continue":true}'; exit 0 }
 
-$prompt = ($payload.prompt ?? "").Trim()
+$prompt = if ($payload.prompt) { $payload.prompt.Trim() } else { "" }
 if ($prompt -notmatch '^[Hh]ello') { Write-Output '{"continue":true}'; exit 0 }
 
 $cwd = $payload.cwd
@@ -85,7 +85,7 @@ if ($vercelToken) {
     try {
         $vh      = @{ Authorization = "Bearer $vercelToken" }
         $teamId  = $env:VERCEL_TEAM_ID
-        $appName = $env:VERCEL_APP_NAME ?? $projectName
+        $appName = if ($env:VERCEL_APP_NAME) { $env:VERCEL_APP_NAME } else { $projectName }
         $url     = "https://api.vercel.com/v6/deployments?app=$appName&limit=5"
         if ($teamId) { $url += "&teamId=$teamId" }
         $deploys = Invoke-RestMethod -Uri $url -Headers $vh -ErrorAction Stop
@@ -94,7 +94,7 @@ if ($vercelToken) {
             $lines += "5 derniers déploiements Vercel ($appName):"
             $deploys.deployments | Select-Object -First 5 | ForEach-Object {
                 $date    = [DateTimeOffset]::FromUnixTimeMilliseconds($_.createdAt).ToString("yyyy-MM-dd HH:mm")
-                $creator = $_.creator.username ?? "inconnu"
+                $creator = if ($_.creator.username) { $_.creator.username } else { "inconnu" }
                 $lines  += "  $date | $($_.state) | par: $creator | $($_.url)"
             }
         }
