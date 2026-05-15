@@ -129,6 +129,7 @@ export default function CatalogueDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
         className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0"
@@ -320,5 +321,6 @@ export default function CatalogueDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    </>
   );
 }
