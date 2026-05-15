@@ -123,6 +123,29 @@ serve(async (req) => {
       .update({ statut: "termine", nb_produits_extraits: produits.length })
       .eq("id", import_id);
 
+    const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
+    if (sendgridKey) {
+      const [{ data: fournisseur }, { data: profile }] = await Promise.all([
+        supabase.from("fournisseurs").select("nom").eq("id", fournisseurId).single(),
+        supabase.from("profiles").select("prenom, nom").eq("user_id", artisanId).single(),
+      ]);
+      const artisanNom = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() : artisanId;
+      const fournisseurNom = fournisseur?.nom ?? fournisseurId;
+      await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${sendgridKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: "contact@pfs-studio-techs.fr" }] }],
+          from: { email: Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia", name: "TrustBuild-IA" },
+          subject: `[Cataverif] Nouveau catalogue à vérifier — ${fournisseurNom}`,
+          content: [{
+            type: "text/plain",
+            value: `Un nouveau catalogue vient d'être importé et attend vérification.\n\nFournisseur : ${fournisseurNom}\nArticles extraits : ${produits.length}\nArtisan : ${artisanNom}\n\nConnectez-vous à Cataverif pour vérifier l'import.`,
+          }],
+        }),
+      });
+    }
+
     return new Response(
       JSON.stringify({ nb_produits: produits.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
