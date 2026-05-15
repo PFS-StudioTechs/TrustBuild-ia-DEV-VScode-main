@@ -12,6 +12,7 @@ export interface Produit {
   designation: string;
   unite: string;
   prix_achat: number;
+  prix_negocie_valeur: number | null;
   prix_negocie: boolean;
   actif: boolean;
   statut_import: "ia" | "valide" | "manuel";
@@ -19,7 +20,7 @@ export interface Produit {
   updated_at: string;
 }
 
-export type ProduitUpdate = Pick<Produit, "reference" | "designation" | "unite" | "prix_achat" | "prix_negocie">;
+export type ProduitUpdate = Pick<Produit, "reference" | "designation" | "unite" | "prix_achat" | "prix_negocie_valeur" | "prix_negocie">;
 
 const db = supabase as any;
 
@@ -68,12 +69,14 @@ export function useProduits() {
   };
 
   const updateProduit = async (id: string, fields: ProduitUpdate): Promise<boolean> => {
-    const { error } = await db
-      .from("produits")
-      .update({ ...fields, statut_import: "valide" })
-      .eq("id", id);
+    const toSave = {
+      ...fields,
+      prix_negocie: fields.prix_negocie_valeur != null && fields.prix_negocie_valeur > 0,
+      statut_import: "valide",
+    };
+    const { error } = await db.from("produits").update(toSave).eq("id", id);
     if (error) { toast.error("Erreur lors de la modification"); return false; }
-    setProduits(prev => prev.map(p => p.id === id ? { ...p, ...fields, statut_import: "valide" } : p));
+    setProduits(prev => prev.map(p => p.id === id ? { ...p, ...toSave } : p));
     return true;
   };
 

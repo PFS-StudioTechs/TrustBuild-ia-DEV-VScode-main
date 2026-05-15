@@ -106,7 +106,7 @@ serve(async (req) => {
 
     const { data: existants } = await supabase
       .from("produits")
-      .select("id, reference, designation, prix_achat, prix_negocie, statut_import")
+      .select("id, reference, designation, statut_import")
       .eq("artisan_id", artisanId)
       .eq("fournisseur_id", fournisseurId)
       .eq("actif", true);
@@ -127,12 +127,11 @@ serve(async (req) => {
       const existing = refKey ? byRef.get(refKey) : byDes.get(desKey);
 
       if (existing) {
-        const prixNegocie = existing.prix_negocie === true;
         await supabase.from("produits").update({
           import_id,
           designation: p.designation,
           unite: p.unite,
-          ...(prixNegocie ? {} : { prix_achat: p.prix_achat }),
+          prix_achat: p.prix_achat,
           statut_import: statutImport,
         }).eq("id", existing.id);
       } else {
@@ -145,6 +144,7 @@ serve(async (req) => {
           unite: p.unite,
           prix_achat: p.prix_achat,
           prix_negocie: false,
+          prix_negocie_valeur: null,
           statut_import: statutImport,
         });
       }

@@ -22,7 +22,7 @@ const STATUT_CLASS: Record<Produit["statut_import"], string> = {
 };
 
 const ACCEPT = ".csv,.pdf,.jpg,.jpeg,.png,.webp";
-const EMPTY_FORM: ProduitUpdate = { reference: null, designation: "", unite: "u", prix_achat: 0, prix_negocie: false };
+const EMPTY_FORM: ProduitUpdate = { reference: null, designation: "", unite: "u", prix_achat: 0, prix_negocie_valeur: null, prix_negocie: false };
 
 function IndeterminateCheckbox({ checked, indeterminate, onChange }: {
   checked: boolean; indeterminate: boolean; onChange: () => void;
@@ -69,7 +69,7 @@ export default function CatalogueDialog({
 
   const startEdit = (p: Produit) => {
     setEditingId(p.id);
-    setEditForm({ reference: p.reference, designation: p.designation, unite: p.unite, prix_achat: p.prix_achat, prix_negocie: p.prix_negocie });
+    setEditForm({ reference: p.reference, designation: p.designation, unite: p.unite, prix_achat: p.prix_achat, prix_negocie_valeur: p.prix_negocie_valeur, prix_negocie: p.prix_negocie });
   };
 
   const cancelEdit = () => setEditingId(null);
@@ -210,9 +210,10 @@ export default function CatalogueDialog({
                       <th className="w-8 px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Référence</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-20">Unité</th>
-                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-28">PA HT (€)</th>
-                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-36">Statut</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-16">Unité</th>
+                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-24">Prix catalogue</th>
+                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-28">Prix négocié</th>
+                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">Statut</th>
                       <th className="w-24" />
                     </tr>
                   </thead>
@@ -224,13 +225,23 @@ export default function CatalogueDialog({
                             <td className="px-3 py-1.5" />
                             <td className="px-2 py-1.5"><Input value={editForm.reference ?? ""} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs" placeholder="Réf." /></td>
                             <td className="px-2 py-1.5"><Input value={editForm.designation} onChange={e => setEditForm(f => ({ ...f, designation: e.target.value }))} className="h-7 text-xs" placeholder="Désignation" /></td>
-                            <td className="px-2 py-1.5"><Input value={editForm.unite} onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-16" placeholder="u" /></td>
+                            <td className="px-2 py-1.5"><Input value={editForm.unite} onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-14" placeholder="u" /></td>
+                            <td className="px-2 py-1.5 text-right text-xs font-mono text-muted-foreground">{editForm.prix_achat.toFixed(2)}</td>
                             <td className="px-2 py-1.5">
-                              <Input type="number" min="0" step="0.01" value={editForm.prix_achat} onChange={e => setEditForm(f => ({ ...f, prix_achat: parseFloat(e.target.value) || 0 }))} className="h-7 text-xs text-right" />
-                              <label className="flex items-center gap-1 mt-1 cursor-pointer">
-                                <input type="checkbox" checked={editForm.prix_negocie} onChange={e => setEditForm(f => ({ ...f, prix_negocie: e.target.checked }))} className="cursor-pointer" />
-                                <span className="text-[10px] text-muted-foreground">Prix négocié</span>
-                              </label>
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  value={editForm.prix_negocie_valeur ?? ""}
+                                  placeholder="—"
+                                  onChange={e => setEditForm(f => ({ ...f, prix_negocie_valeur: e.target.value ? parseFloat(e.target.value) : null }))}
+                                  className="h-7 text-xs text-right w-20"
+                                />
+                                {editForm.prix_negocie_valeur != null && (
+                                  <button onClick={() => setEditForm(f => ({ ...f, prix_negocie_valeur: null }))} className="text-muted-foreground hover:text-foreground">
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                             <td />
                             <td className="px-2 py-1.5">
@@ -246,9 +257,11 @@ export default function CatalogueDialog({
                             <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{p.reference ?? "—"}</td>
                             <td className="px-3 py-2 text-xs">{p.designation}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground">{p.unite}</td>
+                            <td className="px-3 py-2 text-xs text-right font-mono text-muted-foreground">{p.prix_achat.toFixed(2)}</td>
                             <td className="px-3 py-2 text-xs text-right font-mono">
-                              {p.prix_achat.toFixed(2)}
-                              {p.prix_negocie && <span className="ml-1 text-[9px] text-blue-600 font-medium">négocié</span>}
+                              {p.prix_negocie_valeur != null
+                                ? <span className="text-blue-700 font-medium">{p.prix_negocie_valeur.toFixed(2)}</span>
+                                : <span className="text-muted-foreground">—</span>}
                             </td>
                             <td className="px-3 py-2 text-center">
                               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${STATUT_CLASS[p.statut_import]}`}>{STATUT_LABEL[p.statut_import]}</span>

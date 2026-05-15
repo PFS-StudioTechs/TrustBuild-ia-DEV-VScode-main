@@ -78,7 +78,7 @@ type LigneState = {
 };
 
 type FournisseurRef = { id: string; nom: string };
-type ProduitRef = { id: string; designation: string; reference: string | null; unite: string; prix_achat: number };
+type ProduitRef = { id: string; designation: string; reference: string | null; unite: string; prix_achat: number; prix_negocie_valeur: number | null };
 
 const calcPV = (pa: number, marge: number) =>
   marge >= 100 ? pa * 2 : pa === 0 ? 0 : pa / (1 - marge / 100);
@@ -144,7 +144,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
     if (produitsCache[fournisseurId]) return;
     const { data: rows } = await (supabase as any)
       .from("produits")
-      .select("id, designation, reference, unite, prix_achat")
+      .select("id, designation, reference, unite, prix_achat, prix_negocie_valeur")
       .eq("artisan_id", user!.id)
       .eq("fournisseur_id", fournisseurId)
       .eq("actif", true)
@@ -254,14 +254,15 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
       return;
     }
     const marge = lignes[i].marge_pct ?? 30;
-    const pv = parseFloat(calcPV(produit.prix_achat, marge).toFixed(2));
+    const prixEffectif = produit.prix_negocie_valeur ?? produit.prix_achat;
+    const pv = parseFloat(calcPV(prixEffectif, marge).toFixed(2));
     setLignes(prev => prev.map((l, idx) => idx === i
       ? {
           ...l,
           produit_id: produit.id,
           description: produit.designation,
           unite: produit.unite,
-          prix_achat: produit.prix_achat,
+          prix_achat: prixEffectif,
           marge_pct: marge,
           prix_unitaire: pv,
         }
