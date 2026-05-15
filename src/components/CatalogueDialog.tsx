@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pencil, Trash2, Check, X, Upload, Loader2, PackageOpen, Plus } from "lucide-react";
@@ -46,6 +47,7 @@ export default function CatalogueDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [newForm, setNewForm] = useState<ProduitUpdate>(EMPTY_FORM);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -123,6 +125,7 @@ export default function CatalogueDialog({
     if (ids.length === 0) return;
     await deleteProduits(ids);
     setSelectedIds(new Set());
+    setConfirmDeleteOpen(false);
   };
 
   return (
@@ -166,7 +169,7 @@ export default function CatalogueDialog({
               </Button>
             )}
             {selectedIds.size > 0 && (
-              <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 h-7 text-xs" onClick={handleBulkDelete}>
+              <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 h-7 text-xs" onClick={() => setConfirmDeleteOpen(true)}>
                 <Trash2 className="w-3.5 h-3.5" /> Supprimer ({selectedIds.size})
               </Button>
             )}
@@ -300,5 +303,22 @@ export default function CatalogueDialog({
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Supprimer {selectedIds.size} article{selectedIds.size > 1 ? "s" : ""} ?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Cette action est irréversible. Les articles sélectionnés seront définitivement supprimés du catalogue.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Annuler</AlertDialogCancel>
+          <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
+            Supprimer
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
