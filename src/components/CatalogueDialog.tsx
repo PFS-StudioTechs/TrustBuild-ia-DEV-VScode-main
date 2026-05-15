@@ -37,7 +37,7 @@ export default function CatalogueDialog({
 }: {
   fournisseur: Fournisseur; open: boolean; onOpenChange: (v: boolean) => void;
 }) {
-  const { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue } = useProduits();
+  const { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, deleteProduits, uploadCatalogue } = useProduits();
 
   const [filtre, setFiltre] = useState<Filtre>("tous");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -118,6 +118,13 @@ export default function CatalogueDialog({
     setSelectedIds(new Set());
   };
 
+  const handleBulkDelete = async () => {
+    const ids = filtered.filter(p => selectedIds.has(p.id)).map(p => p.id);
+    if (ids.length === 0) return;
+    await deleteProduits(ids);
+    setSelectedIds(new Set());
+  };
+
   return (
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
@@ -156,6 +163,11 @@ export default function CatalogueDialog({
             {selectedIACount > 0 && (
               <Button size="sm" variant="outline" className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-7 text-xs" onClick={handleBulkValidate}>
                 <Check className="w-3.5 h-3.5" /> Valider ({selectedIACount})
+              </Button>
+            )}
+            {selectedIds.size > 0 && (
+              <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 h-7 text-xs" onClick={handleBulkDelete}>
+                <Trash2 className="w-3.5 h-3.5" /> Supprimer ({selectedIds.size})
               </Button>
             )}
             <span className="ml-auto text-xs text-muted-foreground self-center">{filtered.length} produit{filtered.length !== 1 ? "s" : ""}</span>

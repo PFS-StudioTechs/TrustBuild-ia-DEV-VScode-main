@@ -99,6 +99,13 @@ export function useProduits() {
     setProduits(prev => prev.filter(p => p.id !== id));
   };
 
+  const deleteProduits = async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+    const { error } = await db.from("produits").update({ actif: false }).in("id", ids);
+    if (error) { toast.error("Erreur lors de la suppression"); return; }
+    setProduits(prev => prev.filter(p => !ids.includes(p.id)));
+  };
+
   const uploadCatalogue = async (fournisseurId: string, file: File): Promise<void> => {
     if (!user) return;
     const ext = file.name.split(".").pop()?.toLowerCase();
@@ -143,5 +150,5 @@ export function useProduits() {
     }
   };
 
-  return { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue };
+  return { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, deleteProduits, uploadCatalogue };
 }
