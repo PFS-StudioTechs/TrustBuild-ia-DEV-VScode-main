@@ -136,7 +136,7 @@ export default function CatalogueDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0" onInteractOutside={(e) => e.preventDefault()} onFocusOutside={(e) => e.preventDefault()}>
         <DialogHeader className="px-6 pt-5 pb-4 border-b">
           <DialogTitle className="font-display text-lg">
             Catalogue — {fournisseur.nom}
