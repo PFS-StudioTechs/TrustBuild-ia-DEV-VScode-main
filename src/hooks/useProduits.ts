@@ -70,6 +70,21 @@ export function useProduits() {
     setProduits(prev => prev.map(p => ids.includes(p.id) ? { ...p, statut_import: "valide" } : p));
   };
 
+  const createProduit = async (fournisseurId: string, fields: ProduitUpdate): Promise<boolean> => {
+    if (!user) return false;
+    const { error } = await db.from("produits").insert({
+      artisan_id: user.id,
+      fournisseur_id: fournisseurId,
+      import_id: null,
+      ...fields,
+      statut_import: "manuel",
+      actif: true,
+    });
+    if (error) { toast.error("Erreur lors de la création"); return false; }
+    await fetchProduits(fournisseurId);
+    return true;
+  };
+
   const deleteProduit = async (id: string): Promise<void> => {
     const { error } = await db.from("produits").update({ actif: false }).eq("id", id);
     if (error) { toast.error("Erreur lors de la suppression"); return; }
@@ -129,5 +144,5 @@ export function useProduits() {
     }
   };
 
-  return { produits, loading, importing, fetchProduits, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue };
+  return { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue };
 }

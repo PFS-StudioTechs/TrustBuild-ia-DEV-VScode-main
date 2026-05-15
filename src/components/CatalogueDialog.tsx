@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Trash2, Check, X, Upload, Loader2, PackageOpen } from "lucide-react";
+import { Pencil, Trash2, Check, X, Upload, Loader2, PackageOpen, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useProduits, type Produit, type ProduitUpdate } from "@/hooks/useProduits";
 import type { Fournisseur } from "@/hooks/useFournisseurs";
@@ -22,6 +22,7 @@ const STATUT_CLASS: Record<Produit["statut_import"], string> = {
 };
 
 const ACCEPT = ".csv,.pdf,.jpg,.jpeg,.png,.webp";
+const EMPTY_FORM: ProduitUpdate = { reference: null, designation: "", unite: "u", prix_achat: 0 };
 
 function IndeterminateCheckbox({ checked, indeterminate, onChange }: {
   checked: boolean;
@@ -44,14 +45,16 @@ export default function CatalogueDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const { produits, loading, importing, fetchProduits, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue } =
+  const { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, uploadCatalogue } =
     useProduits();
 
   const [filtre, setFiltre] = useState<Filtre>("tous");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<ProduitUpdate>({ reference: null, designation: "", unite: "u", prix_achat: 0 });
+  const [editForm, setEditForm] = useState<ProduitUpdate>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [newForm, setNewForm] = useState<ProduitUpdate>(EMPTY_FORM);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,6 +62,8 @@ export default function CatalogueDialog({
       setFiltre("tous");
       setEditingId(null);
       setSelectedIds(new Set());
+      setAdding(false);
+      setNewForm(EMPTY_FORM);
       fetchProduits(fournisseur.id);
     }
   }, [open, fournisseur.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -83,6 +88,18 @@ export default function CatalogueDialog({
     setEditingId(null);
   };
 
+  const handleCreate = async () => {
+    if (!newForm.designation.trim()) { toast.error("La désignation est obligatoire"); return; }
+    setSaving(true);
+    const ok = await createProduit(fournisseur.id, { ...newForm, designation: newForm.designation.trim() });
+    setSaving(false);
+    if (ok) {
+      setAdding(false);
+      setNewForm(EMPTY_FORM);
+      toast.success("Article ajouté");
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -100,33 +117,18 @@ export default function CatalogueDialog({
 
   const toggleAll = () => {
     if (allSelected) {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        selectableFiltered.forEach(p => next.delete(p.id));
-        return next;
-      });
+      setSelectedIds(prev => { const next = new Set(prev); selectableFiltered.forEach(p => next.delete(p.id)); return next; });
     } else {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        selectableFiltered.forEach(p => next.add(p.id));
-        return next;
-      });
+      setSelectedIds(prev => { const next = new Set(prev); selectableFiltered.forEach(p => next.add(p.id)); return next; });
     }
   };
 
   const toggleOne = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   };
 
   const handleBulkValidate = async () => {
-    const ids = filtered
-      .filter(p => selectedIds.has(p.id) && p.statut_import === "ia")
-      .map(p => p.id);
+    const ids = filtered.filter(p => selectedIds.has(p.id) && p.statut_import === "ia").map(p => p.id);
     if (ids.length === 0) return;
     await validerProduits(ids);
     setSelectedIds(new Set());
@@ -194,7 +196,49 @@ export default function CatalogueDialog({
             <span className="ml-auto text-xs text-muted-foreground self-center">
               {filtered.length} produit{filtered.length !== 1 ? "s" : ""}
             </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50 h-7 text-xs"
+              onClick={() => { setAdding(true); setFiltre("tous"); }}
+              disabled={adding}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Ajouter un article
+            </Button>
           </div>
+
+          {adding && (
+            <div className="border rounded-lg overflow-hidden bg-blue-50/50">
+              <div className="px-3 py-2 bg-blue-100 text-xs font-medium text-blue-800 border-b border-blue-200">
+                Nouvel article manuel
+              </div>
+              <div className="flex gap-2 p-3 items-end flex-wrap">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">Référence</span>
+                  <Input value={newForm.reference ?? ""} onChange={e => setNewForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs w-28" placeholder="Optionnel" />
+                </div>
+                <div className="flex flex-col gap-1 flex-1 min-w-40">
+                  <span className="text-xs text-muted-foreground">Désignation *</span>
+                  <Input value={newForm.designation} onChange={e => setNewForm(f => ({ ...f, designation: e.target.value }))} className="h-7 text-xs" placeholder="Désignation" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">Unité</span>
+                  <Input value={newForm.unite} onChange={e => setNewForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-16" placeholder="u" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">PA HT (€)</span>
+                  <Input type="number" min="0" step="0.01" value={newForm.prix_achat} onChange={e => setNewForm(f => ({ ...f, prix_achat: parseFloat(e.target.value) || 0 }))} className="h-7 text-xs text-right w-24" />
+                </div>
+                <Button size="sm" className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700" onClick={handleCreate} disabled={saving}>
+                  <Check className="w-3.5 h-3.5" /> Enregistrer
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAdding(false); setNewForm(EMPTY_FORM); }}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="space-y-2">
@@ -217,17 +261,13 @@ export default function CatalogueDialog({
                   <thead className="sticky top-0 z-10 bg-muted/50">
                     <tr className="border-b">
                       <th className="w-8 px-3 py-2">
-                        <IndeterminateCheckbox
-                          checked={allSelected}
-                          indeterminate={someSelected && !allSelected}
-                          onChange={toggleAll}
-                        />
+                        <IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} />
                       </th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Référence</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-20">Unité</th>
                       <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-28">PA HT (€)</th>
-                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-24">Statut</th>
+                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">Statut</th>
                       <th className="w-24" />
                     </tr>
                   </thead>
@@ -238,38 +278,16 @@ export default function CatalogueDialog({
                           <>
                             <td className="px-3 py-1.5" />
                             <td className="px-2 py-1.5">
-                              <Input
-                                value={editForm.reference ?? ""}
-                                onChange={e => setEditForm(f => ({ ...f, reference: e.target.value || null }))}
-                                className="h-7 text-xs"
-                                placeholder="Réf."
-                              />
+                              <Input value={editForm.reference ?? ""} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs" placeholder="Réf." />
                             </td>
                             <td className="px-2 py-1.5">
-                              <Input
-                                value={editForm.designation}
-                                onChange={e => setEditForm(f => ({ ...f, designation: e.target.value }))}
-                                className="h-7 text-xs"
-                                placeholder="Désignation"
-                              />
+                              <Input value={editForm.designation} onChange={e => setEditForm(f => ({ ...f, designation: e.target.value }))} className="h-7 text-xs" placeholder="Désignation" />
                             </td>
                             <td className="px-2 py-1.5">
-                              <Input
-                                value={editForm.unite}
-                                onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))}
-                                className="h-7 text-xs w-16"
-                                placeholder="u"
-                              />
+                              <Input value={editForm.unite} onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-16" placeholder="u" />
                             </td>
                             <td className="px-2 py-1.5">
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={editForm.prix_achat}
-                                onChange={e => setEditForm(f => ({ ...f, prix_achat: parseFloat(e.target.value) || 0 }))}
-                                className="h-7 text-xs text-right"
-                              />
+                              <Input type="number" min="0" step="0.01" value={editForm.prix_achat} onChange={e => setEditForm(f => ({ ...f, prix_achat: parseFloat(e.target.value) || 0 }))} className="h-7 text-xs text-right" />
                             </td>
                             <td />
                             <td className="px-2 py-1.5">
@@ -286,19 +304,12 @@ export default function CatalogueDialog({
                         ) : (
                           <>
                             <td className="px-3 py-1.5">
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(p.id)}
-                                onChange={() => toggleOne(p.id)}
-                                className="cursor-pointer"
-                              />
+                              <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" />
                             </td>
                             <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{p.reference ?? "—"}</td>
                             <td className="px-3 py-2 text-xs">{p.designation}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground">{p.unite}</td>
-                            <td className="px-3 py-2 text-xs text-right font-mono">
-                              {p.prix_achat.toFixed(2)}
-                            </td>
+                            <td className="px-3 py-2 text-xs text-right font-mono">{p.prix_achat.toFixed(2)}</td>
                             <td className="px-3 py-2 text-center">
                               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${STATUT_CLASS[p.statut_import]}`}>
                                 {STATUT_LABEL[p.statut_import]}
@@ -307,25 +318,14 @@ export default function CatalogueDialog({
                             <td className="px-2 py-1.5">
                               <div className="flex gap-1 justify-end">
                                 {p.statut_import === "ia" && (
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="w-7 h-7 text-emerald-600"
-                                    title="Valider"
-                                    onClick={() => validerProduit(p.id)}
-                                  >
+                                  <Button size="icon" variant="ghost" className="w-7 h-7 text-emerald-600" title="Valider" onClick={() => validerProduit(p.id)}>
                                     <Check className="w-3.5 h-3.5" />
                                   </Button>
                                 )}
                                 <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => startEdit(p)}>
                                   <Pencil className="w-3.5 h-3.5" />
                                 </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="w-7 h-7 text-destructive hover:text-destructive"
-                                  onClick={() => deleteProduit(p.id)}
-                                >
+                                <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteProduit(p.id)}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
