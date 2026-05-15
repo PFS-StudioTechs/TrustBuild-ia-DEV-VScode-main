@@ -230,7 +230,7 @@ async function extractFromAI(
       const chunkProduits = await callClaudeAPIWithRetry(chunkBlob, "pdf", anthropicKey);
       allProduits.push(...chunkProduits);
       if (start + MAX_PDF_PAGES < totalPages) {
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, 1000));
       }
     }
     return deduplicateProduits(allProduits);
@@ -246,9 +246,9 @@ async function callClaudeAPIWithRetry(
   fileData: Blob,
   fichier_type: "image" | "pdf",
   anthropicKey: string,
-  maxRetries = 4
+  maxRetries = 2
 ): Promise<ProduitExtrait[]> {
-  let delay = 8000; // 8s initial — laisse le compteur tokens/min se vider
+  let delay = 2000;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await callClaudeAPI(fileData, fichier_type, anthropicKey);
@@ -257,7 +257,7 @@ async function callClaudeAPIWithRetry(
       const isRateLimit = msg.includes("rate_limit_error") || msg.includes("rate limit");
       if (!isRateLimit || attempt === maxRetries) throw e;
       await new Promise((r) => setTimeout(r, delay));
-      delay = Math.min(delay * 2, 60000); // backoff exponentiel, max 60s
+      delay = Math.min(delay * 2, 15000);
     }
   }
   throw new Error("Impossible d'appeler l'API après plusieurs tentatives");
@@ -302,15 +302,19 @@ Règles : r=null si absent, u="u" si absente, pa=0 si absent.`;
     reqHeaders["anthropic-beta"] = "pdfs-2024-09-25";
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: reqHeaders,
+    signal: controller.signal,
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 8192,
       messages: [{ role: "user", content: [contentItem, { type: "text", text: prompt }] }],
     }),
   });
+  clearTimeout(timeout);
 
   if (!resp.ok) {
     const errText = await resp.text();
