@@ -113,14 +113,18 @@ export default function CatalogueDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
         className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0"
         onInteractOutside={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={() => onOpenChange(false)}
       >
-        <DialogHeader className="px-6 pt-5 pb-4 border-b">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b flex-row items-center justify-between">
           <DialogTitle className="font-display text-lg">Catalogue — {fournisseur.nom}</DialogTitle>
+          <button onClick={() => onOpenChange(false)} className="rounded-sm opacity-70 hover:opacity-100 transition-opacity">
+            <X className="h-4 w-4" />
+          </button>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 px-6 py-4 overflow-y-auto flex-1">

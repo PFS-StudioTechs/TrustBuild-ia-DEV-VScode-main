@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useFournisseurs, type Fournisseur, type FournisseurForm } from "@/hooks/useFournisseurs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -246,18 +246,6 @@ export default function Fournisseurs() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Fournisseur | null>(null);
   const [catalogueTarget, setCatalogueTarget] = useState<Fournisseur | null>(null);
-  const windowBlurred = useRef(false);
-
-  useEffect(() => {
-    const onFocusOut = (e: FocusEvent) => {
-      if (!e.relatedTarget) {
-        windowBlurred.current = true;
-        setTimeout(() => { windowBlurred.current = false; }, 500);
-      }
-    };
-    document.addEventListener("focusout", onFocusOut, true);
-    return () => { document.removeEventListener("focusout", onFocusOut, true); };
-  }, []);
 
   const filtered = fournisseurs.filter(f => {
     const q = search.toLowerCase();
@@ -359,7 +347,7 @@ export default function Fournisseurs() {
         <CatalogueDialog
           fournisseur={catalogueTarget}
           open={!!catalogueTarget}
-          onOpenChange={v => { if (!v) { console.log('[catalogue] close demandé — windowBlurred:', windowBlurred.current, new Error().stack?.split('\n').slice(1,4).join(' | ')); if (!windowBlurred.current) setCatalogueTarget(null); } }}
+          onOpenChange={v => { if (!v) setCatalogueTarget(null); }}
         />
       )}
     </div>
