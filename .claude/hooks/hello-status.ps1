@@ -27,7 +27,7 @@ if (-not $projectName) { $projectName = Split-Path $cwd -Leaf }
 $lines += "Projet: $projectName"
 
 # Git
-$gitCheck = git -C "$cwd" rev-parse --is-inside-work-tree 2>$null
+git -C "$cwd" rev-parse --is-inside-work-tree 2>$null
 if ($LASTEXITCODE -eq 0) {
     $branch = git -C "$cwd" rev-parse --abbrev-ref HEAD 2>$null
     $remote = git -C "$cwd" remote get-url origin 2>$null
@@ -110,7 +110,7 @@ $lines += "=== CONFIG SESSION ACTIVE ==="
 # Read global settings
 $globalSettingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
 $projectSettingsPath = Join-Path $cwd ".claude\settings.json"
-$localSettingsPath   = Join-Path $cwd ".claude\settings.local.json"
+
 
 $globalSettings  = $null
 $projectSettings = $null
@@ -169,7 +169,29 @@ if ($hookEvents.Count -gt 0) {
 if ($globalSettings -and $globalSettings.theme) { $lines += "Thème: $($globalSettings.theme)" }
 
 $lines += ""
-$lines += "FORMAT RÉPONSE REQUIS: commence par 'Hello Steeve, sur le dossier actif tu as :' puis résume toutes ces données de façon claire."
+$lines += @"
+FORMAT RÉPONSE REQUIS — respecte ces règles à la lettre :
+
+1. Commence par "Hello Steeve !" avec une touche chaleureuse et une pointe d'humour (une phrase max, varie à chaque fois).
+
+2. Résumé projet : nom du projet, branche active, état du repo (propre ou fichiers en attente).
+
+3. Derniers commits : pour chaque commit, présente-le ainsi :
+   - Mets EN AVANT le nom de l'auteur (ex: "steevii", "psiaudeau", "fc-excellence") — PAS juste le hash
+   - Traduis le message technique en langage fonctionnel compréhensible pour un non-développeur
+     Exemples : "fix(hook): PS5.1 compat" → "Correction d'un bug dans l'outil de démarrage automatique (compatibilité Windows)"
+                "feat: signature et annotation devis côté client" → "Nouveauté : les clients peuvent maintenant signer et annoter les devis directement"
+                "fix(migration): DROP POLICY IF EXISTS" → "Correction de la base de données pour éviter une erreur au redémarrage"
+   - Format : "· [Auteur] — [Description fonctionnelle] (le hash entre parenthèses)"
+
+4. Branches disponibles sur le repo.
+
+5. Déploiements Vercel : date, état, qui a déployé — en langage humain.
+
+6. Config session active : plugins, MCP, hooks — liste simple.
+
+7. Termine par une question courte et sympa sur ce qu'on va faire aujourd'hui.
+"@
 
 $output = [ordered]@{ continue = $true; context = ($lines -join "`n") } | ConvertTo-Json -Compress
 Write-Output $output
