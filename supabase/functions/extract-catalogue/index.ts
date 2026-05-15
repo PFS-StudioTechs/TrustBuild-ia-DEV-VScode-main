@@ -198,7 +198,7 @@ serve(async (req) => {
   }
 });
 
-const MAX_PDF_PAGES = 90; // marge de sécurité sous la limite API de 100
+const MAX_PDF_PAGES = 40; // ~20k tokens/chunk, sous la limite 50k TPM de Haiku
 
 async function extractFromAI(
   fileData: Blob,
@@ -230,7 +230,7 @@ async function extractFromAI(
       const chunkProduits = await callClaudeAPIWithRetry(chunkBlob, "pdf", anthropicKey);
       allProduits.push(...chunkProduits);
       if (start + MAX_PDF_PAGES < totalPages) {
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 20000));
       }
     }
     return deduplicateProduits(allProduits);
@@ -248,7 +248,7 @@ async function callClaudeAPIWithRetry(
   anthropicKey: string,
   maxRetries = 2
 ): Promise<ProduitExtrait[]> {
-  let delay = 2000;
+  let delay = 15000;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await callClaudeAPI(fileData, fichier_type, anthropicKey);
@@ -257,7 +257,7 @@ async function callClaudeAPIWithRetry(
       const isRateLimit = msg.includes("rate_limit_error") || msg.includes("rate limit");
       if (!isRateLimit || attempt === maxRetries) throw e;
       await new Promise((r) => setTimeout(r, delay));
-      delay = Math.min(delay * 2, 15000);
+      delay = Math.min(delay * 2, 30000);
     }
   }
   throw new Error("Impossible d'appeler l'API après plusieurs tentatives");
