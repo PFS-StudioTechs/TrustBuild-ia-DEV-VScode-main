@@ -159,7 +159,7 @@ export default function CatalogueDialog({
 
           <div className="flex gap-2 flex-wrap items-center">
             {(["tous", "ia", "valide", "manuel"] as Filtre[]).map(f => (
-              <button key={f} onClick={() => setFiltre(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filtre === f ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}>
+              <button key={f} onClick={() => setFiltre(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!adding && filtre === f ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}>
                 {f === "tous" ? "Tous" : f === "ia" ? "En cours de validation" : f === "valide" ? "Validés" : "Manuels"}
                 {f === "ia" && nbIA > 0 && <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbIA}</span>}
               </button>
@@ -205,15 +205,15 @@ export default function CatalogueDialog({
             </div>
           )}
 
-          {loading ? (
+          {!adding && loading ? (
             <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-10 rounded" />)}</div>
-          ) : filtered.length === 0 ? (
+          ) : !adding && filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <PackageOpen className="w-10 h-10 text-muted-foreground mb-3" />
               <p className="font-medium text-sm">{filtre === "tous" ? "Aucun produit dans ce catalogue" : "Aucun produit pour ce filtre"}</p>
               <p className="text-xs text-muted-foreground mt-1">{filtre === "tous" ? "Importez un catalogue ou ajoutez des produits manuellement" : ""}</p>
             </div>
-          ) : (
+          ) : !adding ? (
             <div className="border rounded-lg overflow-hidden">
               <div className="overflow-y-auto overflow-x-auto max-h-[215px]">
                 <table className="min-w-max w-full text-sm">
@@ -294,7 +294,7 @@ export default function CatalogueDialog({
                 </table>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
