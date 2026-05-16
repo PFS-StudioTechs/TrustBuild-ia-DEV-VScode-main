@@ -131,13 +131,11 @@ export function useProduits() {
         body: { import_id: importRow.id, storage_path: storagePath, fichier_type },
       });
       if (fnError) {
-        let msg = fnError.message;
-        try {
-          const ctx = (fnError as any).context;
-          const text = typeof ctx?.text === "function" ? await ctx.text() : null;
-          if (text) { const body = JSON.parse(text); if (body?.error) msg = body.error; }
-        } catch {}
-        throw new Error(msg);
+        try { await db.from("catalogue_imports").update({ statut: "erreur" }).eq("id", importRow.id); } catch {}
+        throw new Error("L'extraction a échoué. Un administrateur va traiter cet import manuellement et vous contacter.");
+      }
+      if (result?.error === "catalogue_too_large") {
+        throw new Error(`Ce catalogue est trop volumineux (${result.nb_pages} pages, max ${result.max_pages}). Un administrateur va le traiter manuellement et vous contacter.`);
       }
 
       const nb = result?.nb_produits ?? 0;
