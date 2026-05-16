@@ -119,6 +119,7 @@ serve(async (req) => {
 
     const toInsert: any[] = [];
     const statutImport = fichier_type === "csv" ? "valide" : "ia";
+    let nbUpdated = 0;
 
     for (const p of produits) {
       const refKey = p.reference?.trim().toLowerCase() ?? null;
@@ -139,6 +140,7 @@ serve(async (req) => {
             prix_achat: p.prix_achat,
             statut_import: statutImport,
           }).eq("id", existing.id);
+          nbUpdated++;
         }
       } else {
         toInsert.push({
@@ -161,15 +163,18 @@ serve(async (req) => {
       if (insertError) throw new Error(`Erreur insertion produits: ${insertError.message}`);
     }
 
+    const nbNouveaux = toInsert.length;
+    const nbTotal = nbNouveaux + nbUpdated;
+
     await supabase
       .from("catalogue_imports")
-      .update({ statut: "termine", nb_produits_extraits: produits.length })
+      .update({ statut: "termine", nb_produits_extraits: nbTotal })
       .eq("id", import_id);
 
     const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
     const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
     console.log("[email] SENDGRID_API_KEY présent:", !!sendgridKey, "| SENDGRID_FROM_EMAIL:", fromEmail ?? "NON DÉFINI");
-    if (sendgridKey && fromEmail) {
+    if (sendgridKey && fromEmail && nbNouveaux > 0 && fichier_type !== "csv") {
       const [{ data: fournisseur }, { data: profile }] = await Promise.all([
         supabase.from("fournisseurs").select("nom").eq("id", fournisseurId).single(),
         supabase.from("profiles").select("prenom, nom").eq("user_id", artisanId).single(),
@@ -193,7 +198,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ nb_produits: produits.length }),
+      JSON.stringify({ nb_produits: nbTotal }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
