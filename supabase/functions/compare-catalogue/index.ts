@@ -105,7 +105,9 @@ serve(async (req) => {
         pages.forEach(p => chunk.addPage(p));
         const chunkBytes = await chunk.save();
         const path = `temp/compare/${sid}/chunk_${start}_${end}.pdf`;
-        await db.storage.from(BUCKET).upload(path, chunkBytes, { contentType: "application/pdf", upsert: true });
+        const blob = new Blob([chunkBytes], { type: "application/pdf" });
+        const { error: uploadErr } = await db.storage.from(BUCKET).upload(path, blob, { upsert: true });
+        if (uploadErr) throw new Error(`Upload chunk ${start}-${end}: ${uploadErr.message}`);
         chunks.push({ path, page_start: start, page_end: end });
       }
 
