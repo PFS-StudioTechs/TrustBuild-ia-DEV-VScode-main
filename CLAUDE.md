@@ -25,11 +25,11 @@ n8n-workflows/        — automatisations N8N
 
 ## Agents IA
 
-| Agent | Rôle |
-|---|---|
-| **Jarvis** | Assistant principal — crée et modifie devis, factures, avenants via chat |
-| **Robert B** | Expert réglementation et juridique BTP |
-| **Auguste P** | Expert terrain et technique BTP |
+| Agent         | Rôle                                                                     |
+| ------------- | ------------------------------------------------------------------------ |
+| **Jarvis**    | Assistant principal — crée et modifie devis, factures, avenants via chat |
+| **Robert B**  | Expert réglementation et juridique BTP                                   |
+| **Auguste P** | Expert terrain et technique BTP                                          |
 
 ## Commandes utiles
 
@@ -64,7 +64,11 @@ Les secrets des Edge Functions sont déclarés dans Supabase > Project Settings 
 - Les paramètres locaux, paramètres techniques et secrets doivent être placés dans `.env.local`.
 - Le fichier `.env.local` ne doit jamais être envoyé sur GitHub.
 - Après chaque modification importante terminée et testée, proposer un commit Git avec un message clair.
-- Après validation du commit, envoyer le code sur GitHub avec `git push`.
+- Avant tout `git push`, demander explicitement : "Dev ou prod ?" — sans exception, même pour un petit fix.
+- DEV et PROD sont deux repos GitHub séparés. On ne travaille que sur DEV. 
+- PROD n'est JAMAIS mis à jour sauf instruction explicite après validation de Steeve, Pierre et Frédéric.
+  - **PROD** : repo `PFS-StudioTechs/TrustBuild-ia-VScode` · Vercel `trust-build-ia-v-scode.vercel.app` · local `C:\Users\ASUS\Documents\PFS-StudioTechs\TrustBuild-ia-VScode`
+  - **DEV** : repo `PFS-StudioTechs/TrustBuild-ia-DEV-VScode-main` · Vercel `trustbuild-ia-dev.vercel.app` · local `C:\Users\ASUS\Documents\PFS-StudioTechs\TrustBuild-ia-DEV`
 - Pour le code, fournir des fichiers complets ou des modifications précises, jamais des bouts de code ambigus — ou indiquer précisément où insérer le code :
   - exemple 1 : remplace cette ligne `###oldcode###` par cette ligne `###newcode###`
   - exemple 2 : mets la ligne `###code###` entre cette ligne `###previousline###` et `###nextline###`
@@ -73,3 +77,4 @@ Les secrets des Edge Functions sont déclarés dans Supabase > Project Settings 
 - Ne pas reformater massivement les fichiers sans raison.
 - Si une commande échoue, ne pas enchaîner avec d'autres commandes : expliquer l'erreur et attendre instruction.
 - Toujours indiquer clairement ce qui a été modifié, dans quels fichiers, et pourquoi.
+- Ne pas demander 15 fois la meme autorisation pour une etape, ne le faire qu'une fois
