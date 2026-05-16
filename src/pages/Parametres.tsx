@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Save, Shield, Users, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash, Calendar, ListOrdered } from "lucide-react";
+import { User, Save, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash, Calendar, ListOrdered } from "lucide-react";
 import { previewDocNumber } from "@/lib/generateDocumentNumber";
 import { toast } from "sonner";
 import IntegrationsPanel from "@/components/integrations/IntegrationsPanel";
@@ -52,7 +52,6 @@ export default function Parametres() {
   const [numeroDigits, setNumeroDigits] = useState<3 | 4 | 5>(3);
   const [savingPrefixes, setSavingPrefixes] = useState(false);
   const [apiConfigs, setApiConfigs] = useState<{ service_name: string; is_active: boolean }[]>([]);
-  const [allUsers, setAllUsers] = useState<{ user_id: string; role: string; email?: string }[]>([]);
   const [rib, setRib] = useState("");
   const [bic, setBic] = useState("");
   const [ribError, setRibError] = useState("");
@@ -111,21 +110,6 @@ export default function Parametres() {
       });
     supabase.from("api_configurations").select("service_name, is_active")
       .then(({ data }) => { if (data) setApiConfigs(data); });
-    if (isAdmin) {
-      supabase.from("user_roles").select("user_id, role")
-        .then(({ data }) => {
-          if (data) {
-            const userIds = [...new Set(data.map(r => r.user_id))];
-            supabase.from("profiles").select("user_id, nom, prenom").in("user_id", userIds)
-              .then(({ data: profiles }) => {
-                setAllUsers(data.map(r => {
-                  const p = profiles?.find(p => p.user_id === r.user_id);
-                  return { ...r, email: p ? `${p.prenom} ${p.nom}` : r.user_id };
-                }));
-              });
-          }
-        });
-    }
   }, [user]);
 
   // Load saved telegram chat id
@@ -497,32 +481,6 @@ export default function Parametres() {
           </Button>
         </div>
       </div>
-
-      {/* Admin Panel */}
-      {isAdmin && (
-        <div className="forge-card animate-fade-up-4 !border-primary/20">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Shield className="w-4 h-4 text-primary" />
-            </div>
-            <h2 className="text-h3 font-display">Administration</h2>
-          </div>
-          <div className="space-y-3">
-            <p className="text-small text-muted-foreground flex items-center gap-1">
-              <Users className="w-3 h-3" /> Utilisateurs et rôles
-            </p>
-            {allUsers.map((u, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <span className="text-sm truncate max-w-[180px]">{u.email}</span>
-                <Badge className={u.role === "admin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"} variant="secondary">
-                  {u.role}
-                </Badge>
-              </div>
-            ))}
-            {allUsers.length === 0 && <div className="skeleton-shimmer h-8 rounded-lg" />}
-          </div>
-        </div>
-      )}
 
         </TabsContent>
 

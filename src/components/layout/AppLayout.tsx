@@ -57,7 +57,7 @@ export default function AppLayout() {
           <span className="text-[10px] text-white/50 text-center leading-tight mt-0.5">Parce que la confiance se construit</span>
         </div>
 
-        <nav className="flex-1 px-3 py-2 space-y-0.5">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           {tabs.map((tab) => {
             const active = location.pathname.startsWith(tab.path);
             return (
