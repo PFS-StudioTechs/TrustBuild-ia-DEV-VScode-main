@@ -215,18 +215,18 @@ export default function CatalogueDialog({
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-y-auto max-h-[200px]">
+              <div className="overflow-y-auto max-h-[215px]">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-background border-b">
-                    <tr className="border-b">
-                      <th className="w-8 px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Référence</th>
+                    <tr>
+                      <th className="px-3 py-2 whitespace-nowrap"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Référence</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-16">Unité</th>
-                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-24">Prix catalogue</th>
-                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-28">Prix négocié</th>
-                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">Statut</th>
-                      <th className="w-24" />
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Unité</th>
+                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Prix catalogue</th>
+                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Prix négocié</th>
+                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Statut</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -265,11 +265,11 @@ export default function CatalogueDialog({
                           </>
                         ) : (
                           <>
-                            <td className="px-3 py-1.5">{p.statut_import !== "valide" && <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" />}</td>
-                            <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{p.reference ?? "—"}</td>
+                            <td className="px-3 py-1.5 whitespace-nowrap">{p.statut_import !== "valide" && <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" />}</td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground font-mono whitespace-nowrap">{p.reference ?? "—"}</td>
                             <td className="px-3 py-2 text-xs">{p.designation}</td>
-                            <td className="px-3 py-2 text-xs text-muted-foreground">{p.unite}</td>
-                            <td className="px-3 py-2 text-xs text-right font-mono text-muted-foreground">{p.prix_achat.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{p.unite}</td>
+                            <td className="px-3 py-2 text-xs text-right font-mono text-muted-foreground whitespace-nowrap">{p.prix_achat.toFixed(2)}</td>
                             <td className="px-3 py-2 text-xs text-right font-mono">
                               {p.prix_negocie_valeur != null
                                 ? <span className="text-blue-700 font-medium">{p.prix_negocie_valeur.toFixed(2)}</span>
