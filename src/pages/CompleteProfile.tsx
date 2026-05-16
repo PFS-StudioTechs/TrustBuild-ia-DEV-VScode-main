@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,6 +82,23 @@ export default function CompleteProfile() {
   }, [user, profile]);
 
   const isPreFilled = !!(user?.user_metadata?.siret || profile?.siret);
+
+  const autoSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      isPreFilled &&
+      siretData &&
+      siretStatus === "valid" &&
+      !profileLoading &&
+      !profile?.profile_completed &&
+      !autoSubmittedRef.current
+    ) {
+      autoSubmittedRef.current = true;
+      handleSubmit();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siretData, siretStatus, isPreFilled, profileLoading, profile?.profile_completed]);
 
   const formatSiret = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 14);
@@ -177,7 +194,7 @@ export default function CompleteProfile() {
     }
   };
 
-  if (profileLoading) {
+  if (profileLoading || (isPreFilled && !profile?.profile_completed)) {
     return (
       <div className="flex items-center justify-center h-[100dvh] bg-background">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
