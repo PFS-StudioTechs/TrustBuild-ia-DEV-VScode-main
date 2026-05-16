@@ -36,6 +36,7 @@ export default function CompleteProfile() {
   const [siretData, setSiretData] = useState<SiretData | null>(null);
   const [saving, setSaving] = useState(false);
   const [showKbisUpload, setShowKbisUpload] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     if (!profileLoading && profile?.profile_completed) {
@@ -154,9 +155,11 @@ export default function CompleteProfile() {
 
       if (error) {
         if ((error as any)?.code === "23505") {
-          toast.error("Ce SIRET est déjà associé à un compte TrustBuild-IA");
+          const msg = "Ce SIRET est déjà associé à un compte TrustBuild-IA";
+          toast.error(msg);
           setSiretStatus("error");
-          setSiretError("Ce SIRET est déjà associé à un autre compte");
+          setSiretError(msg);
+          setSubmitError(msg);
           return;
         }
         throw error;
@@ -166,7 +169,9 @@ export default function CompleteProfile() {
       toast.success("Profil complété — bienvenue sur TrustBuild-IA !");
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
-      toast.error(err.message || "Erreur lors de la sauvegarde");
+      const msg = err.message || "Erreur lors de la sauvegarde";
+      toast.error(msg);
+      setSubmitError(msg);
     } finally {
       setSaving(false);
     }
@@ -333,6 +338,12 @@ export default function CompleteProfile() {
           </div>
         )}
 
+        {submitError && (
+          <div className="flex items-start gap-2 text-sm text-destructive">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{submitError}</span>
+          </div>
+        )}
         <Button
           onClick={handleSubmit}
           disabled={siretStatus !== "valid" || saving}
