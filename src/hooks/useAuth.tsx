@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       options: {
         data: meta,
-        emailRedirectTo: `${window.location.origin}/complete-profile`,
+        emailRedirectTo: window.location.origin,
       },
     });
     if (error) throw error;

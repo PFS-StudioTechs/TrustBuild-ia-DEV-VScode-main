@@ -77,7 +77,15 @@ export default function Auth() {
           <p className="text-xs text-muted-foreground">
             Vous n'avez pas reçu l'email ?{" "}
             <button
-              onClick={() => setAwaitingEmail(false)}
+              onClick={async () => {
+                try {
+                  const { error } = await supabase.auth.resend({ type: "signup", email });
+                  if (error) throw error;
+                  toast.success("Email de confirmation renvoyé !");
+                } catch (err: any) {
+                  toast.error(err.message || "Erreur lors du renvoi");
+                }
+              }}
               className="text-primary font-semibold hover:underline"
             >
               Réessayer
