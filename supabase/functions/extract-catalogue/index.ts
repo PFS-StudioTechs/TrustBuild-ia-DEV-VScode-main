@@ -84,42 +84,44 @@ serve(async (req) => {
     }
 
     if (fichier_type === "pdf") {
+      let totalPages: number | null = null;
       try {
         const pdfDoc = await PDFDocument.load(await fileData.arrayBuffer());
-        const totalPages = pdfDoc.getPageCount();
-        if (totalPages > MAX_PAGES) {
-          await supabase.from("catalogue_imports").update({ statut: "erreur" }).eq("id", import_id);
-          const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
-          const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
-          if (sendgridKey && fromEmail) {
-            const [{ data: fournisseur }, { data: profile }] = await Promise.all([
-              supabase.from("fournisseurs").select("nom").eq("id", fournisseurId).single(),
-              supabase.from("profiles").select("prenom, nom").eq("user_id", artisanId).single(),
-            ]);
-            const artisanNom = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() : artisanId;
-            const fournisseurNom = fournisseur?.nom ?? fournisseurId;
-            await fetch("https://api.sendgrid.com/v3/mail/send", {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${sendgridKey}`, "Content-Type": "application/json" },
-              body: JSON.stringify({
-                personalizations: [{ to: [{ email: "contact@pfs-studio-techs.fr" }] }],
-                from: { email: fromEmail, name: "TrustBuild-IA" },
-                subject: `[Cataverif] Catalogue trop volumineux — ${fournisseurNom}`,
-                content: [{
-                  type: "text/plain",
-                  value: `Un catalogue n'a pas pu être importé automatiquement.\n\nFournisseur : ${fournisseurNom}\nNombre de pages : ${totalPages} (max : ${MAX_PAGES})\nArtisan : ${artisanNom}\n\nConnectez-vous à Cataverif pour traiter cet import manuellement.`,
-                }],
-              }),
-            });
-          }
-          return new Response(
-            JSON.stringify({ error: "catalogue_too_large", nb_pages: totalPages, max_pages: MAX_PAGES }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        totalPages = pdfDoc.getPageCount();
       } catch (pdfCheckErr) {
         const msg = pdfCheckErr instanceof Error ? pdfCheckErr.message : String(pdfCheckErr);
-        console.warn("vérification taille PDF échouée, traitement direct:", msg);
+        console.warn("vérification taille PDF échouée:", msg);
+      }
+
+      if (totalPages === null || totalPages > MAX_PAGES) {
+        await supabase.from("catalogue_imports").update({ statut: "erreur" }).eq("id", import_id);
+        const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
+        const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
+        if (sendgridKey && fromEmail) {
+          const [{ data: fournisseur }, { data: profile }] = await Promise.all([
+            supabase.from("fournisseurs").select("nom").eq("id", fournisseurId).single(),
+            supabase.from("profiles").select("prenom, nom").eq("user_id", artisanId).single(),
+          ]);
+          const artisanNom = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() : artisanId;
+          const fournisseurNom = fournisseur?.nom ?? fournisseurId;
+          await fetch("https://api.sendgrid.com/v3/mail/send", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${sendgridKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personalizations: [{ to: [{ email: "contact@pfs-studio-techs.fr" }] }],
+              from: { email: fromEmail, name: "TrustBuild-IA" },
+              subject: `[Cataverif] Catalogue trop volumineux — ${fournisseurNom}`,
+              content: [{
+                type: "text/plain",
+                value: `Un catalogue n'a pas pu être importé automatiquement.\n\nFournisseur : ${fournisseurNom}\nNombre de pages : ${totalPages ?? "inconnu"} (max : ${MAX_PAGES})\nArtisan : ${artisanNom}\n\nConnectez-vous à Cataverif pour traiter cet import manuellement.`,
+              }],
+            }),
+          });
+        }
+        return new Response(
+          JSON.stringify({ error: "catalogue_too_large", nb_pages: totalPages ?? "inconnu", max_pages: MAX_PAGES }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
