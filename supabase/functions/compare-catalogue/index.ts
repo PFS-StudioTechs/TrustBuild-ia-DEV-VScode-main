@@ -125,7 +125,8 @@ async function handleExtract(
 }
 
 async function handleCompare(
-  db: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  db: any,
   import_id: string,
   produitsPDF: ProduitExtrait[],
   cors: Record<string, string>
@@ -134,7 +135,8 @@ async function handleCompare(
 }
 
 async function handleCompareSync(
-  db: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  db: any,
   import_id: string,
   produitsPDF: ProduitExtrait[],
   extraction_method: string,
