@@ -8,7 +8,6 @@ const cors = {
 };
 
 type ProduitExtrait = {
-  id?: string;
   reference: string | null;
   designation: string;
   unite: string;
@@ -28,7 +27,6 @@ type EcartPrix = {
 
 const SONNET = "claude-sonnet-4-6";
 const MAX_TOKENS = 32000;
-const MAX_PDF_PAGES = 90;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -47,14 +45,20 @@ serve(async (req) => {
     }
 
     const db = createClient(supabaseUrl, serviceKey);
-    const { import_id } = await req.json();
+    const body = await req.json();
+    const { import_id, mode, page_start, page_end, produits_pdf } = body;
+
     if (!import_id) {
       return new Response(JSON.stringify({ error: "import_id requis" }), { status: 400, headers: cors });
     }
 
+    if (mode === "compare") {
+      return handleCompare(db, import_id, produits_pdf ?? [], cors);
+    }
+
     const { data: imp, error: impErr } = await db
       .from("catalogue_imports")
-      .select("fichier_url, fichier_type, artisan_id, fournisseur_id")
+      .select("fichier_url, fichier_type, artisan_id")
       .eq("id", import_id)
       .single();
 
@@ -71,6 +75,11 @@ serve(async (req) => {
     }
 
     const buffer = await fileData.arrayBuffer();
+
+    if (mode === "extract" && imp.fichier_type === "pdf") {
+      return handleExtract(buffer, page_start ?? 0, page_end, anthropicKey, cors);
+    }
+
     let produitsPDF: ProduitExtrait[] = [];
     let extraction_method = "unknown";
 
@@ -78,60 +87,16 @@ serve(async (req) => {
       produitsPDF = parseCSV(await new Blob([buffer]).text());
       extraction_method = "csv";
     } else if (imp.fichier_type === "pdf") {
-      produitsPDF = await extractWithClaudePDF(buffer, anthropicKey);
+      const pdfDoc = await PDFDocument.load(buffer);
+      const chunkBytes = await extractPageRange(pdfDoc, 0, pdfDoc.getPageCount());
+      produitsPDF = await callClaude(chunkBytes, "pdf", anthropicKey);
       extraction_method = "pdf_sonnet";
     } else {
       produitsPDF = await callClaude(buffer, "image", anthropicKey);
       extraction_method = "image_sonnet";
     }
 
-    const { data: produitsDB } = await db
-      .from("produits")
-      .select("id, reference, designation, unite, prix_achat, prix_negocie")
-      .eq("fournisseur_id", imp.fournisseur_id)
-      .eq("actif", true);
-
-    const dbList = (produitsDB ?? []) as ProduitExtrait[];
-    const indexPDF = buildIndex(produitsPDF);
-    const indexDB  = buildIndex(dbList);
-
-    const manquants: ProduitExtrait[] = [];
-    const fantomes: ProduitExtrait[]  = [];
-    const ecarts_prix: EcartPrix[]    = [];
-    const prix_negocie_list: EcartPrix[] = [];
-
-    for (const [key, p] of indexPDF) {
-      if (!indexDB.has(key)) {
-        manquants.push(p);
-      } else {
-        const d = indexDB.get(key)!;
-        const delta = Math.abs(p.prix_achat - d.prix_achat);
-        if (delta > 0.02) {
-          const ecart = {
-            reference: p.reference,
-            designation: p.designation,
-            unite_pdf: p.unite,
-            unite_db: d.unite,
-            prix_pdf: p.prix_achat,
-            prix_db: d.prix_achat,
-            delta: Math.round(delta * 100) / 100,
-          };
-          if (d.prix_negocie) prix_negocie_list.push(ecart);
-          else ecarts_prix.push(ecart);
-        }
-      }
-    }
-
-    for (const [key, d] of indexDB) {
-      if (!indexPDF.has(key)) {
-        fantomes.push(d);
-      }
-    }
-
-    return new Response(
-      JSON.stringify({ total_pdf: produitsPDF.length, total_db: dbList.length, extraction_method, manquants, fantomes, ecarts_prix, prix_negocie: prix_negocie_list }),
-      { headers: { ...cors, "Content-Type": "application/json" } }
-    );
+    return handleCompareSync(db, import_id, produitsPDF, extraction_method, cors);
   } catch (e) {
     console.error("compare-catalogue error:", e);
     return new Response(
@@ -141,25 +106,92 @@ serve(async (req) => {
   }
 });
 
-async function extractWithClaudePDF(buffer: ArrayBuffer, anthropicKey: string): Promise<ProduitExtrait[]> {
+async function handleExtract(
+  buffer: ArrayBuffer,
+  pageStart: number,
+  pageEnd: number | undefined,
+  anthropicKey: string,
+  cors: Record<string, string>
+): Promise<Response> {
   const pdfDoc = await PDFDocument.load(buffer);
-  const totalPages = pdfDoc.getPageCount();
+  const total_pages = pdfDoc.getPageCount();
+  const end = Math.min(pageEnd ?? total_pages, total_pages);
+  const chunkBytes = await extractPageRange(pdfDoc, pageStart, end);
+  const produits = await callClaude(chunkBytes, "pdf", anthropicKey);
+  return new Response(
+    JSON.stringify({ produits, total_pages }),
+    { headers: { ...cors, "Content-Type": "application/json" } }
+  );
+}
 
-  if (totalPages <= MAX_PDF_PAGES) {
-    return callClaude(buffer, "pdf", anthropicKey);
+async function handleCompare(
+  db: ReturnType<typeof createClient>,
+  import_id: string,
+  produitsPDF: ProduitExtrait[],
+  cors: Record<string, string>
+): Promise<Response> {
+  return handleCompareSync(db, import_id, produitsPDF, "pdf_sonnet_chunked", cors);
+}
+
+async function handleCompareSync(
+  db: ReturnType<typeof createClient>,
+  import_id: string,
+  produitsPDF: ProduitExtrait[],
+  extraction_method: string,
+  cors: Record<string, string>
+): Promise<Response> {
+  const { data: produitsDB } = await db
+    .from("produits")
+    .select("reference, designation, unite, prix_achat, prix_negocie")
+    .eq("import_id", import_id)
+    .eq("actif", true);
+
+  const dbList = (produitsDB ?? []) as ProduitExtrait[];
+  const indexPDF = buildIndex(deduplicate(produitsPDF));
+  const indexDB  = buildIndex(dbList);
+
+  const manquants: ProduitExtrait[] = [];
+  const fantomes: ProduitExtrait[]  = [];
+  const ecarts_prix: EcartPrix[]    = [];
+  const prix_negocie_list: EcartPrix[] = [];
+
+  for (const [key, p] of indexPDF) {
+    if (!indexDB.has(key)) {
+      manquants.push(p);
+    } else {
+      const d = indexDB.get(key)!;
+      const delta = Math.abs(p.prix_achat - d.prix_achat);
+      if (delta > 0.02) {
+        const ecart = {
+          reference: p.reference,
+          designation: p.designation,
+          unite_pdf: p.unite,
+          unite_db: d.unite,
+          prix_pdf: p.prix_achat,
+          prix_db: d.prix_achat,
+          delta: Math.round(delta * 100) / 100,
+        };
+        if (d.prix_negocie) prix_negocie_list.push(ecart);
+        else ecarts_prix.push(ecart);
+      }
+    }
   }
 
-  const all: ProduitExtrait[] = [];
-  for (let start = 0; start < totalPages; start += MAX_PDF_PAGES) {
-    const end = Math.min(start + MAX_PDF_PAGES, totalPages);
-    const chunk = await PDFDocument.create();
-    const pages = await chunk.copyPages(pdfDoc, Array.from({ length: end - start }, (_, i) => start + i));
-    pages.forEach(p => chunk.addPage(p));
-    const chunkBytes = await chunk.save();
-    all.push(...await callClaude(chunkBytes.buffer, "pdf", anthropicKey));
-    if (start + MAX_PDF_PAGES < totalPages) await new Promise(r => setTimeout(r, 3000));
+  for (const [key, d] of indexDB) {
+    if (!indexPDF.has(key)) fantomes.push(d);
   }
-  return deduplicate(all);
+
+  return new Response(
+    JSON.stringify({ total_pdf: indexPDF.size, total_db: dbList.length, extraction_method, manquants, fantomes, ecarts_prix, prix_negocie: prix_negocie_list }),
+    { headers: { ...cors, "Content-Type": "application/json" } }
+  );
+}
+
+async function extractPageRange(pdfDoc: PDFDocument, start: number, end: number): Promise<ArrayBuffer> {
+  const chunk = await PDFDocument.create();
+  const pages = await chunk.copyPages(pdfDoc, Array.from({ length: end - start }, (_, i) => start + i));
+  pages.forEach(p => chunk.addPage(p));
+  return (await chunk.save()).buffer;
 }
 
 async function callClaude(buffer: ArrayBuffer, type: "pdf" | "image", anthropicKey: string): Promise<ProduitExtrait[]> {
