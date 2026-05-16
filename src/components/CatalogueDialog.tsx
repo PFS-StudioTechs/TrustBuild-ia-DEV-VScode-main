@@ -101,7 +101,6 @@ export default function CatalogueDialog({
   };
 
   const nbIA = produits.filter(p => p.statut_import === "ia").length;
-  const nbValide = produits.filter(p => p.statut_import === "valide").length;
   const filtered = filtre === "tous" ? produits : produits.filter(p => p.statut_import === filtre);
   const selectableFiltered = filtered.filter(p => p.id !== editingId);
   const allSelected = selectableFiltered.length > 0 && selectableFiltered.every(p => selectedIds.has(p.id));
@@ -163,7 +162,6 @@ export default function CatalogueDialog({
               <button key={f} onClick={() => setFiltre(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filtre === f ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}>
                 {f === "tous" ? "Tous" : f === "ia" ? "En cours de validation" : f === "valide" ? "Validés" : "Manuels"}
                 {f === "ia" && nbIA > 0 && <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbIA}</span>}
-                {f === "valide" && nbValide > 0 && <span className="ml-1.5 bg-emerald-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbValide}</span>}
               </button>
             ))}
             {selectedIds.size > 0 && (
@@ -217,28 +215,20 @@ export default function CatalogueDialog({
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm table-fixed">
-                <colgroup>
-                  <col className="w-8" /><col className="w-28" /><col /><col className="w-16" /><col className="w-24" /><col className="w-28" /><col className="w-32" /><col className="w-24" />
-                </colgroup>
-                <thead className="bg-muted/50 border-b">
-                  <tr>
-                    <th className="px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Référence</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Unité</th>
-                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Prix catalogue</th>
-                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Prix négocié</th>
-                    <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Statut</th>
-                    <th />
-                  </tr>
-                </thead>
-              </table>
-              <div className="catalogue-scroll overflow-y-auto max-h-[240px]">
-                <table className="w-full text-sm table-fixed">
-                  <colgroup>
-                    <col className="w-8" /><col className="w-28" /><col /><col className="w-16" /><col className="w-24" /><col className="w-28" /><col className="w-32" /><col className="w-24" />
-                  </colgroup>
+              <div className="overflow-y-auto max-h-[200px]">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-muted/50">
+                    <tr className="border-b">
+                      <th className="w-8 px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Référence</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-16">Unité</th>
+                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-24">Prix catalogue</th>
+                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-28">Prix négocié</th>
+                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">Statut</th>
+                      <th className="w-24" />
+                    </tr>
+                  </thead>
                   <tbody>
                     {filtered.map((p, i) => (
                       <tr key={p.id} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
