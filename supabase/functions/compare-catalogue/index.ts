@@ -27,7 +27,7 @@ type EcartPrix = {
 
 const SONNET = "claude-sonnet-4-6";
 const MAX_TOKENS = 32000;
-const CHUNK_PAGES = 20;
+const CHUNK_PAGES = 10;
 const BUCKET = "artisan-documents";
 
 serve(async (req) => {
@@ -55,9 +55,15 @@ serve(async (req) => {
     }
 
     if (mode === "extract" && chunk_path) {
+      console.log("[extract] début téléchargement chunk:", chunk_path);
       const { data: chunkData, error: dlErr } = await db.storage.from(BUCKET).download(chunk_path);
-      if (dlErr || !chunkData) throw new Error(`Téléchargement chunk: ${dlErr?.message}`);
+      if (dlErr || !chunkData) {
+        console.error("[extract] échec téléchargement chunk:", dlErr?.message, "| path:", chunk_path);
+        throw new Error(`Téléchargement chunk: ${dlErr?.message}`);
+      }
+      console.log("[extract] chunk téléchargé, appel Claude");
       const produits = await callClaude(await chunkData.arrayBuffer(), "pdf", anthropicKey);
+      console.log("[extract] Claude OK, produits:", produits.length);
       return new Response(JSON.stringify({ produits }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
