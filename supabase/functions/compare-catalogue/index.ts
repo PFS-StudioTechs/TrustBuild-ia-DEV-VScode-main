@@ -53,7 +53,7 @@ serve(async (req) => {
 
     const { data: imp, error: impErr } = await db
       .from("catalogue_imports")
-      .select("fichier_url, fichier_type, artisan_id")
+      .select("fichier_url, fichier_type, artisan_id, fournisseur_id")
       .eq("id", import_id)
       .single();
 
@@ -87,7 +87,7 @@ serve(async (req) => {
     const { data: produitsDB } = await db
       .from("produits")
       .select("reference, designation, unite, prix_achat, prix_negocie")
-      .eq("import_id", import_id)
+      .eq("fournisseur_id", imp.fournisseur_id)
       .eq("actif", true);
 
     const dbList = (produitsDB ?? []) as ProduitExtrait[];
