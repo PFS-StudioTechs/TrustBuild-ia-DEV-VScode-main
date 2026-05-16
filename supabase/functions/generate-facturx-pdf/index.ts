@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, StandardFonts, rgb, AFRelationship } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, StandardFonts, rgb, AFRelationship, PDFName } from "https://esm.sh/pdf-lib@1.17.1";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +31,40 @@ function fmtDate(d: string): string {
 
 function fmtMoney(n: number): string {
   return n.toFixed(2).replace(".", ",") + " EUR";
+}
+
+function buildXmpMetadata(p: {
+  numero: string;
+  date: string;
+  sellerName: string;
+}): string {
+  const now = new Date().toISOString();
+  const created = new Date(p.date).toISOString();
+  return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+      xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/"
+      xmlns:dc="http://purl.org/dc/elements/1.1/"
+      xmlns:pdf="http://ns.adobe.com/pdf/1.3/"
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
+      <pdfaid:part>3</pdfaid:part>
+      <pdfaid:conformance>B</pdfaid:conformance>
+      <dc:title><rdf:Alt><rdf:li xml:lang="x-default">FACTURE ${xmlEscape(p.numero)}</rdf:li></rdf:Alt></dc:title>
+      <dc:creator><rdf:Seq><rdf:li>${xmlEscape(p.sellerName)}</rdf:li></rdf:Seq></dc:creator>
+      <pdf:Producer>TrustBuild-IA / pdf-lib</pdf:Producer>
+      <xmp:CreateDate>${created}</xmp:CreateDate>
+      <xmp:ModifyDate>${now}</xmp:ModifyDate>
+      <xmp:CreatorTool>TrustBuild-IA</xmp:CreatorTool>
+      <fx:DocumentType>INVOICE</fx:DocumentType>
+      <fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>
+      <fx:Version>1.0</fx:Version>
+      <fx:ConformanceLevel>MINIMUM</fx:ConformanceLevel>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>`;
 }
 
 function buildFacturxXml(p: {
@@ -293,6 +327,16 @@ serve(async (req) => {
       modificationDate: new Date(),
       afRelationship: AFRelationship.Alternative,
     });
+
+    // Inject XMP metadata stream — required for PDF/A-3b + Factur-X compliance
+    const xmpXml = buildXmpMetadata({ numero: facture.numero, date: facture.created_at, sellerName });
+    const xmpBytes = new TextEncoder().encode(xmpXml);
+    const metadataStream = pdfDoc.context.stream(xmpBytes, {
+      Type: PDFName.of("Metadata"),
+      Subtype: PDFName.of("XML"),
+    });
+    const metadataRef = pdfDoc.context.register(metadataStream);
+    pdfDoc.catalog.set(PDFName.of("Metadata"), metadataRef);
 
     const pdfBytes = await pdfDoc.save();
 
