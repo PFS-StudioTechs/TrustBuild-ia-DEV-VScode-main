@@ -37,12 +37,50 @@ export default function CompleteProfile() {
   const [saving, setSaving] = useState(false);
   const [showKbisUpload, setShowKbisUpload] = useState(false);
 
-  // Redirige si profil déjà complété
   useEffect(() => {
     if (!profileLoading && profile?.profile_completed) {
       navigate("/dashboard", { replace: true });
     }
   }, [profile, profileLoading, navigate]);
+
+  // Pré-remplissage depuis user_metadata (nouveau flux) ou profile (legacy)
+  useEffect(() => {
+    if (siretData) return;
+    const meta = user?.user_metadata;
+    if (meta?.siret) {
+      setSiretData({
+        siret: meta.siret,
+        siren: String(meta.siret).slice(0, 9),
+        raisonSociale: meta.raison_sociale ?? "",
+        nomCommercial: meta.nom_commercial ?? "",
+        adresse: meta.adresse ?? "",
+        codePostal: meta.code_postal ?? "",
+        ville: meta.ville ?? "",
+        pays: meta.pays ?? "France",
+        activite: meta.activite ?? "",
+        formeJuridique: meta.forme_juridique ?? "",
+        actif: true,
+      });
+      setSiretStatus("valid");
+    } else if (profile?.siret) {
+      setSiretData({
+        siret: profile.siret,
+        siren: profile.siret.slice(0, 9),
+        raisonSociale: profile.raison_sociale ?? "",
+        nomCommercial: profile.nom_commercial ?? "",
+        adresse: profile.adresse ?? "",
+        codePostal: profile.code_postal ?? "",
+        ville: profile.ville ?? "",
+        pays: profile.pays ?? "France",
+        activite: profile.activite ?? "",
+        formeJuridique: profile.forme_juridique ?? "",
+        actif: true,
+      });
+      setSiretStatus("valid");
+    }
+  }, [user, profile]);
+
+  const isPreFilled = !!(user?.user_metadata?.siret || profile?.siret);
 
   const formatSiret = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 14);
@@ -65,18 +103,14 @@ export default function CompleteProfile() {
       setSiretError("Le SIRET doit contenir 14 chiffres");
       return;
     }
-
     setSiretStatus("loading");
     setSiretError("");
     setSiretData(null);
-
     try {
       const { data, error } = await supabase.functions.invoke("validate-siret", {
         body: { siret: siretClean },
       });
-
       if (error) {
-        // Extraire le vrai message d'erreur depuis le corps de la réponse
         let errMsg = "Impossible de vérifier le SIRET";
         try {
           const body = await (error as any).context?.json?.();
@@ -85,26 +119,11 @@ export default function CompleteProfile() {
         throw new Error(errMsg);
       }
       if (data?.error) throw new Error(data.error);
-
       if (!data.actif) {
         setSiretStatus("inactive");
         setSiretError("Cet établissement est fermé (état administratif inactif dans la base INSEE)");
         return;
       }
-
-      // Vérification unicité : ce SIRET est-il déjà utilisé par un autre compte ?
-      const { data: existing } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("siret", data.siret)
-        .maybeSingle();
-
-      if (existing) {
-        setSiretStatus("error");
-        setSiretError("Ce SIRET est déjà associé à un autre compte TrustBuild-IA");
-        return;
-      }
-
       setSiretData(data as SiretData);
       setSiretStatus("valid");
     } catch (err: any) {
@@ -133,7 +152,15 @@ export default function CompleteProfile() {
         })
         .eq("user_id", user.id);
 
-      if (error) throw error;
+      if (error) {
+        if ((error as any)?.code === "23505") {
+          toast.error("Ce SIRET est déjà associé à un compte TrustBuild-IA");
+          setSiretStatus("error");
+          setSiretError("Ce SIRET est déjà associé à un autre compte");
+          return;
+        }
+        throw error;
+      }
 
       await refreshProfile();
       toast.success("Profil complété — bienvenue sur TrustBuild-IA !");
@@ -160,7 +187,6 @@ export default function CompleteProfile() {
   return (
     <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-lg forge-card animate-fade-up space-y-6">
-        {/* Header */}
         <div className="text-center">
           <TrustBuildLogo size={56} className="mx-auto mb-4 block" />
           <h1 className="text-h2 font-display">Complétez votre profil</h1>
@@ -169,7 +195,6 @@ export default function CompleteProfile() {
           </p>
         </div>
 
-        {/* Informations personnelles (lecture seule) */}
         <div className="space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Informations personnelles
@@ -190,57 +215,56 @@ export default function CompleteProfile() {
           </div>
         </div>
 
-        {/* SIRET */}
         <div className="space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Votre entreprise
           </p>
-          <div className="space-y-2">
-            <Label htmlFor="siret">
-              Numéro SIRET <span className="text-destructive">*</span>
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="siret"
-                value={siretInput}
-                onChange={handleSiretChange}
-                placeholder="123 456 789 00012"
-                className="touch-target font-mono"
-                maxLength={17}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") validateSiret();
-                }}
-              />
-              <Button
-                onClick={validateSiret}
-                disabled={siretInput.replace(/\s/g, "").length !== 14 || siretStatus === "loading"}
-                variant="outline"
-                className="shrink-0"
-              >
-                {siretStatus === "loading" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Vérifier"
-                )}
-              </Button>
+
+          {!isPreFilled && (
+            <div className="space-y-2">
+              <Label htmlFor="siret">
+                Numéro SIRET <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="siret"
+                  value={siretInput}
+                  onChange={handleSiretChange}
+                  placeholder="123 456 789 00012"
+                  className="touch-target font-mono"
+                  maxLength={17}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") validateSiret();
+                  }}
+                />
+                <Button
+                  onClick={validateSiret}
+                  disabled={siretInput.replace(/\s/g, "").length !== 14 || siretStatus === "loading"}
+                  variant="outline"
+                  className="shrink-0"
+                >
+                  {siretStatus === "loading" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Vérifier"
+                  )}
+                </Button>
+              </div>
+              {siretStatus === "valid" && siretData && (
+                <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>Établissement actif — <strong>{siretData.raisonSociale}</strong></span>
+                </div>
+              )}
+              {(siretStatus === "error" || siretStatus === "inactive") && (
+                <div className="flex items-start gap-2 text-sm text-destructive">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{siretError}</span>
+                </div>
+              )}
             </div>
+          )}
 
-            {/* Status feedback */}
-            {siretStatus === "valid" && siretData && (
-              <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>Établissement actif — <strong>{siretData.raisonSociale}</strong></span>
-              </div>
-            )}
-            {(siretStatus === "error" || siretStatus === "inactive") && (
-              <div className="flex items-start gap-2 text-sm text-destructive">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{siretError}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Informations entreprise auto-remplies */}
           {siretData && siretStatus === "valid" && (
             <div className="space-y-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-4">
               <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
@@ -283,7 +307,6 @@ export default function CompleteProfile() {
           )}
         </div>
 
-        {/* KBIS optionnel — affiché après validation SIRET */}
         {siretStatus === "valid" && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -310,7 +333,6 @@ export default function CompleteProfile() {
           </div>
         )}
 
-        {/* CTA */}
         <Button
           onClick={handleSubmit}
           disabled={siretStatus !== "valid" || saving}

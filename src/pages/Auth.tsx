@@ -5,9 +5,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, ArrowLeft, Eye, EyeOff, Mail } from "lucide-react";
+import { ArrowRight, ArrowLeft, Eye, EyeOff, Mail, Loader2, CheckCircle2, AlertCircle, Building2 } from "lucide-react";
 import TrustBuildLogo from "@/components/TrustBuildLogo";
 import { toast } from "sonner";
+
+interface SiretData {
+  siret: string;
+  siren: string;
+  raisonSociale: string;
+  nomCommercial: string;
+  adresse: string;
+  codePostal: string;
+  ville: string;
+  pays: string;
+  activite: string;
+  formeJuridique: string;
+  actif: boolean;
+}
+
+type SiretStatus = "idle" | "loading" | "valid" | "inactive" | "error";
 
 export default function Auth() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -19,6 +35,12 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [awaitingEmail, setAwaitingEmail] = useState(false);
+
+  const [siretInput, setSiretInput] = useState("");
+  const [siretStatus, setSiretStatus] = useState<SiretStatus>("idle");
+  const [siretError, setSiretError] = useState("");
+  const [siretData, setSiretData] = useState<SiretData | null>(null);
+
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -36,9 +58,22 @@ export default function Auth() {
   };
 
   const handleRegister = async () => {
+    if (!siretData) return;
     setLoading(true);
     try {
-      await signUp(email, password, { nom, prenom });
+      await signUp(email, password, {
+        nom,
+        prenom,
+        siret: siretData.siret,
+        raison_sociale: siretData.raisonSociale,
+        nom_commercial: siretData.nomCommercial,
+        adresse: siretData.adresse,
+        code_postal: siretData.codePostal,
+        ville: siretData.ville,
+        pays: siretData.pays,
+        activite: siretData.activite,
+        forme_juridique: siretData.formeJuridique,
+      });
       setMode("login");
       setStep(1);
       setAwaitingEmail(true);
@@ -47,6 +82,64 @@ export default function Auth() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatSiret = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 14);
+    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{0,5})/, (_m, a, b, c, d) =>
+      [a, b, c, d].filter(Boolean).join(" ")
+    );
+  };
+
+  const handleSiretChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSiretInput(formatSiret(e.target.value));
+    setSiretStatus("idle");
+    setSiretError("");
+    setSiretData(null);
+  };
+
+  const validateSiret = async () => {
+    const siretClean = siretInput.replace(/\s/g, "");
+    if (siretClean.length !== 14) {
+      setSiretError("Le SIRET doit contenir 14 chiffres");
+      return;
+    }
+    setSiretStatus("loading");
+    setSiretError("");
+    setSiretData(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-siret", {
+        body: { siret: siretClean },
+      });
+      if (error) {
+        let errMsg = "Impossible de vérifier le SIRET";
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) errMsg = body.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
+      if (data?.error) throw new Error(data.error);
+      if (!data.actif) {
+        setSiretStatus("inactive");
+        setSiretError("Cet établissement est fermé (état administratif inactif dans la base INSEE)");
+        return;
+      }
+      setSiretData(data as SiretData);
+      setSiretStatus("valid");
+    } catch (err: any) {
+      setSiretStatus("error");
+      setSiretError(err.message || "Impossible de vérifier le SIRET");
+    }
+  };
+
+  const resetRegister = () => {
+    setMode("login");
+    setStep(1);
+    setSiretInput("");
+    setSiretStatus("idle");
+    setSiretError("");
+    setSiretData(null);
   };
 
   if (awaitingEmail) {
@@ -61,7 +154,7 @@ export default function Auth() {
           <div>
             <h2 className="text-h2 font-display mb-2">Vérifiez votre email</h2>
             <p className="text-muted-foreground text-small">
-              Un lien de connexion a été envoyé à <span className="font-semibold text-foreground">{email}</span>.
+              Un lien de confirmation a été envoyé à <span className="font-semibold text-foreground">{email}</span>.
               Cliquez sur le lien pour accéder à votre espace.
             </p>
           </div>
@@ -95,9 +188,9 @@ export default function Auth() {
           <div className="text-center mb-6">
             <TrustBuildLogo size={64} className="mx-auto mb-4 block" />
             <h1 className="text-h2 font-display">Créer un compte</h1>
-            <p className="text-small text-muted-foreground mt-1">Étape {step} sur 2</p>
+            <p className="text-small text-muted-foreground mt-1">Étape {step} sur 3</p>
             <div className="flex gap-1.5 justify-center mt-3">
-              {[1, 2].map((s) => (
+              {[1, 2, 3].map((s) => (
                 <div key={s} className={`h-1.5 rounded-full transition-all ${s <= step ? "w-10 bg-primary" : "w-6 bg-muted"}`} />
               ))}
             </div>
@@ -122,7 +215,78 @@ export default function Auth() {
                 </Button>
               </>
             )}
+
             {step === 2 && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="r-siret">
+                    Numéro SIRET <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="r-siret"
+                      value={siretInput}
+                      onChange={handleSiretChange}
+                      placeholder="123 456 789 00012"
+                      className="touch-target font-mono"
+                      maxLength={17}
+                      onKeyDown={(e) => { if (e.key === "Enter") validateSiret(); }}
+                    />
+                    <Button
+                      onClick={validateSiret}
+                      disabled={siretInput.replace(/\s/g, "").length !== 14 || siretStatus === "loading"}
+                      variant="outline"
+                      className="shrink-0"
+                    >
+                      {siretStatus === "loading" ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Vérifier"
+                      )}
+                    </Button>
+                  </div>
+                  {siretStatus === "valid" && siretData && (
+                    <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>Établissement actif — <strong>{siretData.raisonSociale}</strong></span>
+                    </div>
+                  )}
+                  {(siretStatus === "error" || siretStatus === "inactive") && (
+                    <div className="flex items-start gap-2 text-sm text-destructive">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{siretError}</span>
+                    </div>
+                  )}
+                </div>
+
+                {siretData && siretStatus === "valid" && (
+                  <div className="space-y-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-3">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                      <Building2 className="w-3.5 h-3.5" />
+                      Informations INSEE Sirene
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {siretData.raisonSociale} — {siretData.adresse}, {siretData.codePostal} {siretData.ville}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setStep(1)} className="touch-target">
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    onClick={() => setStep(3)}
+                    disabled={siretStatus !== "valid"}
+                    className="flex-1 touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge hover:shadow-forge-hover transition-all"
+                  >
+                    Suivant <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {step === 3 && (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="r-email">Email professionnel</Label>
@@ -150,7 +314,7 @@ export default function Auth() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setStep(1)} className="touch-target">
+                  <Button variant="outline" onClick={() => setStep(2)} className="touch-target">
                     <ArrowLeft className="w-4 h-4" />
                   </Button>
                   <Button
@@ -163,9 +327,10 @@ export default function Auth() {
                 </div>
               </>
             )}
+
             <p className="text-center text-small text-muted-foreground">
               Déjà un compte ?{" "}
-              <button onClick={() => { setMode("login"); setStep(1); }} className="text-primary font-semibold hover:underline">
+              <button onClick={resetRegister} className="text-primary font-semibold hover:underline">
                 Se connecter
               </button>
             </p>
