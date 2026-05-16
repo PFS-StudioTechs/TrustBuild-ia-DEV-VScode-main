@@ -600,11 +600,27 @@ export default function Clients() {
 
   const handleSave = async (form: ClientForm): Promise<boolean> => {
     if (!user) return false;
+
+    if (form.email.trim()) {
+      let dupQuery = supabase
+        .from("clients")
+        .select("id")
+        .eq("artisan_id", user.id)
+        .ilike("email", form.email.trim())
+        .limit(1);
+      if (editTarget) dupQuery = dupQuery.neq("id", editTarget.id);
+      const { data: dup } = await dupQuery;
+      if (dup && dup.length > 0) {
+        toast.error("Un client avec cet email existe déjà");
+        return false;
+      }
+    }
+
     const payload = {
       nom: form.nom.trim(),
       prenom: form.prenom.trim() || null,
       type: form.type,
-      email: form.email.trim() || null,
+      email: form.email.trim().toLowerCase() || null,
       telephone: form.telephone.trim() || null,
       adresse: form.adresse.trim() || null,
       siret: form.siret.trim() || null,
@@ -612,7 +628,7 @@ export default function Clients() {
     };
     if (editTarget) {
       const { error } = await supabase.from("clients").update(payload).eq("id", editTarget.id);
-      if (error) { toast.error("Erreur lors de la modification"); return false; }
+      if (error) { toast.error((error as any)?.code === "23505" ? "Un client avec cet email existe déjà" : "Erreur lors de la modification"); return false; }
       toast.success("Client mis à jour");
 
       // Si l'adresse a changé, proposer de mettre à jour les chantiers
@@ -626,7 +642,7 @@ export default function Clients() {
       }
     } else {
       const { error } = await supabase.from("clients").insert({ ...payload, artisan_id: user.id });
-      if (error) { toast.error("Erreur lors de l'ajout"); return false; }
+      if (error) { toast.error((error as any)?.code === "23505" ? "Un client avec cet email existe déjà" : "Erreur lors de l'ajout"); return false; }
       toast.success("Client ajouté");
     }
     await fetchAll();
