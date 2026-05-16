@@ -215,13 +215,13 @@ export default function CatalogueDialog({
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-y-auto max-h-[215px]">
-                <table className="w-full text-sm">
+              <div className="overflow-y-auto overflow-x-auto max-h-[215px]">
+                <table className="min-w-max w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-background border-b">
                     <tr>
                       <th className="px-3 py-2 whitespace-nowrap"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Référence</th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
+                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Désignation</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Unité</th>
                       <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Prix catalogue</th>
                       <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Prix négocié</th>
@@ -267,7 +267,7 @@ export default function CatalogueDialog({
                           <>
                             <td className="px-3 py-1.5 whitespace-nowrap">{p.statut_import !== "valide" && <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" />}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground font-mono whitespace-nowrap">{p.reference ?? "—"}</td>
-                            <td className="px-3 py-2 text-xs">{p.designation}</td>
+                            <td className="px-3 py-2 text-xs whitespace-nowrap">{p.designation}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{p.unite}</td>
                             <td className="px-3 py-2 text-xs text-right font-mono text-muted-foreground whitespace-nowrap">{p.prix_achat.toFixed(2)}</td>
                             <td className="px-3 py-2 text-xs text-right font-mono">
