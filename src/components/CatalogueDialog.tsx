@@ -234,7 +234,7 @@ export default function CatalogueDialog({
                   </tr>
                 </thead>
               </table>
-              <div className="overflow-y-auto max-h-[240px]">
+              <div className="catalogue-scroll overflow-y-auto max-h-[240px]">
                 <table className="w-full text-sm table-fixed">
                   <colgroup>
                     <col className="w-8" /><col className="w-28" /><col /><col className="w-16" /><col className="w-24" /><col className="w-28" /><col className="w-32" /><col className="w-24" />
