@@ -8,6 +8,7 @@ const cors = {
 };
 
 type ProduitExtrait = {
+  id?: string;
   reference: string | null;
   designation: string;
   unite: string;
@@ -86,7 +87,7 @@ serve(async (req) => {
 
     const { data: produitsDB } = await db
       .from("produits")
-      .select("reference, designation, unite, prix_achat, prix_negocie")
+      .select("id, reference, designation, unite, prix_achat, prix_negocie")
       .eq("fournisseur_id", imp.fournisseur_id)
       .eq("actif", true);
 
