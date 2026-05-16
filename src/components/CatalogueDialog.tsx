@@ -217,7 +217,7 @@ export default function CatalogueDialog({
             <div className="border rounded-lg overflow-hidden">
               <div className="overflow-y-auto max-h-[200px]">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-muted/50">
+                  <thead className="sticky top-0 z-10 bg-background border-b">
                     <tr className="border-b">
                       <th className="w-8 px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Référence</th>
