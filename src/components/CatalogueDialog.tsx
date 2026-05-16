@@ -101,6 +101,7 @@ export default function CatalogueDialog({
   };
 
   const nbIA = produits.filter(p => p.statut_import === "ia").length;
+  const nbValide = produits.filter(p => p.statut_import === "valide").length;
   const filtered = filtre === "tous" ? produits : produits.filter(p => p.statut_import === filtre);
   const selectableFiltered = filtered.filter(p => p.id !== editingId);
   const allSelected = selectableFiltered.length > 0 && selectableFiltered.every(p => selectedIds.has(p.id));
@@ -162,6 +163,7 @@ export default function CatalogueDialog({
               <button key={f} onClick={() => setFiltre(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filtre === f ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}>
                 {f === "tous" ? "Tous" : f === "ia" ? "En cours de validation" : f === "valide" ? "Validés" : "Manuels"}
                 {f === "ia" && nbIA > 0 && <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbIA}</span>}
+                {f === "valide" && nbValide > 0 && <span className="ml-1.5 bg-emerald-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbValide}</span>}
               </button>
             ))}
             {selectedIds.size > 0 && (
