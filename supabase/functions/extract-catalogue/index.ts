@@ -106,7 +106,7 @@ serve(async (req) => {
 
     const { data: existants } = await supabase
       .from("produits")
-      .select("id, reference, designation, statut_import")
+      .select("id, reference, designation, unite, prix_achat, statut_import")
       .eq("artisan_id", artisanId)
       .eq("fournisseur_id", fournisseurId)
       .eq("actif", true);
@@ -126,13 +126,20 @@ serve(async (req) => {
       const existing = (refKey ? byRef.get(refKey) : null) ?? byDes.get(desKey);
 
       if (existing) {
-        await supabase.from("produits").update({
-          import_id,
-          designation: p.designation,
-          unite: p.unite,
-          prix_achat: p.prix_achat,
-          statut_import: statutImport,
-        }).eq("id", existing.id);
+        if (existing.statut_import === "valide") continue;
+        const changed =
+          existing.designation !== p.designation ||
+          existing.unite !== p.unite ||
+          Number(existing.prix_achat) !== Number(p.prix_achat ?? 0);
+        if (changed) {
+          await supabase.from("produits").update({
+            import_id,
+            designation: p.designation,
+            unite: p.unite,
+            prix_achat: p.prix_achat,
+            statut_import: statutImport,
+          }).eq("id", existing.id);
+        }
       } else {
         toInsert.push({
           artisan_id: artisanId,
