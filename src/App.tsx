@@ -79,7 +79,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) return loadingSkeleton;
   if (!user) return <Navigate to="/auth" replace />;
-  if (profileLoading) return loadingSkeleton;
+  if (profileLoading && profile === null) return loadingSkeleton;
 
   if (!user.email_confirmed_at) {
     return <EmailUnverifiedScreen email={user.email ?? ""} />;
