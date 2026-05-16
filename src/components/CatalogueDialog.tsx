@@ -217,20 +217,28 @@ export default function CatalogueDialog({
             </div>
           ) : (
             <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-y-auto max-h-[420px]">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-muted/50">
-                    <tr className="border-b">
-                      <th className="w-8 px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">Référence</th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
-                      <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-16">Unité</th>
-                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-24">Prix catalogue</th>
-                      <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-28">Prix négocié</th>
-                      <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground w-32">Statut</th>
-                      <th className="w-24" />
-                    </tr>
-                  </thead>
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col className="w-8" /><col className="w-28" /><col /><col className="w-16" /><col className="w-24" /><col className="w-28" /><col className="w-32" /><col className="w-24" />
+                </colgroup>
+                <thead className="bg-muted/50 border-b">
+                  <tr>
+                    <th className="px-3 py-2"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Référence</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Désignation</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Unité</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Prix catalogue</th>
+                    <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Prix négocié</th>
+                    <th className="text-center px-3 py-2 text-xs font-medium text-muted-foreground">Statut</th>
+                    <th />
+                  </tr>
+                </thead>
+              </table>
+              <div className="overflow-y-auto max-h-[380px] scrollbar-thin">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-8" /><col className="w-28" /><col /><col className="w-16" /><col className="w-24" /><col className="w-28" /><col className="w-32" /><col className="w-24" />
+                  </colgroup>
                   <tbody>
                     {filtered.map((p, i) => (
                       <tr key={p.id} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>

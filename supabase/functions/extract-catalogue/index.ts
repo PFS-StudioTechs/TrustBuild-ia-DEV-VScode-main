@@ -115,7 +115,7 @@ serve(async (req) => {
       .filter((e: any) => e.reference)
       .map((e: any) => [e.reference.trim().toLowerCase(), e]));
     const byDes = new Map((existants ?? [])
-      .map((e: any) => [e.designation.trim().toLowerCase().slice(0, 50), e]));
+      .map((e: any) => [e.designation.trim().toLowerCase().slice(0, 30), e]));
 
     const toInsert: any[] = [];
     const statutImport = fichier_type === "csv" ? "valide" : "ia";
@@ -123,23 +123,30 @@ serve(async (req) => {
 
     for (const p of produits) {
       const refKey = p.reference?.trim().toLowerCase() ?? null;
-      const desKey = p.designation.trim().toLowerCase().slice(0, 50);
+      const desKey = p.designation.trim().toLowerCase().slice(0, 30);
       const existing = (refKey ? byRef.get(refKey) : null) ?? byDes.get(desKey);
 
       if (existing) {
-        if (existing.statut_import === "valide") continue;
         const changed =
           existing.designation !== p.designation ||
           existing.unite !== p.unite ||
           Number(existing.prix_achat) !== Number(p.prix_achat ?? 0);
         if (changed) {
-          await supabase.from("produits").update({
-            import_id,
-            designation: p.designation,
-            unite: p.unite,
-            prix_achat: p.prix_achat,
-            statut_import: statutImport,
-          }).eq("id", existing.id);
+          if (existing.statut_import === "valide") {
+            await supabase.from("produits").update({
+              designation: p.designation,
+              unite: p.unite,
+              prix_achat: p.prix_achat,
+            }).eq("id", existing.id);
+          } else {
+            await supabase.from("produits").update({
+              import_id,
+              designation: p.designation,
+              unite: p.unite,
+              prix_achat: p.prix_achat,
+              statut_import: statutImport,
+            }).eq("id", existing.id);
+          }
           nbUpdated++;
         }
       } else {
