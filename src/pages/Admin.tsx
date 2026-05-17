@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Shield, Users, HardHat, Trash2, Edit, RefreshCw, Search, Brain, Globe, CheckCircle2, AlertCircle, Loader2, Play } from "lucide-react";
+import { Shield, Users, HardHat, Trash2, Edit, RefreshCw, Search, Brain, Globe, CheckCircle2, AlertCircle, Loader2, Play, ScrollText } from "lucide-react";
 import { toast } from "sonner";
 import { Navigate } from "react-router-dom";
 
@@ -22,6 +22,17 @@ interface EnrichedUser {
   last_sign_in_at: string | null;
   profile: { nom: string; prenom: string; siret: string | null; plan_abonnement: string } | null;
   roles: string[];
+}
+
+interface AppLog {
+  id: string;
+  user_id: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  status: "success" | "error" | "info";
+  details: Record<string, unknown> | null;
+  created_at: string;
 }
 
 interface EnrichedChantier {
@@ -64,6 +75,28 @@ export default function Admin() {
 
   const [deleteTarget, setDeleteTarget] = useState<EnrichedUser | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // ── Logs ──
+  const [logs, setLogs] = useState<AppLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logStatusFilter, setLogStatusFilter] = useState<"all" | "success" | "error" | "info">("all");
+  const [logSearch, setLogSearch] = useState("");
+
+  const fetchLogs = useCallback(async () => {
+    setLogsLoading(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from("app_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    setLogs(data ?? []);
+    setLogsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "logs") fetchLogs();
+  }, [activeTab, fetchLogs]);
 
   // ── Base de connaissances globale — hooks AVANT tout return conditionnel ──
   const [globalDocs, setGlobalDocs] = useState<Array<{ id: string; nom: string; statut: string; storage_path: string | null }>>([]);
@@ -240,6 +273,7 @@ export default function Admin() {
           <TabsTrigger value="users" className="flex-1 gap-1 touch-target"><Users className="w-4 h-4" /> Utilisateurs ({users.length})</TabsTrigger>
           <TabsTrigger value="chantiers" className="flex-1 gap-1 touch-target"><HardHat className="w-4 h-4" /> Chantiers ({chantiers.length})</TabsTrigger>
           <TabsTrigger value="knowledge" className="flex-1 gap-1 touch-target"><Brain className="w-4 h-4" /> Base globale</TabsTrigger>
+          <TabsTrigger value="logs" className="flex-1 gap-1 touch-target"><ScrollText className="w-4 h-4" /> Logs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="space-y-3 mt-3">
@@ -478,6 +512,80 @@ export default function Admin() {
               );
             })}
           </div>
+        </TabsContent>
+
+        <TabsContent value="logs" className="space-y-3 mt-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <input
+                className="w-full pl-8 pr-3 py-2 text-sm border rounded-md bg-background"
+                placeholder="Filtrer par action…"
+                value={logSearch}
+                onChange={(e) => setLogSearch(e.target.value)}
+              />
+            </div>
+            <select
+              className="text-sm border rounded-md px-2 py-2 bg-background"
+              value={logStatusFilter}
+              onChange={(e) => setLogStatusFilter(e.target.value as typeof logStatusFilter)}
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="success">Succès</option>
+              <option value="error">Erreur</option>
+              <option value="info">Info</option>
+            </select>
+            <Button variant="outline" size="sm" onClick={fetchLogs} disabled={logsLoading} className="gap-1">
+              <RefreshCw className={`w-4 h-4 ${logsLoading ? "animate-spin" : ""}`} /> Actualiser
+            </Button>
+          </div>
+
+          {logsLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[160px]">Date</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead className="w-[90px]">Entité</TableHead>
+                    <TableHead className="w-[80px]">Statut</TableHead>
+                    <TableHead>Détails</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {logs
+                    .filter((l) => logStatusFilter === "all" || l.status === logStatusFilter)
+                    .filter((l) => !logSearch || l.action.toLowerCase().includes(logSearch.toLowerCase()))
+                    .map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(l.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{l.action}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {l.entity_type ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={l.status === "error" ? "destructive" : "outline"} className={`text-xs ${l.status === "success" ? "border-green-500 text-green-700" : l.status === "info" ? "border-blue-400 text-blue-700" : ""}`}>
+                            {l.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground max-w-[320px] truncate" title={l.details ? JSON.stringify(l.details) : ""}>
+                          {l.details ? JSON.stringify(l.details) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {logs.filter((l) => logStatusFilter === "all" || l.status === logStatusFilter).filter((l) => !logSearch || l.action.toLowerCase().includes(logSearch.toLowerCase())).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8 text-sm">Aucun log</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </TabsContent>
 
       </Tabs>

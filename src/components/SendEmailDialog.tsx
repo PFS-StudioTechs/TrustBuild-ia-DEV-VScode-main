@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Send, Loader2, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useLog } from "@/hooks/useLog";
 import { toast } from "sonner";
 
 interface BaseDoc {
@@ -42,6 +43,7 @@ type Props = SendEmailDialogDevisProps | SendEmailDialogFactureProps;
 export default function SendEmailDialog(props: Props) {
   const { type, doc, clientEmail, clientNom, open, onClose, onSent } = props;
   const { user } = useAuth();
+  const { log } = useLog();
 
   const [toEmail, setToEmail] = useState(clientEmail ?? "");
   const [subject, setSubject] = useState("");
@@ -123,16 +125,20 @@ export default function SendEmailDialog(props: Props) {
       const label = type === "devis" ? "Devis" : "Facture";
       if (data?.status === "sent") {
         toast.success(`${label} ${doc.numero} envoyé${type === "facture" ? "e" : ""} à ${toEmail}`);
+        log({ action: 'email.sent', entity_type: type, entity_id: doc.id, status: 'success', details: { to: toEmail, subject, numero: doc.numero } });
       } else if (data?.status === "no_sendgrid") {
         toast.success(`${label} enregistré — SendGrid non configuré`);
+        log({ action: 'email.no_sendgrid', entity_type: type, entity_id: doc.id, status: 'info', details: { to: toEmail, numero: doc.numero } });
       } else {
         toast.error("Erreur lors de l'envoi");
+        log({ action: 'email.send_failed', entity_type: type, entity_id: doc.id, status: 'error', details: { to: toEmail, numero: doc.numero, response: data } });
       }
 
       onClose();
       onSent();
     } catch (err: any) {
       toast.error("Erreur : " + err.message);
+      log({ action: 'email.send_failed', entity_type: type, entity_id: doc.id, status: 'error', details: { to: toEmail, numero: doc.numero, error: err.message } });
     } finally {
       setSending(false);
     }

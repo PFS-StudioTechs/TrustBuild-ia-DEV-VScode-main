@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { log } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,9 +122,13 @@ serve(async (req) => {
       const errText = await sgRes.text();
       console.error("SendGrid error:", sgRes.status, errText);
       sendStatus = "error";
+      log(serviceClient, { user_id: user.id, action: "email.send_failed", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "error", details: { to: to_email, subject, sg_status: sgRes.status, sg_error: errText } });
+    } else {
+      log(serviceClient, { user_id: user.id, action: "email.sent", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "success", details: { to: to_email, subject } });
     }
   } else {
     sendStatus = "no_sendgrid";
+    log(serviceClient, { user_id: user.id, action: "email.no_sendgrid", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "info", details: { to: to_email, subject } });
   }
 
   // Store message in DB regardless of send status

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { log } from "../_shared/logger.ts";
 import {
   AFRelationship,
   PDFDocument,
@@ -543,6 +544,11 @@ async function finalize(
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
+  let logUserId = "";
+  let logDb: ReturnType<typeof createClient> | undefined;
+  let logDocType = "";
+  let logDocumentId = "";
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -568,11 +574,15 @@ serve(async (req) => {
     }
 
     const db = createClient(supabaseUrl, serviceKey);
+    logDb = db;
+    logUserId = user.id;
     const body = await req.json();
 
     // Support legacy { facture_id } et nouveau { type, document_id }
     const docType: "facture" | "avoir" | "acompte" = body.type ?? "facture";
     const documentId: string = body.document_id ?? body.facture_id;
+    logDocType = docType;
+    logDocumentId = documentId;
 
     if (!documentId) {
       return new Response(JSON.stringify({ error: "document_id requis" }), {
@@ -794,6 +804,7 @@ serve(async (req) => {
 
       const xml = buildXml(docParams);
       const pdfDoc = await buildPdf(docParams);
+      log(db, { user_id: user.id, action: "facturx.generated", entity_type: docType, entity_id: documentId, status: "success", details: { docType } });
       return finalize(pdfDoc, xml, docParams);
     }
 
@@ -803,6 +814,9 @@ serve(async (req) => {
     );
   } catch (e) {
     console.error("generate-facturx-pdf error:", e);
+    if (logDb && logUserId) {
+      log(logDb, { user_id: logUserId, action: "facturx.error", entity_type: logDocType || undefined, entity_id: logDocumentId || undefined, status: "error", details: { error: e instanceof Error ? e.message : String(e) } });
+    }
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Erreur inconnue" }),
       { status: 500, headers: { ...cors, "Content-Type": "application/json" } }

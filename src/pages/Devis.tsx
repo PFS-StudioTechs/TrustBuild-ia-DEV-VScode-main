@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, Fragment } from "react";
 import { generateDocumentNumber, buildVersionedDevisNumero, NomenclatureSettings } from "@/lib/generateDocumentNumber";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useLog } from "@/hooks/useLog";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -271,6 +272,7 @@ function DevisDialog({
   preselectedClientId: string | null;
   artisanId: string;
 }) {
+  const { log } = useLog();
   const isLocked = editDevis?.statut === "signe" || editDevis?.statut === "remplace";
   const [clientId, setClientId] = useState(preselectedClientId ?? "");
   const [newClient, setNewClient] = useState({ nom: "", prenom: "", email: "", telephone: "", adresse: "", type: "particulier" });
@@ -321,6 +323,7 @@ function DevisDialog({
     if (!clientId && !creatingClient) { toast.error("Sélectionnez ou créez un client"); return; }
     if (!numero.trim()) { toast.error("Numéro de devis requis"); return; }
     setSaving(true);
+    let savedDevisId = editDevis?.id;
     try {
       let resolvedClientId = clientId;
 
@@ -355,6 +358,7 @@ function DevisDialog({
           .select("id")
           .single();
         if (error) throw error;
+        savedDevisId = d.id;
 
         if (lignes.length > 0) {
           await supabase.from("lignes_devis").insert(
@@ -364,10 +368,12 @@ function DevisDialog({
       }
 
       toast.success(editDevis ? "Devis mis à jour" : "Devis créé");
+      log({ action: editDevis ? 'devis.updated' : 'devis.created', entity_type: 'devis', entity_id: savedDevisId, status: 'success', details: { numero, montant_ht: montantHT } });
       onSaved();
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Erreur");
+      log({ action: editDevis ? 'devis.updated' : 'devis.created', entity_type: 'devis', entity_id: savedDevisId, status: 'error', details: { numero, error: err.message } });
     } finally {
       setSaving(false);
     }
@@ -1078,6 +1084,7 @@ function FactureDialog({
   nomenclatureSettings: NomenclatureSettings;
   lignesDevis: LigneDevis[];
 }) {
+  const { log } = useLog();
   const [dateEcheance, setDateEcheance] = useState("");
   const [saving, setSaving] = useState(false);
   const [isPartial, setIsPartial] = useState(false);
@@ -1134,10 +1141,12 @@ function FactureDialog({
       }
 
       toast.success(`Facture ${numero} créée`);
+      log({ action: 'facture.created', entity_type: 'facture', entity_id: newFacture?.id, status: 'success', details: { numero, devis_id: devisId, montant_ttc: montantTTCFinal } });
       onSaved();
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Erreur");
+      log({ action: 'facture.created', entity_type: 'facture', status: 'error', details: { devis_id: devisId, error: err.message } });
     } finally {
       setSaving(false);
     }
