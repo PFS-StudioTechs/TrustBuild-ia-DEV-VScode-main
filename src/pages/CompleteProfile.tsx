@@ -37,6 +37,7 @@ export default function CompleteProfile() {
   const [saving, setSaving] = useState(false);
   const [showKbisUpload, setShowKbisUpload] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [tvaIntra, setTvaIntra] = useState("");
 
   useEffect(() => {
     if (!profileLoading && profile?.profile_completed) {
@@ -144,6 +145,9 @@ export default function CompleteProfile() {
       }
       setSiretData(data as SiretData);
       setSiretStatus("valid");
+      const siren = (data as SiretData).siret.slice(0, 9);
+      const key = ((12 + 3 * (parseInt(siren) % 97)) % 97).toString().padStart(2, "0");
+      setTvaIntra(`FR${key}${siren}`);
     } catch (err: any) {
       setSiretStatus("error");
       setSiretError(err.message || "Impossible de vérifier le SIRET");
@@ -166,6 +170,7 @@ export default function CompleteProfile() {
           pays: siretData.pays,
           activite: siretData.activite,
           forme_juridique: siretData.formeJuridique,
+          tva_intracommunautaire: tvaIntra || null,
           profile_completed: true,
         })
         .eq("user_id", user.id);

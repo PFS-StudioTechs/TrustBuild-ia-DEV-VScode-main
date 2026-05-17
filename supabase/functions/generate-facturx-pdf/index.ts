@@ -303,8 +303,8 @@ function buildXml(p: DocParams): string {
 ${linesXml}
     <ram:ApplicableHeaderTradeAgreement>
 ${orderRefXml}
-      <ram:SellerTradeParty>${sellerSiretXml}
-        <ram:Name>${xe(p.seller.name)}</ram:Name>
+      <ram:SellerTradeParty>
+        <ram:Name>${xe(p.seller.name)}</ram:Name>${sellerSiretXml}
         <ram:PostalTradeAddress>
           <ram:PostcodeCode>${xe(p.seller.codePostal)}</ram:PostcodeCode>
           <ram:LineOne>${xe(p.seller.adresse)}</ram:LineOne>
@@ -312,8 +312,8 @@ ${orderRefXml}
           <ram:CountryID>FR</ram:CountryID>
         </ram:PostalTradeAddress>${sellerTaxXml}
       </ram:SellerTradeParty>
-      <ram:BuyerTradeParty>${buyerSiretXml}
-        <ram:Name>${xe(p.buyer.name)}</ram:Name>
+      <ram:BuyerTradeParty>
+        <ram:Name>${xe(p.buyer.name)}</ram:Name>${buyerSiretXml}
         <ram:PostalTradeAddress>
           <ram:LineOne>${xe(p.buyer.adresse)}</ram:LineOne>
           <ram:CountryID>FR</ram:CountryID>
