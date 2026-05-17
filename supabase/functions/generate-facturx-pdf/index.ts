@@ -91,6 +91,22 @@ function tvaCat(rate: number): string {
   return rate > 0 ? "S" : "E";
 }
 
+function toUnitCode(unite: string | null | undefined): string {
+  if (!unite) return "C62";
+  const map: Record<string, string> = {
+    "u": "C62", "forfait": "C62", "pce": "C62", "pièce": "C62", "ensemble": "C62",
+    "h": "HUR", "heure": "HUR", "heures": "HUR",
+    "j": "DAY", "jour": "DAY", "jours": "DAY",
+    "m": "MTR", "ml": "MTR",
+    "m²": "MTK", "m2": "MTK",
+    "m³": "MTQ", "m3": "MTQ",
+    "kg": "KGM",
+    "l": "LTR",
+    "%": "P1",
+  };
+  return map[unite.toLowerCase()] ?? "C62";
+}
+
 // ─── Buyer resolver ───────────────────────────────────────────────────────────
 
 async function fetchBuyer(
@@ -171,7 +187,7 @@ function buildXml(p: DocParams): string {
   // BlocsLignes
   const linesXml = p.lines.map((l, i) => {
     const lineHt = l.quantite * l.prix_unitaire;
-    const unitCode = l.unite && l.unite !== "u" ? xe(l.unite) : "C62";
+    const unitCode = toUnitCode(l.unite);
     const exemptLine = l.tva === 0
       ? "\n          <ram:ExemptionReasonCode>VATEX-FR-CGI</ram:ExemptionReasonCode>"
       : "";
@@ -229,8 +245,9 @@ function buildXml(p: DocParams): string {
   const sellerSiretXml = p.seller.siret
     ? `\n        <ram:ID schemeID="0002">${xe(p.seller.siret)}</ram:ID>`
     : "";
-  // tva_intra absent du schéma — bloc omis volontairement
-  const sellerTaxXml = "";
+  const sellerTaxXml = p.seller.siret
+    ? `\n        <ram:SpecifiedTaxRegistration>\n          <ram:ID schemeID="FC">${xe(p.seller.siret)}</ram:ID>\n        </ram:SpecifiedTaxRegistration>`
+    : "";
 
   // Buyer ID
   const buyerSiretXml = p.buyer.siret
@@ -269,9 +286,6 @@ function buildXml(p: DocParams): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <rsm:ExchangedDocumentContext>
-    <ram:BusinessProcessSpecifiedDocumentContextParameter>
-      <ram:ID>A1</ram:ID>
-    </ram:BusinessProcessSpecifiedDocumentContextParameter>
     <ram:GuidelineSpecifiedDocumentContextParameter>
       <ram:ID>urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:en16931</ram:ID>
     </ram:GuidelineSpecifiedDocumentContextParameter>
@@ -322,7 +336,6 @@ ${dueXml}
         <ram:TaxBasisTotalAmount>${n2(p.totalHt)}</ram:TaxBasisTotalAmount>
         <ram:TaxTotalAmount currencyID="EUR">${n2(p.totalTva)}</ram:TaxTotalAmount>
         <ram:GrandTotalAmount>${n2(p.totalTtc)}</ram:GrandTotalAmount>
-        <ram:TotalAllowanceChargeAmount>0.00</ram:TotalAllowanceChargeAmount>
         <ram:DuePayableAmount>${n2(p.duePayable)}</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
     </ram:ApplicableHeaderTradeSettlement>

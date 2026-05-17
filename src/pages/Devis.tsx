@@ -15,7 +15,7 @@ import {
   Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
-  GitBranch, RotateCcw, ClipboardList, Layers, Mail,
+  GitBranch, RotateCcw, ClipboardList, Layers, Mail, Download,
 } from "lucide-react";
 import SendEmailDialog from "@/components/SendEmailDialog";
 import { toast } from "sonner";
@@ -743,6 +743,7 @@ function FactureCard({
   const [lignes, setLignes] = useState<AvenantLigne[] | null>(null);
   const [lignesLoading, setLignesLoading] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [pdfxLoading, setPdfxLoading] = useState(false);
 
   const montantTTC = facture.montant_ht * (1 + facture.tva / 100);
 
@@ -820,6 +821,33 @@ function FactureCard({
       onRefresh();
     } catch (err: any) {
       toast.error(err.message);
+    }
+  };
+
+  const downloadFacturX = async () => {
+    setPdfxLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-facturx-pdf", {
+        body: { type: "facture", document_id: facture.id },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.pdf_base64) throw new Error("PDF vide");
+      const blob = new Blob(
+        [Uint8Array.from(atob(data.pdf_base64), (c) => c.charCodeAt(0))],
+        { type: "application/pdf" }
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.numero ?? facture.numero}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error("Erreur PDF : " + err.message);
+    } finally {
+      setPdfxLoading(false);
     }
   };
 
@@ -907,6 +935,10 @@ function FactureCard({
                   <ArrowRight className="w-3.5 h-3.5 mr-1.5" /> Remettre en envoyée
                 </Button>
               )}
+              <Button size="sm" variant="outline" onClick={downloadFacturX} disabled={pdfxLoading}>
+                {pdfxLoading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
+                Télécharger PDF
+              </Button>
             </div>
 
             {/* Lignes */}
