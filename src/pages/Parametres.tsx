@@ -59,18 +59,20 @@ export default function Parametres() {
   const [telegramChatId, setTelegramChatId] = useState("");
   const [telegramStatus, setTelegramStatus] = useState<"idle" | "loading" | "connected" | "error">("idle");
   const [botName, setBotName] = useState("");
+  const [tvaIntra, setTvaIntra] = useState("");
 
   useEffect(() => {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("nom, prenom, siret, raison_sociale, nom_commercial, adresse, code_postal, ville, pays, activite, forme_juridique")
+      .select("nom, prenom, siret, raison_sociale, nom_commercial, adresse, code_postal, ville, pays, activite, forme_juridique, tva_intracommunautaire")
       .eq("user_id", user.id)
       .single()
       .then(({ data }) => {
         if (!data) return;
         setNom(data.nom);
         setPrenom(data.prenom);
+        setTvaIntra((data as any).tva_intracommunautaire ?? "");
         if (data.siret) {
           const formatted = formatSiret(data.siret);
           setSiretInput(formatted);
@@ -231,6 +233,9 @@ export default function Parametres() {
       }
       setSiretData(data as SiretData);
       setSiretStatus("valid");
+      const siren = (data as SiretData).siret.slice(0, 9);
+      const key = ((12 + 3 * (parseInt(siren) % 97)) % 97).toString().padStart(2, "0");
+      setTvaIntra(prev => prev || `FR${key}${siren}`);
     } catch (err: any) {
       setSiretStatus("error");
       setSiretError(err.message || "Impossible de vérifier le SIRET");
@@ -291,7 +296,7 @@ export default function Parametres() {
       return;
     }
     setSaving(true);
-    const update: Record<string, unknown> = { nom, prenom };
+    const update: Record<string, unknown> = { nom, prenom, tva_intracommunautaire: tvaIntra || null };
     if (siretData && siretStatus === "valid") {
       update.siret = siretData.siret;
       update.raison_sociale = siretData.raisonSociale;
@@ -440,6 +445,16 @@ export default function Parametres() {
                 </div>
               </div>
             )}
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-small">N° TVA intracommunautaire</Label>
+            <Input
+              value={tvaIntra}
+              onChange={(e) => setTvaIntra(e.target.value.toUpperCase())}
+              placeholder="FR12345678901"
+              className="touch-target font-mono"
+              maxLength={13}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-small">Email</Label>

@@ -27,6 +27,7 @@ interface LineItem {
 interface SellerInfo {
   name: string;
   siret: string;
+  tvaIntra: string;
   adresse: string;
   codePostal: string;
   ville: string;
@@ -244,15 +245,15 @@ function buildXml(p: DocParams): string {
 
   // Seller IDs
   const sellerSiretXml = p.seller.siret
-    ? `\n        <ram:ID schemeID="0002">${xe(p.seller.siret)}</ram:ID>`
+    ? `\n        <ram:SpecifiedLegalOrganization>\n          <ram:ID schemeID="0002">${xe(p.seller.siret)}</ram:ID>\n        </ram:SpecifiedLegalOrganization>`
     : "";
-  const sellerTaxXml = p.seller.siret
-    ? `\n        <ram:SpecifiedTaxRegistration>\n          <ram:ID schemeID="FC">${xe(p.seller.siret)}</ram:ID>\n        </ram:SpecifiedTaxRegistration>`
+  const sellerTaxXml = p.seller.tvaIntra
+    ? `\n        <ram:SpecifiedTaxRegistration>\n          <ram:ID schemeID="VA">${xe(p.seller.tvaIntra)}</ram:ID>\n        </ram:SpecifiedTaxRegistration>`
     : "";
 
   // Buyer ID
   const buyerSiretXml = p.buyer.siret
-    ? `\n        <ram:ID schemeID="0002">${xe(p.buyer.siret)}</ram:ID>`
+    ? `\n        <ram:SpecifiedLegalOrganization>\n          <ram:ID schemeID="0002">${xe(p.buyer.siret)}</ram:ID>\n        </ram:SpecifiedLegalOrganization>`
     : "";
 
   // Référence devis pour acompte (TypeCode 386)
@@ -265,7 +266,7 @@ function buildXml(p: DocParams): string {
   // Moyen de paiement (IBAN/BIC)
   const paymentXml = p.seller.iban
     ? `    <ram:SpecifiedTradeSettlementPaymentMeans>
-      <ram:TypeCode>58</ram:TypeCode>
+      <ram:TypeCode>30</ram:TypeCode>
       <ram:PayeePartyCreditorFinancialAccount>
         <ram:IBANID>${xe(p.seller.iban)}</ram:IBANID>
       </ram:PayeePartyCreditorFinancialAccount>${p.seller.bic ? `
@@ -288,7 +289,7 @@ function buildXml(p: DocParams): string {
 <rsm:CrossIndustryInvoice xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <rsm:ExchangedDocumentContext>
     <ram:GuidelineSpecifiedDocumentContextParameter>
-      <ram:ID>urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:en16931</ram:ID>
+      <ram:ID>urn:cen.eu:en16931:2017</ram:ID>
     </ram:GuidelineSpecifiedDocumentContextParameter>
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
@@ -594,7 +595,7 @@ serve(async (req) => {
     // Profil artisan
     const [profileRes, settingsRes] = await Promise.all([
       db.from("profiles")
-        .select("nom, prenom, siret, raison_sociale, adresse, code_postal, ville")
+        .select("nom, prenom, siret, raison_sociale, adresse, code_postal, ville, tva_intracommunautaire")
         .eq("user_id", user.id)
         .single(),
       db.from("artisan_settings")
@@ -612,6 +613,7 @@ serve(async (req) => {
         || `${profile?.prenom ?? ""} ${profile?.nom ?? ""}`.trim()
         || "Artisan",
       siret: profile?.siret ?? "",
+      tvaIntra: (profile as any)?.tva_intracommunautaire ?? "",
       adresse: profile?.adresse ?? prefs.adresse ?? "",
       codePostal: profile?.code_postal ?? "",
       ville: profile?.ville ?? "",
