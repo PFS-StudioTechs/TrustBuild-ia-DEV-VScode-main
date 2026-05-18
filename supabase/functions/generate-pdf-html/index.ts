@@ -29,7 +29,7 @@ function buildHtml(params: {
   date_validite?: string | null;
   date_echeance?: string | null;
   parent_numero?: string | null;
-  artisan: { nom: string; prenom: string; siret?: string | null; adresse?: string | null; telephone?: string | null; email?: string | null; logo_url?: string | null };
+  artisan: { nom: string; prenom: string; siret?: string | null; tva_intracommunautaire?: string | null; adresse?: string | null; telephone?: string | null; email?: string | null; logo_url?: string | null };
   client: { nom: string; adresse?: string | null; email?: string | null; telephone?: string | null };
   chantier?: { nom?: string | null; adresse?: string | null };
   lignes: Array<{ description: string; quantite: number; unite: string; prix_unitaire: number; tva_taux?: number; section?: string | null }>;
@@ -158,6 +158,7 @@ function buildHtml(params: {
       <strong style="font-size:12pt;">${params.artisan.prenom} ${params.artisan.nom}</strong>
       ${params.artisan.adresse ? `<br>${params.artisan.adresse}` : ""}
       ${params.artisan.siret ? `<br>SIRET : ${params.artisan.siret}` : ""}
+      ${params.artisan.tva_intracommunautaire ? `<br>TVA : ${params.artisan.tva_intracommunautaire}` : ""}
       ${params.artisan.telephone ? `<br>Tél. : ${params.artisan.telephone}` : ""}
       ${params.artisan.email ? `<br>${params.artisan.email}` : ""}
       ${enteteHtml ? `<br>${enteteHtml}` : ""}
@@ -232,7 +233,7 @@ function buildHtml(params: {
   <!-- ══ PIED DE PAGE (fixe à l'impression) ══ -->
   <div class="no-print" style="height:50px;"></div>
   <div style="font-size:7.5pt;text-align:center;color:#999;border-top:1px solid #ddd;padding-top:6px;margin-top:20px;">
-    ${params.artisan.prenom} ${params.artisan.nom}${params.artisan.siret ? ` — SIRET ${params.artisan.siret}` : ""}${params.artisan.email ? ` — ${params.artisan.email}` : ""}${params.artisan.telephone ? ` — ${params.artisan.telephone}` : ""}
+    ${params.artisan.prenom} ${params.artisan.nom}${params.artisan.siret ? ` — SIRET ${params.artisan.siret}` : ""}${params.artisan.tva_intracommunautaire ? ` — TVA ${params.artisan.tva_intracommunautaire}` : ""}${params.artisan.email ? ` — ${params.artisan.email}` : ""}${params.artisan.telephone ? ` — ${params.artisan.telephone}` : ""}
   </div>
 
   <!-- Bouton impression -->
@@ -276,7 +277,7 @@ serve(async (req) => {
 
     // ── Profil artisan ─────────────────────────────────────────────────────
     const { data: profile } = await db.from("profiles")
-      .select("nom, prenom, siret, logo_url")
+      .select("nom, prenom, siret, tva_intracommunautaire, logo_url")
       .eq("user_id", user.id)
       .single();
 
@@ -290,6 +291,7 @@ serve(async (req) => {
       nom: profile?.nom ?? "",
       prenom: profile?.prenom ?? "",
       siret: profile?.siret ?? null,
+      tva_intracommunautaire: (profile as any)?.tva_intracommunautaire ?? null,
       adresse: prefs.adresse ?? null,
       telephone: prefs.telephone ?? null,
       email: user.email ?? null,
