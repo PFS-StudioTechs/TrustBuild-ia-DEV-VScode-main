@@ -57,6 +57,8 @@ interface DevisRow {
   version: number;
   parent_devis_id: string | null;
   base_numero: string | null;
+  token_public: string | null;
+  token_expires_at: string | null;
   client?: Client;
   lignes?: LigneDevis[];
 }
@@ -1586,6 +1588,7 @@ function DevisCard({
   const [avoirRectifTargetId, setAvoirRectifTargetId] = useState<string | null>(null);
   const [avoirRectifFactureId, setAvoirRectifFactureId] = useState<string>("");
   const [emailDevisOpen, setEmailDevisOpen] = useState(false);
+  const [renewingLink, setRenewingLink] = useState(false);
   const [avoirRectifEcheance, setAvoirRectifEcheance] = useState("");
   const [avoirRectifSaving, setAvoirRectifSaving] = useState(false);
   const [emailDetailOpen, setEmailDetailOpen] = useState(false);
@@ -1747,6 +1750,22 @@ function DevisCard({
     await supabase.from("devis").update({ statut }).eq("id", devis.id);
     toast.success(`Statut → ${statutLabels[statut] ?? statut}`);
     onRefresh();
+  };
+
+  const handleRenewLink = async () => {
+    setRenewingLink(true);
+    try {
+      const newToken = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 90);
+      await (supabase as any).from("devis").update({ token_public: newToken, token_expires_at: expiresAt.toISOString() }).eq("id", devis.id);
+      toast.success("Lien renouvelé — valable 90 jours");
+      onRefresh();
+    } catch {
+      toast.error("Erreur lors du renouvellement du lien");
+    } finally {
+      setRenewingLink(false);
+    }
   };
 
   const handleDeleteDevis = async () => {
@@ -1998,6 +2017,24 @@ function DevisCard({
                     <Trash2 className="w-3.5 h-3.5 mr-1" /> Supprimer
                   </Button>
                 )}
+              </div>
+            )}
+
+            {devis.statut === "envoye" && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                {devis.token_expires_at ? (
+                  new Date(devis.token_expires_at) < new Date() ? (
+                    <span className="text-destructive font-medium">Lien public expiré le {new Date(devis.token_expires_at).toLocaleDateString("fr-FR")}</span>
+                  ) : (
+                    <span>Lien public valable jusqu'au {new Date(devis.token_expires_at).toLocaleDateString("fr-FR")}</span>
+                  )
+                ) : (
+                  <span>Lien public sans date limite</span>
+                )}
+                <Button size="sm" variant="ghost" onClick={handleRenewLink} disabled={renewingLink} className="text-primary h-6 px-2 text-xs">
+                  {renewingLink ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RotateCcw className="w-3 h-3 mr-1" />}
+                  Renouveler (90 j)
+                </Button>
               </div>
             )}
 
@@ -2554,7 +2591,7 @@ export default function DevisPage() {
       { data: ltsData },
     ] = await Promise.all([
       supabase.from("clients").select("id,nom,prenom,email,telephone,adresse,type").eq("artisan_id", user.id).order("nom"),
-      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,version,parent_devis_id,base_numero,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,version,parent_devis_id,base_numero,token_public,token_expires_at,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
       supabase.from("avenants").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),

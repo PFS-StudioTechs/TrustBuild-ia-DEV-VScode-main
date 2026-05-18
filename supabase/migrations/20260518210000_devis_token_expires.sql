@@ -1,0 +1,1 @@
+ALTER TABLE devis ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ;

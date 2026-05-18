@@ -154,7 +154,9 @@ export default function SendEmailDialog(props: Props) {
 
       // Met à jour le statut du document
       if (type === "devis") {
-        await supabase.from("devis").update({ statut: "envoye" } as any).eq("id", doc.id);
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 90);
+        await supabase.from("devis").update({ statut: "envoye", token_expires_at: expiresAt.toISOString() } as any).eq("id", doc.id);
       } else {
         await supabase.from("factures").update({ statut: "envoyee" } as any).eq("id", doc.id);
       }

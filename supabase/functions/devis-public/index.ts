@@ -426,11 +426,15 @@ serve(async (req) => {
 
     const { data: devis, error } = await db
       .from("devis")
-      .select("id, numero, statut, montant_ht, tva, date_validite, created_at, artisan_id, client_id, chantier_id")
+      .select("id, numero, statut, montant_ht, tva, date_validite, created_at, artisan_id, client_id, chantier_id, token_expires_at")
       .eq("token_public", token)
       .single();
 
     if (error || !devis) return json({ error: "Devis introuvable" }, 404);
+
+    if ((devis as any).token_expires_at && new Date((devis as any).token_expires_at) < new Date()) {
+      return json({ error: "Lien expiré", expired: true }, 410);
+    }
 
     const { data: profile } = await db
       .from("profiles")
@@ -483,11 +487,15 @@ serve(async (req) => {
 
     const { data: devis } = await db
       .from("devis")
-      .select("id, statut, artisan_id, numero, client_id, chantier_id, montant_ht, tva, created_at, date_validite")
+      .select("id, statut, artisan_id, numero, client_id, chantier_id, montant_ht, tva, created_at, date_validite, token_expires_at")
       .eq("token_public", effectiveToken)
       .single();
 
     if (!devis) return json({ error: "Devis introuvable" }, 404);
+
+    if ((devis as any).token_expires_at && new Date((devis as any).token_expires_at) < new Date()) {
+      return json({ error: "Lien expiré", expired: true }, 410);
+    }
 
     const devisId = (devis as any).id;
     const artisanId = (devis as any).artisan_id;
