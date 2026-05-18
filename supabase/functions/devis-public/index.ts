@@ -20,7 +20,10 @@ async function notifyArtisan(
   bodyText: string,
 ) {
   const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-  if (!sendgridApiKey) return;
+  if (!sendgridApiKey) {
+    console.warn("notifyArtisan: SENDGRID_API_KEY non configuré");
+    return;
+  }
 
   const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
   const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
@@ -31,23 +34,39 @@ async function notifyArtisan(
     .eq("user_id", artisanId)
     .single();
 
-  if (!(profile as any)?.email) return;
+  const artisanName = `${(profile as any)?.prenom ?? ""} ${(profile as any)?.nom ?? ""}`.trim() || "Artisan";
 
-  const artisanName = `${(profile as any).prenom ?? ""} ${(profile as any).nom ?? ""}`.trim() || "Artisan";
+  let toEmail: string | undefined = (profile as any)?.email;
+  if (!toEmail) {
+    const { data: authUser } = await db.auth.admin.getUserById(artisanId);
+    toEmail = authUser?.user?.email;
+  }
 
-  await fetch("https://api.sendgrid.com/v3/mail/send", {
+  if (!toEmail) {
+    console.error("notifyArtisan: email artisan introuvable pour", artisanId);
+    return;
+  }
+
+  const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${sendgridApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email: (profile as any).email, name: artisanName }] }],
+      personalizations: [{ to: [{ email: toEmail, name: artisanName }] }],
       from: { email: fromEmail, name: fromName },
       subject,
       content: [{ type: "text/plain", value: bodyText }],
     }),
   });
+
+  if (!sgRes.ok) {
+    const err = await sgRes.text();
+    console.error("notifyArtisan: SendGrid erreur", sgRes.status, err);
+  } else {
+    console.log("notifyArtisan: email envoyé à", toEmail, "—", subject);
+  }
 }
 
 serve(async (req) => {
