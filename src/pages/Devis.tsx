@@ -1513,6 +1513,8 @@ function DevisCard({
   const [emailDevisOpen, setEmailDevisOpen] = useState(false);
   const [avoirRectifEcheance, setAvoirRectifEcheance] = useState("");
   const [avoirRectifSaving, setAvoirRectifSaving] = useState(false);
+  const [emailDetailOpen, setEmailDetailOpen] = useState(false);
+  const [emailDetailMsg, setEmailDetailMsg] = useState<{ subject: string; body: string; to_email: string; to_name: string | null; sent_at: string } | null>(null);
 
   const openDevisPdf = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1530,6 +1532,24 @@ function DevisCard({
       toast.error("Erreur PDF : " + err.message);
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  const openEmailDetail = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { data } = await (supabase as any)
+      .from("messages")
+      .select("subject, body, to_email, to_name, sent_at")
+      .eq("document_id", devis.id)
+      .eq("document_type", "devis")
+      .order("sent_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      setEmailDetailMsg(data);
+      setEmailDetailOpen(true);
+    } else {
+      toast.info("Aucun mail trouvé pour ce devis");
     }
   };
 
@@ -1864,6 +1884,11 @@ function DevisCard({
                 <Button size="sm" variant="outline" onClick={() => setEmailDevisOpen(true)} className="text-primary border-primary/40 hover:bg-primary/10">
                   <Mail className="w-3.5 h-3.5 mr-1" /> Envoyer par email
                 </Button>
+                {(devis.statut === "envoye" || devis.statut === "signe" || devis.statut === "refuse") && (
+                  <Button size="sm" variant="ghost" onClick={openEmailDetail} className="text-muted-foreground hover:text-foreground">
+                    <Eye className="w-3.5 h-3.5 mr-1" /> Voir le mail
+                  </Button>
+                )}
                 {devis.statut !== "envoye" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("envoye")}><Send className="w-3.5 h-3.5 mr-1" /> Marquer envoyé</Button>}
                 {devis.statut !== "signe" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("signe")} className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Marquer signé</Button>}
                 {devis.statut !== "refuse" && <Button size="sm" variant="outline" onClick={() => handleChangeStatut("refuse")} className="text-destructive"><XCircle className="w-3.5 h-3.5 mr-1" /> Refusé</Button>}
@@ -2365,6 +2390,29 @@ function DevisCard({
           onSent={() => { setEmailDevisOpen(false); onRefresh(); }}
         />
       )}
+
+      <Dialog open={emailDetailOpen} onOpenChange={setEmailDetailOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2 text-base">
+              <Mail className="w-4 h-4 text-primary" />
+              Mail envoyé — {devis.numero}
+            </DialogTitle>
+          </DialogHeader>
+          {emailDetailMsg && (
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1.5 text-xs bg-muted/40 rounded-lg p-3">
+                <div><span className="font-semibold text-muted-foreground">À :</span> {emailDetailMsg.to_name ? `${emailDetailMsg.to_name} <${emailDetailMsg.to_email}>` : emailDetailMsg.to_email}</div>
+                <div><span className="font-semibold text-muted-foreground">Objet :</span> {emailDetailMsg.subject}</div>
+                <div><span className="font-semibold text-muted-foreground">Date :</span> {new Date(emailDetailMsg.sent_at).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })}</div>
+              </div>
+              <div className="whitespace-pre-wrap text-xs font-mono bg-background border rounded-lg p-3 leading-relaxed">
+                {emailDetailMsg.body}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
