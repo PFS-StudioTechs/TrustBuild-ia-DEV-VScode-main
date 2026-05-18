@@ -93,7 +93,7 @@ export default function SendEmailDialog(props: Props) {
 
     setBody(bodyText);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, artisanNom]);
+  }, [open, artisanNom, tokenPublic]);
 
   const handleSend = async () => {
     if (!toEmail.trim()) { toast.error("Adresse email requise"); return; }
