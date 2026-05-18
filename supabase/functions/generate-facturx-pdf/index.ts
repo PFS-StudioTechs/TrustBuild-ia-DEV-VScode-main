@@ -93,6 +93,196 @@ function tvaCat(rate: number): string {
   return rate > 0 ? "S" : "E";
 }
 
+const SECTOR_PRIMARY: Record<string, string> = {
+  plomberie: "#1d4ed8", electricite: "#ca8a04", architecture: "#374151",
+  peinture: "#7c3aed", menuiserie: "#92400e", general: "#2563eb",
+  jardinage: "#16a34a", pisciniste: "#0891b2", platrerie: "#6b7280",
+  charpente: "#b45309", maconnerie: "#4b5563",
+};
+
+function hexToRgb(hex: string) {
+  const h = (hex ?? "#2563eb").replace("#", "").padEnd(6, "0");
+  return rgb(
+    parseInt(h.slice(0, 2), 16) / 255,
+    parseInt(h.slice(2, 4), 16) / 255,
+    parseInt(h.slice(4, 6), 16) / 255,
+  );
+}
+
+async function buildDevisPdf(p: {
+  numero: string;
+  dateDoc: string;
+  dateValidite: string | null;
+  statut: string;
+  seller: SellerInfo;
+  clientNom: string;
+  clientAdresse: string;
+  chantierNom: string;
+  chantierAdresse: string;
+  lines: LineItem[];
+  totalHt: number;
+  totalTva: number;
+  totalTtc: number;
+  tvaPct: number;
+  primaryHex: string;
+  logoUrl: string | null;
+}): Promise<PDFDocument> {
+  const pdfDoc = await PDFDocument.create();
+  pdfDoc.setTitle(`Devis ${p.numero}`);
+  pdfDoc.setCreator("TrustBuild-IA");
+  pdfDoc.setProducer("TrustBuild-IA / pdf-lib");
+
+  const fN = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fB = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const page = pdfDoc.addPage([595.28, 841.89]);
+  const { width, height } = page.getSize();
+  const M = 40;
+  const primary = hexToRgb(p.primaryHex);
+  const gray = rgb(0.5, 0.5, 0.5);
+  const dark = rgb(0.15, 0.15, 0.15);
+  const lineCol = rgb(0.85, 0.85, 0.85);
+  const white = rgb(1, 1, 1);
+  const headerH = 80;
+
+  // Header band
+  page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: primary });
+
+  // Logo (left in header)
+  if (p.logoUrl) {
+    try {
+      const res = await fetch(p.logoUrl);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        const ct = res.headers.get("content-type") ?? "";
+        const img = ct.includes("png") || p.logoUrl.toLowerCase().includes(".png")
+          ? await pdfDoc.embedPng(buf)
+          : await pdfDoc.embedJpg(buf);
+        const maxH = 56;
+        const maxW = 140;
+        const scale = Math.min(maxH / img.height, maxW / img.width);
+        const lw = img.width * scale;
+        const lh = img.height * scale;
+        page.drawImage(img, {
+          x: M,
+          y: height - headerH + (headerH - lh) / 2,
+          width: lw,
+          height: lh,
+        });
+      }
+    } catch { /* skip logo on error */ }
+  }
+
+  // "DEVIS" title (right in header)
+  const titleW = fB.widthOfTextAtSize("DEVIS", 26);
+  page.drawText("DEVIS", { x: width - M - titleW, y: height - 38, size: 26, font: fB, color: white });
+
+  const numStr = `N° : ${p.numero}`;
+  page.drawText(numStr, { x: width - M - fN.widthOfTextAtSize(numStr, 9), y: height - 53, size: 9, font: fN, color: white });
+
+  const dateStr = `Date : ${fmtDate(p.dateDoc)}`;
+  page.drawText(dateStr, { x: width - M - fN.widthOfTextAtSize(dateStr, 9), y: height - 65, size: 9, font: fN, color: white });
+
+  // Artisan block
+  let y = height - headerH - 16;
+  page.drawText(p.seller.name, { x: M, y, size: 10, font: fB, color: dark });
+  y -= 13;
+  if (p.seller.adresse) { page.drawText(p.seller.adresse, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  const cityLine = [p.seller.codePostal, p.seller.ville].filter(Boolean).join(" ");
+  if (cityLine) { page.drawText(cityLine, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (p.seller.siret) { page.drawText(`SIRET : ${p.seller.siret}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (p.seller.tel) { page.drawText(`Tél. : ${p.seller.tel}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (p.dateValidite) { page.drawText(`Validité : ${fmtDate(p.dateValidite)}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+
+  // Separator
+  y -= 6;
+  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 1, color: primary });
+  y -= 14;
+
+  // Chantier (left) + Client box (right)
+  const colW = (width - 2 * M - 12) / 2;
+  const col2X = M + colW + 12;
+  const blockTop = y;
+
+  if (p.clientNom) {
+    const boxH = 60;
+    page.drawRectangle({ x: col2X - 6, y: blockTop - boxH, width: colW + 6, height: boxH + 10, borderColor: primary, borderWidth: 1 });
+    page.drawText("CLIENT :", { x: col2X, y: blockTop - 2, size: 8, font: fB, color: primary });
+    let yc = blockTop - 16;
+    page.drawText(p.clientNom, { x: col2X, y: yc, size: 9, font: fB, color: dark }); yc -= 12;
+    if (p.clientAdresse) { page.drawText(p.clientAdresse, { x: col2X, y: yc, size: 8, font: fN, color: gray }); }
+  }
+
+  if (p.chantierNom || p.chantierAdresse) {
+    page.drawText("Chantier :", { x: M, y: blockTop - 2, size: 8, font: fB, color: gray });
+    let ycha = blockTop - 16;
+    if (p.chantierNom) { page.drawText(p.chantierNom, { x: M, y: ycha, size: 9, font: fB, color: dark }); ycha -= 12; }
+    if (p.chantierAdresse) { page.drawText(p.chantierAdresse, { x: M, y: ycha, size: 8, font: fN, color: gray }); }
+  }
+
+  y = blockTop - 74;
+
+  // Table header
+  const tableW = width - 2 * M;
+  const COL = { desig: M + 2, qty: 310, pu: 400, ht: 500 };
+  page.drawRectangle({ x: M, y: y - 5, width: tableW, height: 18, color: primary });
+  page.drawText("Description des travaux", { x: COL.desig, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("Qté / Unité", { x: COL.qty, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("P.U. HT", { x: COL.pu, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("Total HT", { x: width - M - fB.widthOfTextAtSize("Total HT", 8), y: y + 1, size: 8, font: fB, color: white });
+  y -= 14;
+
+  // Lines
+  const FOOTER_SAFE = M + 80;
+  for (let i = 0; i < p.lines.length; i++) {
+    if (y < FOOTER_SAFE) break;
+    const l = p.lines[i];
+    const lineHt = l.quantite * l.prix_unitaire;
+    const bg = i % 2 === 0 ? white : rgb(0.97, 0.97, 0.97);
+    page.drawRectangle({ x: M, y: y - 3, width: tableW, height: 14, color: bg });
+
+    const maxDesigW = COL.qty - COL.desig - 4;
+    let desig = l.designation;
+    while (desig.length > 3 && fN.widthOfTextAtSize(desig, 8) > maxDesigW) desig = desig.slice(0, -1);
+    if (desig !== l.designation) desig = desig.slice(0, -1) + "…";
+
+    page.drawText(desig, { x: COL.desig, y, size: 8, font: fN, color: dark });
+    page.drawText(`${n2(l.quantite)} ${l.unite || "u"}`, { x: COL.qty, y, size: 8, font: fN, color: dark });
+    page.drawText(fmtEur(l.prix_unitaire), { x: COL.pu, y, size: 8, font: fN, color: dark });
+    const htStr = fmtEur(lineHt);
+    page.drawText(htStr, { x: width - M - fN.widthOfTextAtSize(htStr, 8), y, size: 8, font: fN, color: dark });
+    y -= 13;
+  }
+
+  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.5, color: lineCol });
+  y -= 12;
+
+  // Totals
+  const SX = width / 2 + 30;
+  const htStr = fmtEur(p.totalHt);
+  page.drawText("Montant HT", { x: SX, y, size: 10, font: fN, color: gray });
+  page.drawText(htStr, { x: width - M - fN.widthOfTextAtSize(htStr, 10), y, size: 10, font: fN, color: dark });
+  y -= 16;
+
+  const tvaStr = fmtEur(p.totalTva);
+  page.drawText(`TVA (${p.tvaPct}%)`, { x: SX, y, size: 10, font: fN, color: gray });
+  page.drawText(tvaStr, { x: width - M - fN.widthOfTextAtSize(tvaStr, 10), y, size: 10, font: fN, color: dark });
+  y -= 18;
+
+  const ttcStr = fmtEur(p.totalTtc);
+  page.drawRectangle({ x: SX - 8, y: y - 6, width: width - M - SX + 8, height: 26, color: primary });
+  page.drawText("Total TTC", { x: SX, y: y + 3, size: 11, font: fB, color: white });
+  page.drawText(ttcStr, { x: width - M - fB.widthOfTextAtSize(ttcStr, 12), y: y + 3, size: 12, font: fB, color: white });
+
+  // Footer
+  const footerText = `${p.seller.name}${p.seller.siret ? ` — SIRET ${p.seller.siret}` : ""} — Généré par TrustBuild-IA`;
+  const ftw = fN.widthOfTextAtSize(footerText, 7.5);
+  page.drawLine({ start: { x: M, y: M + 8 }, end: { x: width - M, y: M + 8 }, thickness: 0.5, color: lineCol });
+  page.drawText(footerText, { x: (width - ftw) / 2, y: M - 5, size: 7.5, font: fN, color: gray });
+
+  return pdfDoc;
+}
+
 function toUnitCode(unite: string | null | undefined): string {
   if (!unite) return "C62";
   const map: Record<string, string> = {
@@ -580,7 +770,7 @@ serve(async (req) => {
     const body = await req.json();
 
     // Support legacy { facture_id } et nouveau { type, document_id }
-    const docType: "facture" | "avoir" | "acompte" = body.type ?? "facture";
+    const docType: "facture" | "avoir" | "acompte" | "devis" = body.type ?? "facture";
     const documentId: string = body.document_id ?? body.facture_id;
     logDocType = docType;
     logDocumentId = documentId;
@@ -595,7 +785,7 @@ serve(async (req) => {
     // Profil artisan
     const [profileRes, settingsRes] = await Promise.all([
       db.from("profiles")
-        .select("nom, prenom, siret, raison_sociale, adresse, code_postal, ville, tva_intracommunautaire")
+        .select("nom, prenom, siret, raison_sociale, adresse, code_postal, ville, tva_intracommunautaire, logo_url")
         .eq("user_id", user.id)
         .single(),
       db.from("artisan_settings")
@@ -808,6 +998,105 @@ serve(async (req) => {
       const pdfDoc = await buildPdf(docParams);
       log(db, { user_id: user.id, action: "facturx.generated", entity_type: docType, entity_id: documentId, status: "success", details: { docType } });
       return finalize(pdfDoc, xml, docParams);
+    }
+
+    // ── DEVIS (PDF visuel uniquement, pas de XML Factur-X) ────────────────────
+    if (docType === "devis") {
+      const { data: devis, error: dErr } = await db.from("devis")
+        .select("id, numero, montant_ht, tva, created_at, date_validite, statut, chantier_id, client_id")
+        .eq("id", documentId)
+        .eq("artisan_id", user.id)
+        .single();
+      if (dErr || !devis) {
+        return new Response(JSON.stringify({ error: "Devis introuvable" }), {
+          status: 404, headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      // Chantier + client
+      // deno-lint-ignore no-explicit-any
+      let chantierNom = "", chantierAdresse = "", clientId: string | null = (devis as any).client_id ?? null;
+      // deno-lint-ignore no-explicit-any
+      if ((devis as any).chantier_id) {
+        const { data: ch } = await db.from("chantiers")
+          .select("nom, adresse_chantier, client_id")
+          // deno-lint-ignore no-explicit-any
+          .eq("id", (devis as any).chantier_id).single();
+        if (ch) {
+          // deno-lint-ignore no-explicit-any
+          chantierNom = (ch as any).nom ?? "";
+          // deno-lint-ignore no-explicit-any
+          chantierAdresse = (ch as any).adresse_chantier ?? "";
+          // deno-lint-ignore no-explicit-any
+          if (!(devis as any).client_id) clientId = (ch as any).client_id ?? null;
+        }
+      }
+      let clientNom = "", clientAdresse = "";
+      if (clientId) {
+        const { data: cl } = await db.from("clients")
+          .select("nom, prenom, adresse").eq("id", clientId).single();
+        if (cl) {
+          clientNom = [cl.prenom, cl.nom].filter(Boolean).join(" ");
+          clientAdresse = cl.adresse ?? "";
+        }
+      }
+
+      // Lignes
+      const { data: rawLines } = await db.from("lignes_devis")
+        .select("designation, quantite, unite, prix_unitaire, tva")
+        .eq("devis_id", documentId).order("ordre");
+      const lines: LineItem[] = (rawLines ?? []).map((l) => ({
+        designation: l.designation ?? "",
+        quantite: Number(l.quantite),
+        unite: l.unite ?? "u",
+        prix_unitaire: Number(l.prix_unitaire),
+        tva: Number(l.tva),
+      }));
+
+      // Template actif pour couleurs + logo
+      const { data: tpl } = await db.from("document_templates")
+        .select("couleur_primaire, logo_url, secteur")
+        .eq("artisan_id", user.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const primaryHex = tpl?.couleur_primaire ?? SECTOR_PRIMARY[tpl?.secteur ?? "general"] ?? "#2563eb";
+      // deno-lint-ignore no-explicit-any
+      const logoUrl: string | null = tpl?.logo_url ?? (profile as any)?.logo_url ?? null;
+
+      const totalHt = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
+      const totalTva = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire * l.tva / 100, 0);
+      const totalTtc = totalHt + totalTva;
+      const tvaPct = Number(devis.tva) || 20;
+
+      const pdfDoc = await buildDevisPdf({
+        numero: devis.numero,
+        dateDoc: devis.created_at,
+        // deno-lint-ignore no-explicit-any
+        dateValidite: (devis as any).date_validite ?? null,
+        statut: devis.statut ?? "brouillon",
+        seller,
+        clientNom, clientAdresse,
+        chantierNom, chantierAdresse,
+        lines, totalHt, totalTva, totalTtc, tvaPct,
+        primaryHex, logoUrl,
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      let binary = "";
+      const CHUNK = 4096;
+      for (let i = 0; i < pdfBytes.length; i += CHUNK) {
+        binary += String.fromCharCode(...pdfBytes.subarray(i, i + CHUNK));
+      }
+
+      log(db, { user_id: user.id, action: "devis.pdf_generated", entity_type: "devis", entity_id: documentId, status: "success", details: { numero: devis.numero } });
+
+      return new Response(
+        JSON.stringify({ pdf_base64: btoa(binary), numero: devis.numero }),
+        { headers: { ...cors, "Content-Type": "application/json" } },
+      );
     }
 
     return new Response(

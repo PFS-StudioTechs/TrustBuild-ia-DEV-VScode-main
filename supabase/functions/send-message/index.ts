@@ -7,40 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function buildEmailHtml(personalMessage: string, documentHtml: string): string {
-  const styleBlocks = [...documentHtml.matchAll(/<style[^>]*>[\s\S]*?<\/style>/gi)]
-    .map(m => m[0]).join("\n");
-
-  const bodyMatch = documentHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  let docContent = bodyMatch ? bodyMatch[1] : documentHtml;
-
-  // Remove print-only elements
-  docContent = docContent.replace(/<div[^>]+class="no-print"[^>]*>[\s\S]*?<\/div>/g, "");
-
-  const msgHtml = personalMessage
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br>");
-
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-${styleBlocks}
-</head>
-<body>
-<div style="max-width:794px;margin:0 auto;padding:20px 0;">
-  <div style="padding:16px 20px;background:#f0f7ff;border-left:4px solid #2563eb;border-radius:4px;margin-bottom:24px;font-size:10pt;line-height:1.7;">
-    ${msgHtml}
-  </div>
-  <hr style="border:none;border-top:2px solid #e5e7eb;margin:0 0 20px 0;">
-  ${docContent}
-</div>
-</body>
-</html>`;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -62,61 +28,55 @@ serve(async (req) => {
 
   const serviceClient = createClient(supabaseUrl, serviceKey);
 
-  const { to_email, to_name, subject, body, document_type, document_id, pdf_attachment_base64, pdf_filename } = await req.json();
+  const { to_email, to_name, subject, body, document_type, document_id } = await req.json();
   if (!to_email || !subject || !body) {
     return new Response(JSON.stringify({ error: "Champs manquants (to_email, subject, body)" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  // Fetch artisan profile for sender identity
   const { data: profile } = await serviceClient.from("profiles").select("prenom, nom, email").eq("user_id", user.id).single();
   const senderName = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() || fromName : fromName;
   const replyTo = profile?.email ?? user.email ?? fromEmail;
 
-  // Fetch document HTML if document context provided
-  let htmlEmail: string | null = null;
-  if (document_type && document_id && (document_type === "devis" || document_type === "facture")) {
+  // Generate PDF for devis and attach it
+  let pdfBase64: string | null = null;
+  let pdfFilename: string | null = null;
+  if (document_type === "devis" && document_id) {
     try {
-      const docRes = await fetch(`${supabaseUrl}/functions/v1/generate-pdf-html`, {
+      const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
         method: "POST",
         headers: {
           "Authorization": authHeader,
           "Content-Type": "application/json",
           "apikey": supabaseAnonKey,
         },
-        body: JSON.stringify(
-          document_type === "devis"
-            ? { type: "devis", devis_id: document_id }
-            : { type: "facture", facture_id: document_id }
-        ),
+        body: JSON.stringify({ type: "devis", document_id }),
       });
-      if (docRes.ok) {
-        const docData = await docRes.json();
-        if (docData.html) htmlEmail = buildEmailHtml(body, docData.html);
+      if (pdfRes.ok) {
+        const pdfData = await pdfRes.json();
+        if (pdfData.pdf_base64) {
+          pdfBase64 = pdfData.pdf_base64;
+          pdfFilename = `Devis_${pdfData.numero ?? document_id}.pdf`;
+        }
       }
     } catch (e) {
-      console.warn("generate-pdf-html failed:", e);
+      console.warn("PDF generation failed:", e);
     }
   }
 
   let sendStatus = "sent";
   if (sendgridApiKey) {
-    const content: Array<{ type: string; value: string }> = [
-      { type: "text/plain", value: body },
-    ];
-    if (htmlEmail) content.push({ type: "text/html", value: htmlEmail });
-
     const payload: Record<string, unknown> = {
       personalizations: [{ to: [{ email: to_email, name: to_name ?? to_email }] }],
       from: { email: fromEmail, name: `${senderName} via ${fromName}` },
       reply_to: { email: replyTo, name: senderName },
       subject,
-      content,
+      content: [{ type: "text/plain", value: body }],
     };
 
-    if (pdf_attachment_base64 && pdf_filename) {
+    if (pdfBase64 && pdfFilename) {
       payload.attachments = [{
-        content: pdf_attachment_base64,
-        filename: pdf_filename,
+        content: pdfBase64,
+        filename: pdfFilename,
         type: "application/pdf",
         disposition: "attachment",
       }];
@@ -133,14 +93,13 @@ serve(async (req) => {
       sendStatus = "error";
       log(serviceClient, { user_id: user.id, action: "email.send_failed", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "error", details: { to: to_email, subject, sg_status: sgRes.status, sg_error: errText } });
     } else {
-      log(serviceClient, { user_id: user.id, action: "email.sent", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "success", details: { to: to_email, subject } });
+      log(serviceClient, { user_id: user.id, action: "email.sent", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "success", details: { to: to_email, subject, has_pdf: !!pdfBase64 } });
     }
   } else {
     sendStatus = "no_sendgrid";
     log(serviceClient, { user_id: user.id, action: "email.no_sendgrid", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "info", details: { to: to_email, subject } });
   }
 
-  // Store message in DB regardless of send status
   await serviceClient.from("messages").insert({
     artisan_id: user.id,
     to_email,
