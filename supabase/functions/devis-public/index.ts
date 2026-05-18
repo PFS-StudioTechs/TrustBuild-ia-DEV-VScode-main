@@ -13,6 +13,43 @@ function json(data: unknown, status = 200) {
   });
 }
 
+async function notifyArtisan(
+  db: ReturnType<typeof createClient>,
+  artisanId: string,
+  subject: string,
+  bodyText: string,
+) {
+  const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
+  if (!sendgridApiKey) return;
+
+  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
+  const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
+
+  const { data: profile } = await db
+    .from("profiles")
+    .select("email, prenom, nom")
+    .eq("user_id", artisanId)
+    .single();
+
+  if (!(profile as any)?.email) return;
+
+  const artisanName = `${(profile as any).prenom ?? ""} ${(profile as any).nom ?? ""}`.trim() || "Artisan";
+
+  await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${sendgridApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: (profile as any).email, name: artisanName }] }],
+      from: { email: fromEmail, name: fromName },
+      subject,
+      content: [{ type: "text/plain", value: bodyText }],
+    }),
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
@@ -105,14 +142,29 @@ serve(async (req) => {
 
     const { data: devis } = await db
       .from("devis")
-      .select("id, statut")
+      .select("id, statut, artisan_id, numero, client_id")
       .eq("token_public", effectiveToken)
       .single();
 
     if (!devis) return json({ error: "Devis introuvable" }, 404);
 
     const devisId = (devis as any).id;
+    const artisanId = (devis as any).artisan_id;
+    const devisNumero = (devis as any).numero;
     const action = body.action as string;
+
+    let clientNom = "Votre client";
+    const clientId = (devis as any).client_id;
+    if (clientId) {
+      const { data: cl } = await db
+        .from("clients")
+        .select("nom, prenom")
+        .eq("id", clientId)
+        .single();
+      if (cl) {
+        clientNom = `${(cl as any).prenom ?? ""} ${(cl as any).nom ?? ""}`.trim() || "Votre client";
+      }
+    }
 
     if (action === "annotate") {
       const annotations = (body.annotations as unknown[]) ?? [];
@@ -122,6 +174,12 @@ serve(async (req) => {
           annotations.map((a: any) => ({ ...a, devis_id: devisId }))
         );
       }
+      await notifyArtisan(
+        db,
+        artisanId,
+        `Devis ${devisNumero} — ${clientNom} a laissé des annotations`,
+        `Bonjour,\n\n${clientNom} vient d'annoter le devis ${devisNumero} (${annotations.length} annotation(s)).\n\nConnectez-vous à TrustBuild-IA pour consulter les détails.\n\nCordialement,\nL'équipe TrustBuild-IA`,
+      );
       return json({ ok: true });
     }
 
@@ -135,6 +193,13 @@ serve(async (req) => {
           contenu: comment.trim(),
         });
       }
+      const motif = comment?.trim() ? `\n\nMotif : ${comment.trim()}` : "";
+      await notifyArtisan(
+        db,
+        artisanId,
+        `Devis ${devisNumero} — ${clientNom} a refusé le devis`,
+        `Bonjour,\n\n${clientNom} vient de refuser le devis ${devisNumero}.${motif}\n\nConnectez-vous à TrustBuild-IA pour consulter les détails.\n\nCordialement,\nL'équipe TrustBuild-IA`,
+      );
       return json({ ok: true });
     }
 
@@ -149,6 +214,12 @@ serve(async (req) => {
         ip_address: req.headers.get("x-forwarded-for") ?? null,
       });
       await db.from("devis").update({ statut: "signe" }).eq("id", devisId);
+      await notifyArtisan(
+        db,
+        artisanId,
+        `Devis ${devisNumero} — ${clientNom} a signé le devis ✓`,
+        `Bonjour,\n\n${clientNom} vient de signer le devis ${devisNumero} — bon pour accord.\n\nConnectez-vous à TrustBuild-IA pour télécharger le devis signé.\n\nCordialement,\nL'équipe TrustBuild-IA`,
+      );
       return json({ ok: true });
     }
 
