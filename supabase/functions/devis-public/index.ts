@@ -16,6 +16,17 @@ function json(data: unknown, status = 200) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const ipCallMap = new Map<string, number[]>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const cutoff = now - 60_000;
+  const calls = (ipCallMap.get(ip) ?? []).filter(t => t > cutoff);
+  if (calls.length >= 10) return false;
+  calls.push(now);
+  ipCallMap.set(ip, calls);
+  return true;
+}
+
 function fmtMoney(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
@@ -475,6 +486,11 @@ serve(async (req) => {
 
   // ── POST : actions client (annotate / refuse / sign) ─────────────────────
   if (req.method === "POST") {
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+    if (!checkRateLimit(clientIp)) {
+      return json({ error: "Trop de requêtes, réessayez dans une minute" }, 429);
+    }
+
     let body: Record<string, unknown>;
     try {
       body = await req.json();
@@ -546,6 +562,7 @@ serve(async (req) => {
         `Devis ${devisNumero} — ${clientNom} a laissé des annotations`,
         `Bonjour,\n\n${clientNom} vient d'annoter le devis ${devisNumero} (${annotations.length} annotation(s)).\n\nConnectez-vous à TrustBuild-IA pour consulter les détails et modifier le devis.\n\nCordialement,\nL'équipe TrustBuild-IA`,
       );
+      await db.from("app_logs").insert({ user_id: artisanId, action: "devis.client_annotate", entity_type: "devis", entity_id: devisId, status: "success", details: { ip: clientIp, client_nom: clientNom, count: annotations.length } });
       return json({ ok: true });
     }
 
@@ -606,6 +623,7 @@ serve(async (req) => {
         `Bonjour,\n\n${clientNom} vient de refuser le devis ${devisNumero}.${motif}\n\nLe devis est joint à ce message en pièce jointe PDF.\n\nCordialement,\nL'équipe TrustBuild-IA`,
         pdfAttachment,
       );
+      await db.from("app_logs").insert({ user_id: artisanId, action: "devis.client_refuse", entity_type: "devis", entity_id: devisId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
       return json({ ok: true });
     }
 
@@ -656,6 +674,7 @@ serve(async (req) => {
         `Bonjour,\n\n${clientNom} vient de signer le devis ${devisNumero} — bon pour accord.\n\nLe devis signé est joint à ce message en pièce jointe PDF.\n\nCordialement,\nL'équipe TrustBuild-IA`,
         pdfAttachment,
       );
+      await db.from("app_logs").insert({ user_id: artisanId, action: "devis.client_sign", entity_type: "devis", entity_id: devisId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
       return json({ ok: true });
     }
 

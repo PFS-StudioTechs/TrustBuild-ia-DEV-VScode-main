@@ -37,6 +37,8 @@ export default function DevisPublic() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  const [expired, setExpired] = useState(false);
+
   const [annotateMode, setAnnotateMode] = useState(false);
   const [lineAnns, setLineAnns] = useState<Record<string, LineAnn>>({});
   const [globalComment, setGlobalComment] = useState("");
@@ -63,7 +65,8 @@ export default function DevisPublic() {
     })
       .then(r => r.json())
       .then(d => {
-        if (d.error) { setErr(d.error); }
+        if (d.expired) { setExpired(true); setErr(d.error); }
+        else if (d.error) { setErr(d.error); }
         else {
           setData(d);
           if (d.devis.statut === "signe") setFinalStatus("signe");
@@ -199,6 +202,18 @@ export default function DevisPublic() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (expired) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="text-center space-y-3 max-w-sm">
+          <p className="text-4xl">⏰</p>
+          <p className="font-semibold text-gray-700 text-lg">Lien expiré</p>
+          <p className="text-sm text-gray-500">Ce lien de consultation du devis a expiré. Contactez votre artisan pour en recevoir un nouveau.</p>
+        </div>
       </div>
     );
   }
