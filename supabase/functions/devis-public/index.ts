@@ -410,6 +410,7 @@ async function notifyArtisan(
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
+  try {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const db = createClient(supabaseUrl, serviceKey);
@@ -569,7 +570,7 @@ serve(async (req) => {
           { type: "refused", reason: comment },
         );
         pdfAttachment = {
-          content: btoa(String.fromCharCode(...pdfBytes)),
+          content: btoa(Array.from(pdfBytes, (b) => String.fromCharCode(b)).join("")),
           filename: `devis-${devisNumero}-refuse.pdf`,
         };
         console.log("[refuse] PDF refusé généré, taille:", pdfBytes.byteLength, "bytes");
@@ -618,7 +619,7 @@ serve(async (req) => {
           { type: "signed", signatureData, bonPourAccord },
         );
         pdfAttachment = {
-          content: btoa(String.fromCharCode(...pdfBytes)),
+          content: btoa(Array.from(pdfBytes, (b) => String.fromCharCode(b)).join("")),
           filename: `devis-${devisNumero}-signe.pdf`,
         };
         console.log("[sign] PDF signé généré, taille:", pdfBytes.byteLength, "bytes");
@@ -640,4 +641,12 @@ serve(async (req) => {
   }
 
   return json({ error: "Méthode non supportée" }, 405);
+
+  } catch (e) {
+    console.error("[devis-public] Erreur non gérée:", e);
+    return new Response(JSON.stringify({ error: "Erreur serveur interne" }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
 });
