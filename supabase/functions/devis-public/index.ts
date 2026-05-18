@@ -19,53 +19,78 @@ async function notifyArtisan(
   subject: string,
   bodyText: string,
 ) {
-  const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-  if (!sendgridApiKey) {
-    console.warn("notifyArtisan: SENDGRID_API_KEY non configuré");
-    return;
-  }
+  try {
+    const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
+    if (!sendgridApiKey) {
+      console.warn("[notifyArtisan] SENDGRID_API_KEY absent — email non envoyé");
+      return;
+    }
 
-  const { data: profile } = await db
-    .from("profiles")
-    .select("email, prenom, nom")
-    .eq("user_id", artisanId)
-    .single();
+    const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
+    const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
 
-  const artisanName = `${(profile as any)?.prenom ?? ""} ${(profile as any)?.nom ?? ""}`.trim() || "Artisan";
+    const { data: profile, error: profileErr } = await db
+      .from("profiles")
+      .select("email, prenom, nom")
+      .eq("user_id", artisanId)
+      .single();
 
-  let toEmail: string | undefined = (profile as any)?.email;
-  if (!toEmail) {
-    const { data: authUser } = await db.auth.admin.getUserById(artisanId);
-    toEmail = authUser?.user?.email;
-  }
+    if (profileErr) console.warn("[notifyArtisan] profiles fetch error:", profileErr.message);
 
-  if (!toEmail) {
-    console.error("notifyArtisan: email artisan introuvable pour", artisanId);
-    return;
-  }
+    const artisanName = `${(profile as any)?.prenom ?? ""} ${(profile as any)?.nom ?? ""}`.trim() || "Artisan";
 
-  const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${sendgridApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: toEmail, name: artisanName }] }],
-      from: { email: fromEmail, name: fromName },
-      subject,
-      content: [{ type: "text/plain", value: bodyText }],
-    }),
-  });
+    let toEmail: string | undefined = (profile as any)?.email ?? undefined;
 
-  if (!sgRes.ok) {
-    const err = await sgRes.text();
-    console.error("notifyArtisan: SendGrid erreur", sgRes.status, err);
-  } else {
-    console.log("notifyArtisan: email envoyé à", toEmail, "—", subject);
+    if (!toEmail) {
+      console.log("[notifyArtisan] profiles.email vide, appel Auth Admin REST pour", artisanId);
+      const authRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${artisanId}`, {
+        headers: {
+          "apikey": serviceKey,
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+      });
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        toEmail = authData?.email ?? undefined;
+        console.log("[notifyArtisan] Auth Admin email:", toEmail);
+      } else {
+        const errTxt = await authRes.text();
+        console.error("[notifyArtisan] Auth Admin erreur", authRes.status, errTxt);
+      }
+    }
+
+    if (!toEmail) {
+      console.error("[notifyArtisan] email artisan introuvable pour artisan_id:", artisanId);
+      return;
+    }
+
+    console.log("[notifyArtisan] Envoi SendGrid →", toEmail, "|", subject);
+
+    const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${sendgridApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: toEmail, name: artisanName }] }],
+        from: { email: fromEmail, name: fromName },
+        subject,
+        content: [{ type: "text/plain", value: bodyText }],
+      }),
+    });
+
+    if (!sgRes.ok) {
+      const err = await sgRes.text();
+      console.error("[notifyArtisan] SendGrid erreur", sgRes.status, err);
+    } else {
+      console.log("[notifyArtisan] Email envoyé avec succès à", toEmail);
+    }
+  } catch (e) {
+    console.error("[notifyArtisan] Exception non capturée:", e);
   }
 }
 
