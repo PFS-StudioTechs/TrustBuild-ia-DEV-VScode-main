@@ -46,6 +46,15 @@ function statusBadge(status: string) {
   return <Badge className="bg-red-500/10 text-red-600 text-[10px]"><AlertCircle className="w-3 h-3 mr-1" />Erreur</Badge>;
 }
 
+interface LigneDevisMin {
+  id: string;
+  designation: string;
+  quantite: number;
+  unite: string;
+  prix_unitaire: number;
+  ordre: number;
+}
+
 function InboundMessageCard({ m, onDelete, onMarkRead }: {
   m: Message;
   onDelete: (id: string) => void;
@@ -53,13 +62,28 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
 }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  const annotations = (m.annotations_data ?? []) as Array<{ type?: string; contenu?: string }>;
+  const [lignes, setLignes] = useState<LigneDevisMin[]>([]);
+  const [lignesLoading, setLignesLoading] = useState(false);
+  const annotations = (m.annotations_data ?? []) as Array<{ type?: string; ligne_id?: string; contenu?: string }>;
   const isAnnotation = annotations.length > 0;
   const isRefus = m.subject.toLowerCase().includes("refus");
 
   const handleExpand = () => {
     if (!m.read) onMarkRead(m.id);
-    setExpanded(v => !v);
+    const next = !expanded;
+    setExpanded(next);
+    if (next && m.document_id && m.document_type === "devis" && lignes.length === 0) {
+      setLignesLoading(true);
+      (supabase as any)
+        .from("lignes_devis")
+        .select("id, designation, quantite, unite, prix_unitaire, ordre")
+        .eq("devis_id", m.document_id)
+        .order("ordre")
+        .then(({ data }: any) => {
+          setLignes(data ?? []);
+          setLignesLoading(false);
+        });
+    }
   };
 
   return (
@@ -113,8 +137,58 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
           )}
 
           {expanded && isAnnotation && (
-            <div className="mt-2 space-y-1 pl-2 border-l-2 border-primary/20">
-              {annotations.map((a, i) => (
+            <div className="mt-2 pl-2 border-l-2 border-primary/20 space-y-2">
+              {lignesLoading && (
+                <p className="text-xs text-muted-foreground">Chargement des lignes…</p>
+              )}
+              {!lignesLoading && lignes.length > 0 && (() => {
+                const lineAnnotMap: Record<string, typeof annotations> = {};
+                const globalAnnots: typeof annotations = [];
+                annotations.forEach(a => {
+                  if (a.ligne_id) {
+                    if (!lineAnnotMap[a.ligne_id]) lineAnnotMap[a.ligne_id] = [];
+                    lineAnnotMap[a.ligne_id].push(a);
+                  } else {
+                    globalAnnots.push(a);
+                  }
+                });
+                return (
+                  <div className="space-y-1">
+                    {lignes.map(l => {
+                      const lanns = lineAnnotMap[l.id] ?? [];
+                      const hasAnn = lanns.length > 0;
+                      const hasStrike = lanns.some(a => a.type === "line_strikethrough");
+                      return (
+                        <div key={l.id} className={`rounded px-2 py-1 ${hasAnn ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/40" : "bg-muted/30"}`}>
+                          <div className="flex justify-between gap-2 text-xs">
+                            <span className={`${hasStrike ? "line-through opacity-50" : ""} ${hasAnn ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                              {l.designation}
+                            </span>
+                            <span className="text-muted-foreground whitespace-nowrap shrink-0">
+                              {l.quantite} {l.unite} × {Number(l.prix_unitaire).toFixed(2)} €
+                            </span>
+                          </div>
+                          {lanns.map((a, i) => (
+                            <div key={i} className="mt-0.5 text-xs text-amber-700 dark:text-amber-400 italic flex items-center gap-1">
+                              <Pencil className="w-2.5 h-2.5 shrink-0" />
+                              {a.type === "line_strikethrough" && "Suppression demandée"}
+                              {a.type === "line_circled" && "Ligne entourée"}
+                              {a.type === "line_comment" && `"${a.contenu}"`}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                    {globalAnnots.length > 0 && (
+                      <div className="mt-1 bg-muted/40 rounded px-2 py-1 text-xs text-foreground/80 border-t border-border/40">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Commentaire général : </span>
+                        {globalAnnots.map((a, i) => <span key={i}>{a.contenu}</span>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              {!lignesLoading && lignes.length === 0 && annotations.map((a, i) => (
                 <div key={i} className="text-xs text-foreground/80 bg-muted/40 rounded px-2 py-1">
                   {a.contenu ?? "—"}
                 </div>

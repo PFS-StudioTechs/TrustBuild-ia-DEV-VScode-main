@@ -179,14 +179,20 @@ function isExpired(date_validite: string | null) {
 
 // ─── Composant lignes éditables ─────────────────────────────
 
+type AnnotationItem = { type?: string; ligne_id?: string; contenu?: string };
+
 function LignesEditor({
   lignes,
   onChange,
   disabled,
+  allAnnotations,
+  onAnnotationDelete,
 }: {
   lignes: LigneDevis[];
   onChange: (l: LigneDevis[]) => void;
   disabled?: boolean;
+  allAnnotations?: AnnotationItem[];
+  onAnnotationDelete?: (index: number) => void;
 }) {
   const addLigne = () =>
     onChange([...lignes, { designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: lignes.length }]);
@@ -200,48 +206,80 @@ function LignesEditor({
 
   return (
     <div className="space-y-2">
-      {lignes.map((l, i) => (
-        <div key={i} className="grid grid-cols-12 gap-1 items-center">
-          <Input
-            className="col-span-5 text-xs"
-            placeholder="Désignation"
-            value={l.designation}
-            onChange={(e) => updateLigne(i, "designation", e.target.value)}
-            disabled={disabled}
-          />
-          <Input
-            className="col-span-2 text-xs"
-            type="number"
-            placeholder="Qté"
-            value={l.quantite}
-            onChange={(e) => updateLigne(i, "quantite", parseFloat(e.target.value) || 0)}
-            disabled={disabled}
-          />
-          <Input
-            className="col-span-1 text-xs"
-            placeholder="u."
-            value={l.unite}
-            onChange={(e) => updateLigne(i, "unite", e.target.value)}
-            disabled={disabled}
-          />
-          <Input
-            className="col-span-2 text-xs"
-            type="number"
-            placeholder="P.U."
-            value={l.prix_unitaire}
-            onChange={(e) => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)}
-            disabled={disabled}
-          />
-          <div className="col-span-1 text-xs text-right font-mono text-muted-foreground">
-            {(l.quantite * l.prix_unitaire).toFixed(2)}
+      {lignes.map((l, i) => {
+        const ligneAnns = allAnnotations && l.id
+          ? allAnnotations.map((a, idx) => ({ ...a, _idx: idx })).filter(a => a.ligne_id === l.id)
+          : [];
+        const hasStrikethrough = ligneAnns.some(a => a.type === "line_strikethrough");
+        return (
+          <div key={i} className={ligneAnns.length > 0 ? "rounded-md bg-amber-50/60 dark:bg-amber-900/10 border border-amber-200/60 dark:border-amber-700/40 p-1" : ""}>
+            <div className="grid grid-cols-12 gap-1 items-center">
+              <Input
+                className={`col-span-5 text-xs ${hasStrikethrough ? "line-through opacity-60" : ""}`}
+                placeholder="Désignation"
+                value={l.designation}
+                onChange={(e) => updateLigne(i, "designation", e.target.value)}
+                disabled={disabled}
+              />
+              <Input
+                className="col-span-2 text-xs"
+                type="number"
+                placeholder="Qté"
+                value={l.quantite}
+                onChange={(e) => updateLigne(i, "quantite", parseFloat(e.target.value) || 0)}
+                disabled={disabled}
+              />
+              <Input
+                className="col-span-1 text-xs"
+                placeholder="u."
+                value={l.unite}
+                onChange={(e) => updateLigne(i, "unite", e.target.value)}
+                disabled={disabled}
+              />
+              <Input
+                className="col-span-2 text-xs"
+                type="number"
+                placeholder="P.U."
+                value={l.prix_unitaire}
+                onChange={(e) => updateLigne(i, "prix_unitaire", parseFloat(e.target.value) || 0)}
+                disabled={disabled}
+              />
+              <div className="col-span-1 text-xs text-right font-mono text-muted-foreground">
+                {(l.quantite * l.prix_unitaire).toFixed(2)}
+              </div>
+              {!disabled && (
+                <button onClick={() => removeLigne(i)} className="col-span-1 text-destructive hover:opacity-80">
+                  <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                </button>
+              )}
+            </div>
+            {ligneAnns.length > 0 && (
+              <div className="mt-1 space-y-0.5 pl-1">
+                {ligneAnns.map(a => (
+                  <div key={a._idx} className="flex items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-400">
+                    <span className="flex items-center gap-1">
+                      <Pencil className="w-2.5 h-2.5 shrink-0" />
+                      {a.type === "line_strikethrough" && "Suppression demandée"}
+                      {a.type === "line_circled" && "Ligne entourée"}
+                      {a.type === "line_comment" && `"${a.contenu}"`}
+                    </span>
+                    {onAnnotationDelete && (
+                      <button
+                        type="button"
+                        onClick={() => onAnnotationDelete(a._idx)}
+                        className="text-muted-foreground hover:text-destructive shrink-0"
+                        title="Marquer comme traitée"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {!disabled && (
-            <button onClick={() => removeLigne(i)} className="col-span-1 text-destructive hover:opacity-80">
-              <Trash2 className="w-3.5 h-3.5 mx-auto" />
-            </button>
-          )}
-        </div>
-      ))}
+        );
+      })}
       {!disabled && (
         <Button type="button" variant="outline" size="sm" onClick={addLigne} className="w-full text-xs">
           <Plus className="w-3.5 h-3.5 mr-1" /> Ajouter une ligne
@@ -273,7 +311,7 @@ function DevisDialog({
   editDevis: DevisRow | null;
   preselectedClientId: string | null;
   artisanId: string;
-  annotations?: Array<{ type?: string; contenu?: string }>;
+  annotations?: AnnotationItem[];
   onAnnotationDelete?: (index: number) => void;
 }) {
   const { log } = useLog();
@@ -391,29 +429,6 @@ function DevisDialog({
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {annotations && annotations.length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 space-y-2">
-              <p className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-xs font-semibold">
-                <Pencil className="w-3.5 h-3.5" />
-                Annotations client ({annotations.length})
-              </p>
-              {annotations.map((a, i) => (
-                <div key={i} className="flex items-start justify-between gap-2">
-                  <span className="text-xs text-foreground/80">{a.contenu ?? "—"}</span>
-                  {onAnnotationDelete && (
-                    <button
-                      type="button"
-                      onClick={() => onAnnotationDelete(i)}
-                      className="text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
-                      title="Marquer comme traitée"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
           {/* Client */}
           {!editDevis && (
             <div className="space-y-2">
@@ -516,7 +531,36 @@ function DevisDialog({
               <span className="col-span-2">P.U. €</span>
               <span className="col-span-2 text-right">Total</span>
             </div>
-            <LignesEditor lignes={lignes} onChange={setLignes} disabled={isLocked} />
+            <LignesEditor
+              lignes={lignes}
+              onChange={setLignes}
+              disabled={isLocked}
+              allAnnotations={annotations}
+              onAnnotationDelete={onAnnotationDelete}
+            />
+            {annotations && annotations.filter(a => !a.ligne_id).length > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md p-2 space-y-1">
+                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Commentaire global du client</p>
+                {annotations.filter(a => !a.ligne_id).map((a, i) => {
+                  const globalIdx = annotations.indexOf(a);
+                  return (
+                    <div key={i} className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-foreground/80">{a.contenu}</span>
+                      {onAnnotationDelete && (
+                        <button
+                          type="button"
+                          onClick={() => onAnnotationDelete(globalIdx)}
+                          className="text-muted-foreground hover:text-destructive shrink-0"
+                          title="Marquer comme traitée"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {!isLocked && (
@@ -1546,14 +1590,14 @@ function DevisCard({
   const [avoirRectifSaving, setAvoirRectifSaving] = useState(false);
   const [emailDetailOpen, setEmailDetailOpen] = useState(false);
   const [emailDetailMsg, setEmailDetailMsg] = useState<{ subject: string; body: string; to_email: string; to_name: string | null; sent_at: string } | null>(null);
-  const [pendingAnnotations, setPendingAnnotations] = useState<Array<{ type?: string; contenu?: string }>>([]);
+  const [pendingAnnotations, setPendingAnnotations] = useState<AnnotationItem[]>([]);
   const [loadedMsgId, setLoadedMsgId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!autoOpen || !pendingMessageId) return;
     (supabase as any).from("messages").select("annotations_data").eq("id", pendingMessageId).single()
       .then(({ data }: any) => {
-        setPendingAnnotations((data?.annotations_data ?? []) as Array<{ type?: string; contenu?: string }>);
+        setPendingAnnotations((data?.annotations_data ?? []) as AnnotationItem[]);
         setLoadedMsgId(pendingMessageId);
         setEditOpen(true);
       });
