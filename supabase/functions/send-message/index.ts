@@ -62,7 +62,7 @@ serve(async (req) => {
 
   const serviceClient = createClient(supabaseUrl, serviceKey);
 
-  const { to_email, to_name, subject, body, document_type, document_id } = await req.json();
+  const { to_email, to_name, subject, body, document_type, document_id, pdf_attachment_base64, pdf_filename } = await req.json();
   if (!to_email || !subject || !body) {
     return new Response(JSON.stringify({ error: "Champs manquants (to_email, subject, body)" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -112,6 +112,15 @@ serve(async (req) => {
       subject,
       content,
     };
+
+    if (pdf_attachment_base64 && pdf_filename) {
+      payload.attachments = [{
+        content: pdf_attachment_base64,
+        filename: pdf_filename,
+        type: "application/pdf",
+        disposition: "attachment",
+      }];
+    }
 
     const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",

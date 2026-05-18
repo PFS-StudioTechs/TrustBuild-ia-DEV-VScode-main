@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useLog } from "@/hooks/useLog";
 import { toast } from "sonner";
+import { generateDevisPdfBytes, LignePdf } from "@/lib/generatePdf";
 
 interface BaseDoc {
   id: string;
@@ -51,6 +52,7 @@ export default function SendEmailDialog(props: Props) {
   const [sending, setSending] = useState(false);
   const [artisanNom, setArtisanNom] = useState("");
   const [tokenPublic, setTokenPublic] = useState<string | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
 
   const montantTTC = doc.montant_ht * (1 + doc.tva / 100);
 
@@ -63,6 +65,33 @@ export default function SendEmailDialog(props: Props) {
     if (type === "devis") {
       (supabase.from("devis" as any).select("token_public").eq("id", doc.id).single() as any)
         .then(({ data }: any) => setTokenPublic(data?.token_public ?? null));
+
+      (supabase as any).from("lignes_devis")
+        .select("designation,quantite,unite,prix_unitaire,tva,section_nom")
+        .eq("devis_id", doc.id)
+        .order("ordre")
+        .then(({ data: lignesData }: any) => {
+          const lignes: LignePdf[] = (lignesData ?? []).map((l: any) => ({
+            designation: l.designation,
+            quantite: l.quantite,
+            unite: l.unite,
+            prix_unitaire: l.prix_unitaire,
+            tva: l.tva,
+            section_nom: l.section_nom ?? null,
+          }));
+          const bytes = generateDevisPdfBytes({
+            numero: doc.numero,
+            montant_ht: doc.montant_ht,
+            tva: doc.tva,
+            statut: "envoye",
+            date_validite: (props as SendEmailDialogDevisProps).doc.date_validite,
+            created_at: doc.created_at,
+            clientNom: clientNom || undefined,
+            chantierNom: doc.chantierNom,
+            lignes,
+          });
+          setPdfBytes(bytes);
+        });
     }
   }, [open, user, type, doc.id]);
 
@@ -102,6 +131,12 @@ export default function SendEmailDialog(props: Props) {
 
     setSending(true);
     try {
+      let pdfAttachmentBase64: string | undefined;
+      if (type === "devis" && pdfBytes) {
+        const binary = Array.from(pdfBytes).map(b => String.fromCharCode(b)).join("");
+        pdfAttachmentBase64 = btoa(binary);
+      }
+
       const { data, error } = await supabase.functions.invoke("send-message", {
         body: {
           to_email: toEmail.trim(),
@@ -110,6 +145,8 @@ export default function SendEmailDialog(props: Props) {
           body,
           document_type: type,
           document_id: doc.id,
+          pdf_attachment_base64: pdfAttachmentBase64,
+          pdf_filename: pdfAttachmentBase64 ? `Devis_${doc.numero}.pdf` : undefined,
         },
       });
 
