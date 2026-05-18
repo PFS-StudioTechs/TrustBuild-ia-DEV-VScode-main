@@ -154,6 +154,12 @@ export default function CompleteProfile() {
       ].filter(Boolean).join(" ");
       const raisonSociale = result.nom_complet || result.nom_raison_sociale || "";
       const siren = result.siren ?? siretClean.slice(0, 9);
+      const { data: available } = await supabase.rpc("check_siret_available", { p_siret: siretClean });
+      if (available === false) {
+        setSiretStatus("error");
+        setSiretError("Ce SIRET est déjà associé à un compte TrustBuild-IA");
+        return;
+      }
       setSiretData({
         siret: siretClean,
         siren,
