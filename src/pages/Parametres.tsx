@@ -304,6 +304,10 @@ export default function Parametres() {
       toast.error("Veuillez vérifier le SIRET avant d'enregistrer");
       return;
     }
+    if (!tvaIntra) {
+      toast.error("Le numéro de TVA intracommunautaire est requis");
+      return;
+    }
     setSaving(true);
     const update: Record<string, unknown> = { nom, prenom, tva_intracommunautaire: tvaIntra || null };
     if (siretData && siretStatus === "valid") {

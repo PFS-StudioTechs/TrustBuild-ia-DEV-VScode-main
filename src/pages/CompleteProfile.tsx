@@ -190,6 +190,10 @@ export default function CompleteProfile() {
 
   const handleSubmit = async () => {
     if (!siretData || !user) return;
+    if (!tvaIntra) {
+      setSubmitError("Le numéro de TVA intracommunautaire est requis. Veuillez valider votre SIRET.");
+      return;
+    }
     setSaving(true);
     try {
       const { error } = await supabase
