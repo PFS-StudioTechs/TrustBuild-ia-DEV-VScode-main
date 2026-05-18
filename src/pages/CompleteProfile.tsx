@@ -126,26 +126,48 @@ export default function CompleteProfile() {
     setSiretError("");
     setSiretData(null);
     try {
-      const { data, error } = await supabase.functions.invoke("validate-siret", {
-        body: { siret: siretClean },
-      });
-      if (error) {
-        let errMsg = "Impossible de vérifier le SIRET";
-        try {
-          const body = await (error as any).context?.json?.();
-          if (body?.error) errMsg = body.error;
-        } catch {}
-        throw new Error(errMsg);
-      }
-      if (data?.error) throw new Error(data.error);
-      if (!data.actif) {
-        setSiretStatus("inactive");
-        setSiretError("Cet établissement est fermé (état administratif inactif dans la base INSEE)");
+      const res = await fetch(
+        `https://recherche-entreprises.api.gouv.fr/search?q=${siretClean}&page=1&per_page=1`
+      );
+      if (!res.ok) throw new Error("API indisponible");
+      const json = await res.json();
+      const result = json.results?.[0];
+      const siretMatch =
+        result?.siege?.siret === siretClean ||
+        result?.matching_etablissements?.some((e: any) => e.siret === siretClean);
+      if (!result || !siretMatch) {
+        setSiretStatus("error");
+        setSiretError("SIRET introuvable dans le registre");
         return;
       }
-      setSiretData(data as SiretData);
+      const etab = result.matching_etablissements?.find((e: any) => e.siret === siretClean) ?? result.siege;
+      if (etab?.etat_administratif !== "A") {
+        setSiretStatus("inactive");
+        setSiretError("Cet établissement est fermé (état administratif inactif)");
+        return;
+      }
+      const siege = result.siege ?? {};
+      const adresse = [
+        etab?.numero_voie ?? siege.numero_voie,
+        etab?.type_voie ?? siege.type_voie,
+        etab?.libelle_voie ?? siege.libelle_voie,
+      ].filter(Boolean).join(" ");
+      const raisonSociale = result.nom_complet || result.nom_raison_sociale || "";
+      const siren = result.siren ?? siretClean.slice(0, 9);
+      setSiretData({
+        siret: siretClean,
+        siren,
+        raisonSociale,
+        nomCommercial: raisonSociale,
+        adresse,
+        codePostal: etab?.code_postal ?? siege.code_postal ?? "",
+        ville: etab?.libelle_commune ?? siege.libelle_commune ?? "",
+        pays: "France",
+        activite: result.activite_principale ?? "",
+        formeJuridique: result.nature_juridique ?? "",
+        actif: true,
+      });
       setSiretStatus("valid");
-      const siren = (data as SiretData).siret.slice(0, 9);
       const key = ((12 + 3 * (parseInt(siren) % 97)) % 97).toString().padStart(2, "0");
       setTvaIntra(`FR${key}${siren}`);
     } catch (err: any) {
