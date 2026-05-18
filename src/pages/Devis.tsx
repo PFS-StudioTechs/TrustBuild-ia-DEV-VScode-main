@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Plus, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
+  Plus, X, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
   GitBranch, RotateCcw, ClipboardList, Layers, Mail, Download,
@@ -262,6 +262,8 @@ function DevisDialog({
   editDevis,
   preselectedClientId,
   artisanId,
+  annotations,
+  onAnnotationDelete,
 }: {
   open: boolean;
   onClose: () => void;
@@ -271,6 +273,8 @@ function DevisDialog({
   editDevis: DevisRow | null;
   preselectedClientId: string | null;
   artisanId: string;
+  annotations?: Array<{ type?: string; contenu?: string }>;
+  onAnnotationDelete?: (index: number) => void;
 }) {
   const { log } = useLog();
   const isLocked = editDevis?.statut === "signe" || editDevis?.statut === "remplace";
@@ -387,6 +391,29 @@ function DevisDialog({
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
+          {annotations && annotations.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 space-y-2">
+              <p className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+                <Pencil className="w-3.5 h-3.5" />
+                Annotations client ({annotations.length})
+              </p>
+              {annotations.map((a, i) => (
+                <div key={i} className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-foreground/80">{a.contenu ?? "—"}</span>
+                  {onAnnotationDelete && (
+                    <button
+                      type="button"
+                      onClick={() => onAnnotationDelete(i)}
+                      className="text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
+                      title="Marquer comme traitée"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           {/* Client */}
           {!editDevis && (
             <div className="space-y-2">
@@ -1477,6 +1504,8 @@ function DevisCard({
   nomenclatureSettings,
   artisanId,
   onRefresh,
+  autoOpen,
+  pendingMessageId,
 }: {
   devis: DevisRow;
   avenants: Avenant[];
@@ -1487,6 +1516,8 @@ function DevisCard({
   nomenclatureSettings: NomenclatureSettings;
   artisanId: string;
   onRefresh: () => void;
+  autoOpen?: boolean;
+  pendingMessageId?: string;
 }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
@@ -1515,6 +1546,25 @@ function DevisCard({
   const [avoirRectifSaving, setAvoirRectifSaving] = useState(false);
   const [emailDetailOpen, setEmailDetailOpen] = useState(false);
   const [emailDetailMsg, setEmailDetailMsg] = useState<{ subject: string; body: string; to_email: string; to_name: string | null; sent_at: string } | null>(null);
+  const [pendingAnnotations, setPendingAnnotations] = useState<Array<{ type?: string; contenu?: string }>>([]);
+  const [loadedMsgId, setLoadedMsgId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!autoOpen || !pendingMessageId) return;
+    (supabase as any).from("messages").select("annotations_data").eq("id", pendingMessageId).single()
+      .then(({ data }: any) => {
+        setPendingAnnotations((data?.annotations_data ?? []) as Array<{ type?: string; contenu?: string }>);
+        setLoadedMsgId(pendingMessageId);
+        setEditOpen(true);
+      });
+  }, [autoOpen, pendingMessageId]);
+
+  const handleDeleteAnnotation = async (index: number) => {
+    if (!loadedMsgId) return;
+    const updated = pendingAnnotations.filter((_, i) => i !== index);
+    setPendingAnnotations(updated);
+    await (supabase as any).from("messages").update({ annotations_data: updated }).eq("id", loadedMsgId);
+  };
 
   const openDevisPdf = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2280,6 +2330,8 @@ function DevisCard({
         editDevis={devis}
         preselectedClientId={null}
         artisanId={artisanId}
+        annotations={pendingAnnotations.length > 0 ? pendingAnnotations : undefined}
+        onAnnotationDelete={loadedMsgId ? handleDeleteAnnotation : undefined}
       />
       <AvenantDialog
         open={avenantOpen}
@@ -2691,6 +2743,8 @@ export default function DevisPage() {
                 nomenclatureSettings={nomenclatureSettings}
                 artisanId={user.id}
                 onRefresh={loadAll}
+                autoOpen={searchParams.get("open") === d.id}
+                pendingMessageId={searchParams.get("open") === d.id ? (searchParams.get("msgId") ?? undefined) : undefined}
               />
             </div>
           ))}

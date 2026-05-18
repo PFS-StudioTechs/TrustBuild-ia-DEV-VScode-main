@@ -127,7 +127,7 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
               size="sm"
               variant="outline"
               className="mt-2 gap-1.5 text-primary border-primary/40 hover:bg-primary/10"
-              onClick={() => navigate("/devis")}
+              onClick={() => navigate(`/devis?open=${m.document_id}&msgId=${m.id}`)}
             >
               <ArrowRight className="w-3.5 h-3.5" />
               Modifier le devis
