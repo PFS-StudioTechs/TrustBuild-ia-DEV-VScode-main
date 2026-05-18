@@ -14,6 +14,8 @@ function json(data: unknown, status = 200) {
   });
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function fmtMoney(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
@@ -420,7 +422,7 @@ serve(async (req) => {
 
   // ── GET : récupère le devis par token public ──────────────────────────────
   if (req.method === "GET") {
-    if (!token) return json({ error: "Token manquant" }, 400);
+    if (!token || !UUID_RE.test(token)) return json({ error: "Token invalide" }, 400);
 
     const { data: devis, error } = await db
       .from("devis")
@@ -477,7 +479,7 @@ serve(async (req) => {
     }
 
     const effectiveToken = (body.token as string | undefined) ?? token;
-    if (!effectiveToken) return json({ error: "Token manquant" }, 400);
+    if (!effectiveToken || !UUID_RE.test(effectiveToken)) return json({ error: "Token invalide" }, 400);
 
     const { data: devis } = await db
       .from("devis")
@@ -502,6 +504,14 @@ serve(async (req) => {
     // ── ANNOTER ──────────────────────────────────────────────────────────────
     if (action === "annotate") {
       const annotations = (body.annotations as unknown[]) ?? [];
+
+      if (annotations.length > 50) return json({ error: "Trop d'annotations (max 50)" }, 400);
+      for (const a of annotations as Record<string, unknown>[]) {
+        if (typeof a.contenu === "string" && a.contenu.length > 2000)
+          return json({ error: "Annotation trop longue (max 2000 caractères)" }, 400);
+        if (typeof a.ligne_id === "string" && !UUID_RE.test(a.ligne_id))
+          return json({ error: "Format ligne_id invalide" }, 400);
+      }
 
       await db.from("devis_annotations").delete().eq("devis_id", devisId);
       if (annotations.length > 0) {
@@ -534,6 +544,9 @@ serve(async (req) => {
     // ── REFUSER ───────────────────────────────────────────────────────────────
     if (action === "refuse") {
       const comment = body.comment as string | undefined;
+
+      if (typeof comment === "string" && comment.length > 2000)
+        return json({ error: "Motif trop long (max 2000 caractères)" }, 400);
 
       await db.from("devis").update({ statut: "refuse" }).eq("id", devisId);
 
@@ -592,6 +605,7 @@ serve(async (req) => {
     if (action === "sign") {
       const signatureData = body.signature_data as string | undefined;
       if (!signatureData) return json({ error: "Signature manquante" }, 400);
+      if (signatureData.length > 2_000_000) return json({ error: "Signature trop volumineuse (max 1.5 Mo)" }, 400);
 
       const bonPourAccord = (body.bon_pour_accord as string) || "Bon pour accord";
 
