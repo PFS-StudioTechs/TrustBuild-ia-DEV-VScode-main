@@ -42,6 +42,7 @@ export default function AgentChat({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lastTranscription, setLastTranscription] = useState<string | null>(null);
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -161,7 +162,7 @@ export default function AgentChat({
             if (!autoSendCancelledRef.current) send(data.text);
           }, 1500);
         } else {
-          toast.success("Transcription terminée — vérifiez et envoyez");
+          setLastTranscription(data.text);
         }
       } else {
         toast.error("Aucun texte détecté");
@@ -183,6 +184,7 @@ export default function AgentChat({
     const updated = [...messages, userMsg];
     setMessages(updated);
     setInput("");
+    setLastTranscription(null);
     setLoading(true);
     resetTtsStream();
 
@@ -707,8 +709,14 @@ function buildConversationHtml(params: {
       )}
 
       {/* Input */}
-      <div className="border-t p-3 shrink-0 bg-card">
-        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-2 max-w-4xl mx-auto">
+      <div className="border-t shrink-0 bg-card">
+        {lastTranscription && input.trim() && (
+          <div className="px-3 pt-2 pb-0 flex items-center gap-1.5 text-xs text-emerald-600 max-w-4xl mx-auto">
+            <svg className="w-3 h-3 shrink-0" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="currentColor"/><path d="M3.5 6l2 2 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Transcription prête — vérifiez et envoyez
+          </div>
+        )}
+        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-2 max-w-4xl mx-auto p-3">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}

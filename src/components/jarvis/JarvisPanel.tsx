@@ -186,7 +186,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       });
       if (!resp.ok) throw new Error("Transcription failed");
       const data = await resp.json();
-      if (data.text) { setInput(data.text); setLastTranscription(data.text); toast.success("Transcription terminée — vérifiez et envoyez"); }
+      if (data.text) { setInput(data.text); setLastTranscription(data.text); }
       else toast.error("Aucun texte détecté");
     } catch { toast.error("Erreur de transcription audio"); }
     finally { setTranscribing(false); }
@@ -543,8 +543,14 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* Input */}
-      <div className="border-t p-2 shrink-0 bg-card">
-        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-2">
+      <div className="border-t shrink-0 bg-card">
+        {lastTranscription && input.trim() && (
+          <div className="px-3 pt-2 pb-0 flex items-center gap-1.5 text-xs text-emerald-600">
+            <svg className="w-3 h-3 shrink-0" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="currentColor"/><path d="M3.5 6l2 2 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Transcription prête — vérifiez et envoyez
+          </div>
+        )}
+        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-2 p-2">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
