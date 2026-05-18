@@ -20,6 +20,7 @@ import Parametres from "@/pages/Parametres";
 import Admin from "@/pages/Admin";
 import Finances from "@/pages/Finances";
 import ResetPassword from "@/pages/ResetPassword";
+import AuthCallback from "@/pages/AuthCallback";
 import Knowledge from "@/pages/Knowledge";
 import Testing from "@/pages/Testing";
 import NotFound from "@/pages/NotFound";
@@ -166,6 +167,7 @@ const App = () => {
                 <Route path="/devis/view/:token" element={<DevisPublic />} />
                 <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/complete-profile" element={<AuthRequiredRoute><CompleteProfile /></AuthRequiredRoute>} />
                 <Route path="/upload-kbis" element={<AuthRequiredRoute><UploadKbis /></AuthRequiredRoute>} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
