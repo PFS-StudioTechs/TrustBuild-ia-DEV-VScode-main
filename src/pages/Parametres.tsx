@@ -72,7 +72,16 @@ export default function Parametres() {
         if (!data) return;
         setNom(data.nom);
         setPrenom(data.prenom);
-        setTvaIntra((data as any).tva_intracommunautaire ?? "");
+        const storedTva = (data as any).tva_intracommunautaire ?? "";
+        if (storedTva) {
+          setTvaIntra(storedTva);
+        } else if (data.siret) {
+          const siren = data.siret.slice(0, 9);
+          const key = ((12 + 3 * (parseInt(siren) % 97)) % 97).toString().padStart(2, "0");
+          const computed = `FR${key}${siren}`;
+          setTvaIntra(computed);
+          supabase.from("profiles").update({ tva_intracommunautaire: computed }).eq("user_id", user!.id);
+        }
         if (data.siret) {
           const formatted = formatSiret(data.siret);
           setSiretInput(formatted);
@@ -450,10 +459,12 @@ export default function Parametres() {
             <Label className="text-small">N° TVA intracommunautaire</Label>
             <Input
               value={tvaIntra}
-              onChange={(e) => setTvaIntra(e.target.value.toUpperCase())}
+              onChange={(e) => isAdmin && setTvaIntra(e.target.value.toUpperCase())}
               placeholder="FR12345678901"
-              className="touch-target font-mono"
+              className={`touch-target font-mono${!isAdmin ? " bg-muted/40 text-muted-foreground cursor-not-allowed" : ""}`}
               maxLength={13}
+              disabled={!isAdmin}
+              readOnly={!isAdmin}
             />
           </div>
           <div className="space-y-1.5">

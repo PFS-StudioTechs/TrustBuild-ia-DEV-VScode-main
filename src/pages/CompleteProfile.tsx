@@ -50,9 +50,10 @@ export default function CompleteProfile() {
     if (siretData) return;
     const meta = user?.user_metadata;
     if (meta?.siret) {
+      const siren = String(meta.siret).slice(0, 9);
       setSiretData({
         siret: meta.siret,
-        siren: String(meta.siret).slice(0, 9),
+        siren,
         raisonSociale: meta.raison_sociale ?? "",
         nomCommercial: meta.nom_commercial ?? "",
         adresse: meta.adresse ?? "",
@@ -64,10 +65,13 @@ export default function CompleteProfile() {
         actif: true,
       });
       setSiretStatus("valid");
+      const key = ((12 + 3 * (parseInt(siren) % 97)) % 97).toString().padStart(2, "0");
+      setTvaIntra(`FR${key}${siren}`);
     } else if (profile?.siret) {
+      const siren = profile.siret.slice(0, 9);
       setSiretData({
         siret: profile.siret,
-        siren: profile.siret.slice(0, 9),
+        siren,
         raisonSociale: profile.raison_sociale ?? "",
         nomCommercial: profile.nom_commercial ?? "",
         adresse: profile.adresse ?? "",
@@ -79,6 +83,8 @@ export default function CompleteProfile() {
         actif: true,
       });
       setSiretStatus("valid");
+      const key = ((12 + 3 * (parseInt(siren) % 97)) % 97).toString().padStart(2, "0");
+      setTvaIntra(`FR${key}${siren}`);
     }
   }, [user, profile]);
 

@@ -20,7 +20,7 @@ interface EnrichedUser {
   email: string;
   created_at: string;
   last_sign_in_at: string | null;
-  profile: { nom: string; prenom: string; siret: string | null; plan_abonnement: string } | null;
+  profile: { nom: string; prenom: string; siret: string | null; plan_abonnement: string; tva_intracommunautaire: string | null } | null;
   roles: string[];
 }
 
@@ -70,6 +70,7 @@ export default function Admin() {
   const [editNom, setEditNom] = useState("");
   const [editPrenom, setEditPrenom] = useState("");
   const [editSiret, setEditSiret] = useState("");
+  const [editTvaIntra, setEditTvaIntra] = useState("");
   const [editPlan, setEditPlan] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -156,6 +157,7 @@ export default function Admin() {
     setEditNom(u.profile?.nom || "");
     setEditPrenom(u.profile?.prenom || "");
     setEditSiret(u.profile?.siret || "");
+    setEditTvaIntra(u.profile?.tva_intracommunautaire || "");
     setEditPlan(u.profile?.plan_abonnement || "gratuit");
   };
 
@@ -165,7 +167,7 @@ export default function Admin() {
     try {
       await adminAction("update_profile", {
         user_id: editUser.id,
-        updates: { nom: editNom, prenom: editPrenom, siret: editSiret, plan_abonnement: editPlan },
+        updates: { nom: editNom, prenom: editPrenom, siret: editSiret, tva_intracommunautaire: editTvaIntra || null, plan_abonnement: editPlan },
       });
       toast.success("Profil mis à jour");
       setEditUser(null);
@@ -603,6 +605,7 @@ export default function Admin() {
               <div className="space-y-1.5"><Label className="text-small">Nom</Label><Input value={editNom} onChange={(e) => setEditNom(e.target.value)} className="touch-target" /></div>
             </div>
             <div className="space-y-1.5"><Label className="text-small">SIRET</Label><Input value={editSiret} onChange={(e) => setEditSiret(e.target.value)} className="touch-target font-mono" /></div>
+            <div className="space-y-1.5"><Label className="text-small">N° TVA intracommunautaire</Label><Input value={editTvaIntra} onChange={(e) => setEditTvaIntra(e.target.value.toUpperCase())} placeholder="FR12345678901" className="touch-target font-mono" maxLength={13} /></div>
             <div className="space-y-1.5">
               <Label className="text-small">Plan d'abonnement</Label>
               <Select value={editPlan} onValueChange={setEditPlan}>
