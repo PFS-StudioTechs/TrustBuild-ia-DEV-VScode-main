@@ -7,10 +7,17 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const securityHeaders = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "X-XSS-Protection": "0",
+};
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...cors, "Content-Type": "application/json" },
+    headers: { ...cors, ...securityHeaders, "Content-Type": "application/json" },
   });
 }
 
