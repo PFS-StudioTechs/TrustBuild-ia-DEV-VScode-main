@@ -135,12 +135,27 @@ export default function SendEmailDialog(props: Props) {
 
     setSending(true);
     try {
+      // Génère token frais avant envoi — garantit que lien email = lien en DB
+      let finalBody = body;
+      if (meta.tokenTable) {
+        const freshToken = crypto.randomUUID();
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 90);
+        await (supabase as any).from(meta.tokenTable).update({
+          token_public: freshToken,
+          token_expires_at: expiresAt.toISOString(),
+        }).eq("id", doc.id);
+        if (tokenPublic) {
+          finalBody = body.replace(tokenPublic, freshToken);
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke("send-message", {
         body: {
           to_email: toEmail.trim(),
           to_name: clientNom || undefined,
           subject,
-          body,
+          body: finalBody,
           document_type: type,
           document_id: doc.id,
         },
@@ -148,18 +163,15 @@ export default function SendEmailDialog(props: Props) {
 
       if (error) throw new Error(error.message);
 
-      // Met à jour le statut + expiration token
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 90);
-
+      // Met à jour le statut (token_public + token_expires_at déjà mis à jour ci-dessus)
       if (type === "devis") {
-        await supabase.from("devis").update({ statut: "envoye", token_expires_at: expiresAt.toISOString() } as any).eq("id", doc.id);
+        await supabase.from("devis").update({ statut: "envoye" } as any).eq("id", doc.id);
       } else if (type === "facture") {
         await supabase.from("factures").update({ statut: "envoyee" } as any).eq("id", doc.id);
       } else if (type === "avenant") {
-        await (supabase as any).from("avenants").update({ statut: "envoye", token_expires_at: expiresAt.toISOString() }).eq("id", doc.id);
+        await (supabase as any).from("avenants").update({ statut: "envoye" }).eq("id", doc.id);
       } else {
-        await (supabase as any).from("travaux_supplementaires").update({ statut: "envoye", token_expires_at: expiresAt.toISOString() }).eq("id", doc.id);
+        await (supabase as any).from("travaux_supplementaires").update({ statut: "envoye" }).eq("id", doc.id);
       }
 
       if (data?.status === "sent") {
