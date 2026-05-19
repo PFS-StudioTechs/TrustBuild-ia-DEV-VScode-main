@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [loaded, setLoaded] = useState(false);
   const [nouveauOpen, setNouveauOpen] = useState(false);
   const [jarvisMessage, setJarvisMessage] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -90,6 +91,13 @@ export default function Dashboard() {
         parts.push("Je peux rédiger une relance si tu veux.");
       }
       setJarvisMessage(parts.join(" "));
+
+      const { data: inboundMsgs } = await (supabase as any)
+        .from("messages")
+        .select("id, read")
+        .eq("artisan_id", user.id)
+        .eq("direction", "inbound");
+      setUnreadCount((inboundMsgs ?? []).filter((m: any) => !m.read).length);
 
       setLoaded(true);
     };
@@ -175,14 +183,21 @@ export default function Dashboard() {
               Nouveau
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${nouveauOpen ? "rotate-180" : ""}`} />
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate("/messagerie")}
-              className="touch-target flex items-center gap-2 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all"
-            >
-              <MessageSquare className="w-4 h-4" />
-              Messagerie
-            </Button>
+            <div className="relative">
+              <Button
+                variant="outline"
+                onClick={() => navigate("/messagerie")}
+                className={`touch-target flex items-center gap-2 rounded-lg border-border hover:border-primary/30 hover:bg-primary-glow transition-all ${unreadCount > 0 ? "animate-msg-bounce" : ""}`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Messagerie
+              </Button>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center leading-none px-1 animate-badge-in pointer-events-none">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </div>
             <Button
               variant="outline"
               onClick={() => navigate("/assistant")}

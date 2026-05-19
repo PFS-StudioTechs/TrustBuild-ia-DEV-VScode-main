@@ -158,6 +158,15 @@
   animation: pendingPulse 1.5s ease-in-out infinite;
 }
 
+@keyframes msgBounce {
+  0%, 20%, 40%, 100% { transform: translateY(0); }
+  10% { transform: translateY(-8px); }
+  30% { transform: translateY(-4px); }
+}
+.animate-msg-bounce {
+  animation: msgBounce 3s ease-in-out infinite;
+}
+
 /* ========== AI VALIDATION CARD ========== */
 .ai-validation-card {
   @apply relative rounded-xl p-4;

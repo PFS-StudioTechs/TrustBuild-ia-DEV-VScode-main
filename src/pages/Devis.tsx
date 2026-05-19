@@ -1972,6 +1972,9 @@ function DevisCard({
                 <Button size="sm" variant="outline" onClick={handleReactiver} disabled={creatingVersion} className="text-violet-600 border-violet-300">
                   <RotateCcw className="w-3.5 h-3.5 mr-1" /> Réactiver
                 </Button>
+                <Button size="sm" variant="outline" onClick={handleDeleteDevis} className="text-destructive border-destructive/30 hover:bg-destructive/10">
+                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Supprimer
+                </Button>
               </div>
             ) : devis.statut === "signe" ? (
               <div className="flex gap-2 flex-wrap">
@@ -2012,7 +2015,7 @@ function DevisCard({
                     Nouvelle version
                   </Button>
                 )}
-                {devis.statut === "brouillon" && (
+                {(devis.statut === "brouillon" || devis.statut === "refuse") && (
                   <Button size="sm" variant="outline" onClick={handleDeleteDevis} className="text-destructive border-destructive/30 hover:bg-destructive/10">
                     <Trash2 className="w-3.5 h-3.5 mr-1" /> Supprimer
                   </Button>
