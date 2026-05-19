@@ -12,6 +12,7 @@ import AddressFields from "@/components/ui/AddressFields";
 import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 
 export interface DevisData {
+  tva?: number;
   client: {
     id?: string;
     nom: string;
@@ -111,6 +112,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(data.client.id ?? null);
   const [client, setClient] = useState(data.client);
   const [lignes, setLignes] = useState<LigneState[]>(data.lignes ?? []);
+  const [tva] = useState<number>(data.tva ?? 20);
   const [saving, setSaving] = useState(false);
 
   const [editingSection, setEditingSection] = useState<string | null>(null);
@@ -378,7 +380,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
         base_numero: numero,
         version: 1,
         montant_ht: totalHT,
-        tva: 20,
+        tva,
         statut: "brouillon",
         date_validite: dateValidite,
       } as any).select("id").single();
@@ -395,7 +397,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
             quantite: l.quantite,
             unite: l.unite || "u",
             prix_unitaire: l.prix_unitaire,
-            tva: 20,
+            tva,
             ordre: i + 1,
             section_nom: l.section?.trim() || null,
             fournisseur_id: l.fournisseur_id ?? null,
@@ -830,12 +832,12 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
             </div>
           )}
           <div className="flex justify-between items-center text-xs text-muted-foreground">
-            <span>TVA (20%)</span>
-            <span>{(totalHT * 0.2).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}</span>
+            <span>TVA ({tva}%)</span>
+            <span>{(totalHT * tva / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}</span>
           </div>
           <div className="flex justify-between items-center text-sm font-bold text-primary">
             <span>Total TTC</span>
-            <span>{(totalHT * 1.2).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}</span>
+            <span>{(totalHT * (1 + tva / 100)).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}</span>
           </div>
         </CardContent>
       </Card>
