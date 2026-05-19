@@ -23,7 +23,7 @@ const SECTOR_DEFAULTS: Record<string, { primary: string; secondary: string; acce
 
 // ─── HTML template builder ────────────────────────────────────────────────────
 function buildHtml(params: {
-  type: "devis" | "facture" | "avenant" | "avoir";
+  type: "devis" | "facture" | "avenant" | "avoir" | "ts";
   numero: string;
   date: string;
   date_validite?: string | null;
@@ -54,6 +54,7 @@ function buildHtml(params: {
     facture: "Facture",
     avenant: "Avenant",
     avoir: "Avoir",
+    ts: "Travaux Supplémentaires",
   };
 
   const montantTTC = params.montant_ht * (1 + params.tva / 100);
@@ -273,7 +274,7 @@ serve(async (req) => {
 
     const db = createClient(supabaseUrl, serviceKey);
     const body = await req.json();
-    const { type, devis_id, facture_id, avenant_id, avoir_id } = body;
+    const { type, devis_id, facture_id, avenant_id, avoir_id, ts_id } = body;
 
     // ── Profil artisan ─────────────────────────────────────────────────────
     const { data: profile } = await db.from("profiles")
@@ -544,8 +545,73 @@ serve(async (req) => {
         custom_css: tpl?.css_template,
       });
 
+    // ══════════════════════════════════════════════════════════════════════
+    } else if (type === "ts" && ts_id) {
+      const { data: ts } = await (db as any).from("travaux_supplementaires").select("*").eq("id", ts_id).single();
+      if (!ts) return new Response(JSON.stringify({ error: "TS introuvable" }), { status: 404, headers: cors });
+
+      let chantier = null, client = null;
+      let resolvedClientId: string | null = ts.client_id ?? null;
+
+      if (ts.chantier_id) {
+        const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", ts.chantier_id).maybeSingle();
+        chantier = ch;
+        if (ch?.client_id && !resolvedClientId) resolvedClientId = ch.client_id;
+      }
+      if (!resolvedClientId && ts.devis_id) {
+        const { data: dv } = await db.from("devis").select("client_id, chantier_id").eq("id", ts.devis_id).maybeSingle();
+        if (dv) {
+          resolvedClientId = (dv as any).client_id ?? null;
+          if (!chantier && (dv as any).chantier_id) {
+            const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (dv as any).chantier_id).maybeSingle();
+            chantier = ch;
+            if (ch?.client_id && !resolvedClientId) resolvedClientId = ch.client_id;
+          }
+        }
+      }
+      if (resolvedClientId) {
+        const { data: cl } = await db.from("clients").select("nom, adresse, email, telephone").eq("id", resolvedClientId).single();
+        client = cl;
+      }
+
+      const { data: lignesTsData } = await (db as any).from("lignes_ts")
+        .select("*").eq("ts_id", ts_id).order("ordre");
+
+      const lignes = lignesTsData && lignesTsData.length > 0
+        ? lignesTsData.map((l: any) => ({
+            description: l.designation ?? "",
+            quantite: Number(l.quantite) || 0,
+            unite: l.unite ?? "u",
+            prix_unitaire: Number(l.prix_unitaire) || 0,
+            tva_taux: Number(l.tva) || 20,
+            section: l.section_nom ?? null,
+          }))
+        : ts.description
+          ? [{ description: ts.description, quantite: 1, unite: "forfait", prix_unitaire: Number(ts.montant_ht) }]
+          : [];
+
+      let parentDevisNumero: string | null = null;
+      if (ts.devis_id) {
+        const { data: dv } = await db.from("devis").select("numero").eq("id", ts.devis_id).maybeSingle();
+        parentDevisNumero = (dv as any)?.numero ?? null;
+      }
+
+      html = buildHtml({
+        type: "ts",
+        numero: ts.numero || `TS-${ts_id.slice(-6).toUpperCase()}`,
+        date: fmtDate(ts.date ?? ts.created_at),
+        date_validite: ts.date_validite ? fmtDate(ts.date_validite) : null,
+        parent_numero: parentDevisNumero,
+        artisan, lignes, secteur, entete_texte, mentions,
+        client: { nom: client?.nom ?? "Client", adresse: client?.adresse, email: client?.email, telephone: client?.telephone },
+        chantier: chantier ? { nom: (chantier as any).nom, adresse: (chantier as any).adresse_chantier } : undefined,
+        montant_ht: Number(ts.montant_ht), tva: Number(ts.tva ?? 20), statut: ts.statut,
+        couleur_primaire, couleur_secondaire, couleur_accent, logo_url,
+        custom_css: tpl?.css_template,
+      });
+
     } else {
-      return new Response(JSON.stringify({ error: "type (devis|facture|avenant|avoir) + id requis" }), { status: 400, headers: cors });
+      return new Response(JSON.stringify({ error: "type (devis|facture|avenant|avoir|ts) + id requis" }), { status: 400, headers: cors });
     }
 
     return new Response(JSON.stringify({ html }), {

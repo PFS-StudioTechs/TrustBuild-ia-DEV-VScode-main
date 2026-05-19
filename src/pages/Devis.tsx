@@ -1589,6 +1589,10 @@ function DevisCard({
   const [avoirRectifFactureId, setAvoirRectifFactureId] = useState<string>("");
   const [emailDevisOpen, setEmailDevisOpen] = useState(false);
   const [renewingLink, setRenewingLink] = useState(false);
+  const [emailAvenantOpen, setEmailAvenantOpen] = useState(false);
+  const [emailAvenantDoc, setEmailAvenantDoc] = useState<Avenant | null>(null);
+  const [emailTsOpen, setEmailTsOpen] = useState(false);
+  const [emailTsDoc, setEmailTsDoc] = useState<TravailSupplementaire | null>(null);
   const [avoirRectifEcheance, setAvoirRectifEcheance] = useState("");
   const [avoirRectifSaving, setAvoirRectifSaving] = useState(false);
   const [emailDetailOpen, setEmailDetailOpen] = useState(false);
@@ -1779,6 +1783,16 @@ function DevisCard({
   const handleEncaisserAcompte = async (acompteId: string) => {
     await supabase.from("acomptes").update({ statut: "encaisse", date_encaissement: new Date().toISOString() }).eq("id", acompteId);
     toast.success("Acompte marqué encaissé");
+    onRefresh();
+  };
+
+  const handleUpdateAvenantStatut = async (id: string, statut: string) => {
+    await (supabase as any).from("avenants").update({ statut }).eq("id", id);
+    onRefresh();
+  };
+
+  const handleUpdateTsStatut = async (id: string, statut: string) => {
+    await (supabase as any).from("travaux_supplementaires").update({ statut }).eq("id", id);
     onRefresh();
   };
 
@@ -2134,21 +2148,49 @@ function DevisCard({
               {/* Avenants */}
               <TabsContent value="avenants" className="mt-3 space-y-2">
                 {devisAvenants.length === 0 && <p className="text-xs text-muted-foreground italic">Aucun avenant</p>}
-                {devisAvenants.map(av => (
-                  <div key={av.id} className="rounded-lg border p-2 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-semibold">{av.numero || "AVN"}</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-mono">{calcMontantTTC(av.montant_ht, devis.tva).toFixed(2)} € TTC</span>
-                        <button onClick={() => { setEditAvenant(av); setAvenantOpen(true); }} className="text-muted-foreground hover:text-foreground p-0.5">
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                        <button onClick={() => handleDeleteAvenant(av.id)} className="text-destructive hover:opacity-80 p-0.5">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                {devisAvenants.map(av => {
+                  const avStatut = (av as any).statut ?? "brouillon";
+                  const avBadgeClass =
+                    avStatut === "signe" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                    avStatut === "envoye" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                    avStatut === "refuse" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                    "bg-muted text-muted-foreground";
+                  const avBadgeLabel =
+                    avStatut === "signe" ? "Signé" : avStatut === "envoye" ? "Envoyé" :
+                    avStatut === "refuse" ? "Refusé" : "Brouillon";
+                  return (
+                  <div key={av.id} className="rounded-lg border p-2 space-y-1.5">
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-mono font-semibold">{av.numero || "AVN"}</span>
+                          <Badge className={`text-[10px] px-1.5 py-0 ${avBadgeClass}`}>{avBadgeLabel}</Badge>
+                          <span className="text-xs font-mono ml-auto">{calcMontantTTC(av.montant_ht, devis.tva).toFixed(2)} € TTC</span>
+                        </div>
+                        {av.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{av.description}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {avStatut === "brouillon" && (
+                          <>
+                            <button onClick={() => { setEmailAvenantDoc(av); setEmailAvenantOpen(true); }} className="text-primary hover:opacity-80 p-0.5" title="Envoyer par email"><Mail className="w-3 h-3" /></button>
+                            <button onClick={() => handleUpdateAvenantStatut(av.id, "envoye")} className="text-blue-600 hover:opacity-80 p-0.5" title="Marquer envoyé"><Send className="w-3 h-3" /></button>
+                            <button onClick={() => { setEditAvenant(av); setAvenantOpen(true); }} className="text-muted-foreground hover:text-foreground p-0.5" title="Modifier"><Pencil className="w-3 h-3" /></button>
+                            <button onClick={() => handleDeleteAvenant(av.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                          </>
+                        )}
+                        {avStatut === "envoye" && (
+                          <>
+                            <button onClick={() => { setEmailAvenantDoc(av); setEmailAvenantOpen(true); }} className="text-primary hover:opacity-80 p-0.5" title="Renvoyer par email"><Mail className="w-3 h-3" /></button>
+                            <button onClick={() => handleUpdateAvenantStatut(av.id, "signe")} className="text-emerald-600 hover:opacity-80 p-0.5" title="Marquer signé"><CheckCircle2 className="w-3 h-3" /></button>
+                            <button onClick={() => handleUpdateAvenantStatut(av.id, "refuse")} className="text-destructive hover:opacity-80 p-0.5" title="Refusé"><XCircle className="w-3 h-3" /></button>
+                            <button onClick={() => handleDeleteAvenant(av.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                          </>
+                        )}
+                        {(avStatut === "signe" || avStatut === "refuse") && (
+                          <button onClick={() => handleDeleteAvenant(av.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                        )}
                       </div>
                     </div>
-                    {av.description && <p className="text-xs text-muted-foreground">{av.description}</p>}
                     {av.lignes && av.lignes.length > 0 && (
                       <div className="space-y-0.5 pt-1 border-t">
                         {av.lignes.map((l, i) => (
@@ -2160,7 +2202,8 @@ function DevisCard({
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 {!isRemplace && (
                   <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => { setEditAvenant(null); setAvenantOpen(true); }}>
                     <Plus className="w-3.5 h-3.5 mr-1" /> Nouvel avenant
@@ -2337,8 +2380,8 @@ function DevisCard({
                       <div className="space-y-0.5 flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-mono font-semibold">{t.numero ?? "TS"}</span>
-                          <Badge className={`text-[10px] ${t.statut === "facture" ? "bg-blue-100 text-blue-700" : t.statut === "signe" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}`}>
-                            {t.statut === "facture" ? "Facturé" : t.statut === "signe" ? "Signé" : "Brouillon"}
+                          <Badge className={`text-[10px] ${t.statut === "facture" ? "bg-purple-100 text-purple-700" : t.statut === "signe" ? "bg-emerald-100 text-emerald-700" : t.statut === "envoye" ? "bg-blue-100 text-blue-700" : t.statut === "refuse" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
+                            {t.statut === "facture" ? "Facturé" : t.statut === "signe" ? "Signé" : t.statut === "envoye" ? "Envoyé" : t.statut === "refuse" ? "Refusé" : "Brouillon"}
                           </Badge>
                           <span className="text-xs font-mono text-orange-600 ml-auto">{calcMontantTTC(t.montant_ht, devis.tva).toFixed(2)} € TTC</span>
                         </div>
@@ -2348,16 +2391,22 @@ function DevisCard({
                       <div className="flex items-center gap-1 shrink-0">
                         {t.statut === "brouillon" && (
                           <>
-                            <button onClick={() => { setEditTs(t); setTsOpen(true); }} className="text-muted-foreground hover:text-foreground p-0.5">
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => handleSignerTs(t.id)} className="text-emerald-600 hover:opacity-80 p-0.5" title="Marquer signé">
-                              <CheckCircle2 className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => handleDeleteTs(t.id)} className="text-destructive hover:opacity-80 p-0.5">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                            <button onClick={() => { setEmailTsDoc(t); setEmailTsOpen(true); }} className="text-primary hover:opacity-80 p-0.5" title="Envoyer par email"><Mail className="w-3 h-3" /></button>
+                            <button onClick={() => handleUpdateTsStatut(t.id, "envoye")} className="text-blue-600 hover:opacity-80 p-0.5" title="Marquer envoyé"><Send className="w-3 h-3" /></button>
+                            <button onClick={() => { setEditTs(t); setTsOpen(true); }} className="text-muted-foreground hover:text-foreground p-0.5"><Pencil className="w-3 h-3" /></button>
+                            <button onClick={() => handleDeleteTs(t.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
                           </>
+                        )}
+                        {t.statut === "envoye" && (
+                          <>
+                            <button onClick={() => { setEmailTsDoc(t); setEmailTsOpen(true); }} className="text-primary hover:opacity-80 p-0.5" title="Renvoyer par email"><Mail className="w-3 h-3" /></button>
+                            <button onClick={() => handleUpdateTsStatut(t.id, "signe")} className="text-emerald-600 hover:opacity-80 p-0.5" title="Marquer signé"><CheckCircle2 className="w-3 h-3" /></button>
+                            <button onClick={() => handleUpdateTsStatut(t.id, "refuse")} className="text-destructive hover:opacity-80 p-0.5" title="Refusé"><XCircle className="w-3 h-3" /></button>
+                            <button onClick={() => handleDeleteTs(t.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                          </>
+                        )}
+                        {(t.statut === "refuse" || t.statut === "facture") && (
+                          <button onClick={() => handleDeleteTs(t.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
                         )}
                       </div>
                     </div>
@@ -2524,6 +2573,43 @@ function DevisCard({
           open={emailDevisOpen}
           onClose={() => setEmailDevisOpen(false)}
           onSent={() => { setEmailDevisOpen(false); onRefresh(); }}
+        />
+      )}
+
+      {emailAvenantOpen && emailAvenantDoc && (
+        <SendEmailDialog
+          type="avenant"
+          doc={{
+            id: emailAvenantDoc.id,
+            numero: (emailAvenantDoc as any).numero || "AVN",
+            montant_ht: emailAvenantDoc.montant_ht,
+            tva: devis.tva,
+            created_at: (emailAvenantDoc as any).date ?? devis.created_at,
+          }}
+          clientEmail={devis.client?.email ?? null}
+          clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+          open={emailAvenantOpen}
+          onClose={() => { setEmailAvenantOpen(false); setEmailAvenantDoc(null); }}
+          onSent={() => { setEmailAvenantOpen(false); setEmailAvenantDoc(null); onRefresh(); }}
+        />
+      )}
+
+      {emailTsOpen && emailTsDoc && (
+        <SendEmailDialog
+          type="ts"
+          doc={{
+            id: emailTsDoc.id,
+            numero: (emailTsDoc as any).numero || "TS",
+            montant_ht: emailTsDoc.montant_ht,
+            tva: devis.tva,
+            created_at: (emailTsDoc as any).date ?? devis.created_at,
+            date_validite: (emailTsDoc as any).date_validite ?? null,
+          }}
+          clientEmail={devis.client?.email ?? null}
+          clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+          open={emailTsOpen}
+          onClose={() => { setEmailTsOpen(false); setEmailTsDoc(null); }}
+          onSent={() => { setEmailTsOpen(false); setEmailTsDoc(null); onRefresh(); }}
         />
       )}
 

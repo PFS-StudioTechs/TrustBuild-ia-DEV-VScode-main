@@ -38,7 +38,38 @@ export interface SendEmailDialogFactureProps {
   onSent: () => void;
 }
 
-type Props = SendEmailDialogDevisProps | SendEmailDialogFactureProps;
+export interface SendEmailDialogAvenantProps {
+  type: "avenant";
+  doc: BaseDoc & { date_validite?: string | null; chantierNom?: string };
+  clientEmail: string | null;
+  clientNom: string;
+  open: boolean;
+  onClose: () => void;
+  onSent: () => void;
+}
+
+export interface SendEmailDialogTsProps {
+  type: "ts";
+  doc: BaseDoc & { date_validite?: string | null; chantierNom?: string };
+  clientEmail: string | null;
+  clientNom: string;
+  open: boolean;
+  onClose: () => void;
+  onSent: () => void;
+}
+
+type Props =
+  | SendEmailDialogDevisProps
+  | SendEmailDialogFactureProps
+  | SendEmailDialogAvenantProps
+  | SendEmailDialogTsProps;
+
+const DOC_LABELS: Record<string, { label: string; labelFem: boolean; table: string; tokenTable: string }> = {
+  devis:   { label: "Devis",                   labelFem: false, table: "devis",                   tokenTable: "devis" },
+  facture: { label: "Facture",                  labelFem: true,  table: "factures",                tokenTable: "" },
+  avenant: { label: "Avenant",                  labelFem: false, table: "avenants",                tokenTable: "avenants" },
+  ts:      { label: "Travaux supplémentaires",  labelFem: false, table: "travaux_supplementaires", tokenTable: "travaux_supplementaires" },
+};
 
 export default function SendEmailDialog(props: Props) {
   const { type, doc, clientEmail, clientNom, open, onClose, onSent } = props;
@@ -52,18 +83,19 @@ export default function SendEmailDialog(props: Props) {
   const [artisanNom, setArtisanNom] = useState("");
   const [tokenPublic, setTokenPublic] = useState<string | null>(null);
 
+  const meta = DOC_LABELS[type];
   const montantTTC = doc.montant_ht * (1 + doc.tva / 100);
 
   useEffect(() => {
     if (!open || !user) return;
     supabase.from("profiles").select("prenom, nom").eq("user_id", user.id).single().then(({ data }) => {
-      const nom = data ? `${data.prenom ?? ""} ${data.nom ?? ""}`.trim() : "";
-      setArtisanNom(nom);
+      setArtisanNom(data ? `${data.prenom ?? ""} ${data.nom ?? ""}`.trim() : "");
     });
-    if (type === "devis") {
-      (supabase.from("devis" as any).select("token_public").eq("id", doc.id).single() as any)
+    if (meta.tokenTable) {
+      (supabase as any).from(meta.tokenTable).select("token_public").eq("id", doc.id).single()
         .then(({ data }: any) => setTokenPublic(data?.token_public ?? null));
-
+    } else {
+      setTokenPublic(null);
     }
   }, [open, user, type, doc.id]);
 
@@ -71,26 +103,26 @@ export default function SendEmailDialog(props: Props) {
     if (!open) return;
     setToEmail(clientEmail ?? "");
 
-    const docLabel = type === "devis" ? "Devis" : "Facture";
     const montantLabel = montantTTC.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
-
-    setSubject(`${docLabel} ${doc.numero} — ${montantLabel} TTC`);
-
-    const dateInfo = type === "devis"
-      ? (props as SendEmailDialogDevisProps).doc.date_validite
-        ? `\nCe devis est valable jusqu'au ${new Date((props as SendEmailDialogDevisProps).doc.date_validite!).toLocaleDateString("fr-FR")}.`
-        : ""
-      : `\nDate d'échéance : ${new Date((props as SendEmailDialogFactureProps).doc.date_echeance).toLocaleDateString("fr-FR")}.`;
+    setSubject(`${meta.label} ${doc.numero} — ${montantLabel} TTC`);
 
     const greeting = clientNom ? `Bonjour ${clientNom},` : "Bonjour,";
 
-    const publicLink = type === "devis" && tokenPublic
-      ? `\n\n👉 Consulter, annoter et signer votre devis en ligne :\n${window.location.origin}/devis/view/${tokenPublic}`
+    let dateInfo = "";
+    if (type === "facture") {
+      dateInfo = `\nDate d'échéance : ${new Date((props as SendEmailDialogFactureProps).doc.date_echeance).toLocaleDateString("fr-FR")}.`;
+    } else if ((props as any).doc.date_validite) {
+      dateInfo = `\nCe document est valable jusqu'au ${new Date((props as any).doc.date_validite).toLocaleDateString("fr-FR")}.`;
+    }
+
+    const docRoute = type === "devis" ? "devis/view" : "document/view";
+    const publicLink = tokenPublic
+      ? `\n\n👉 Consulter, annoter et signer votre document en ligne :\n${window.location.origin}/${docRoute}/${tokenPublic}`
       : "";
 
-    const bodyText = type === "devis"
-      ? `${greeting}\n\nVeuillez trouver ci-dessous le devis ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}${publicLink}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`
-      : `${greeting}\n\nVeuillez trouver ci-dessous la facture ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`;
+    const bodyText = type === "facture"
+      ? `${greeting}\n\nVeuillez trouver ci-dessous la facture ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`
+      : `${greeting}\n\nVeuillez trouver ci-dessous ${type === "avenant" ? "l'avenant" : type === "ts" ? "les travaux supplémentaires" : "le devis"} ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}${publicLink}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`;
 
     setBody(bodyText);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,36 +148,42 @@ export default function SendEmailDialog(props: Props) {
 
       if (error) throw new Error(error.message);
 
-      // Met à jour le statut du document
+      // Met à jour le statut + expiration token
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 90);
+
       if (type === "devis") {
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 90);
         await supabase.from("devis").update({ statut: "envoye", token_expires_at: expiresAt.toISOString() } as any).eq("id", doc.id);
-      } else {
+      } else if (type === "facture") {
         await supabase.from("factures").update({ statut: "envoyee" } as any).eq("id", doc.id);
+      } else if (type === "avenant") {
+        await (supabase as any).from("avenants").update({ statut: "envoye", token_expires_at: expiresAt.toISOString() }).eq("id", doc.id);
+      } else {
+        await (supabase as any).from("travaux_supplementaires").update({ statut: "envoye", token_expires_at: expiresAt.toISOString() }).eq("id", doc.id);
       }
 
-      const label = type === "devis" ? "Devis" : "Facture";
       if (data?.status === "sent") {
-        toast.success(`${label} ${doc.numero} envoyé${type === "facture" ? "e" : ""} à ${toEmail}`);
-        log({ action: 'email.sent', entity_type: type, entity_id: doc.id, status: 'success', details: { to: toEmail, subject, numero: doc.numero } });
+        toast.success(`${meta.label} ${doc.numero} envoyé${meta.labelFem ? "e" : ""} à ${toEmail}`);
+        log({ action: "email.sent", entity_type: type, entity_id: doc.id, status: "success", details: { to: toEmail, subject, numero: doc.numero } });
       } else if (data?.status === "no_sendgrid") {
-        toast.success(`${label} enregistré — SendGrid non configuré`);
-        log({ action: 'email.no_sendgrid', entity_type: type, entity_id: doc.id, status: 'info', details: { to: toEmail, numero: doc.numero } });
+        toast.success(`${meta.label} enregistré${meta.labelFem ? "e" : ""} — SendGrid non configuré`);
+        log({ action: "email.no_sendgrid", entity_type: type, entity_id: doc.id, status: "info", details: { to: toEmail, numero: doc.numero } });
       } else {
         toast.error("Erreur lors de l'envoi");
-        log({ action: 'email.send_failed', entity_type: type, entity_id: doc.id, status: 'error', details: { to: toEmail, numero: doc.numero, response: data } });
+        log({ action: "email.send_failed", entity_type: type, entity_id: doc.id, status: "error", details: { to: toEmail, numero: doc.numero, response: data } });
       }
 
       onClose();
       onSent();
     } catch (err: any) {
       toast.error("Erreur : " + err.message);
-      log({ action: 'email.send_failed', entity_type: type, entity_id: doc.id, status: 'error', details: { to: toEmail, numero: doc.numero, error: err.message } });
+      log({ action: "email.send_failed", entity_type: type, entity_id: doc.id, status: "error", details: { to: toEmail, numero: doc.numero, error: err.message } });
     } finally {
       setSending(false);
     }
   };
+
+  const docArticle = type === "facture" ? "la facture" : type === "avenant" ? "l'avenant" : type === "ts" ? "les travaux supplémentaires" : "le devis";
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -153,7 +191,7 @@ export default function SendEmailDialog(props: Props) {
         <DialogHeader>
           <DialogTitle className="font-display flex items-center gap-2">
             <Mail className="w-4 h-4 text-primary" />
-            Envoyer {type === "devis" ? "le devis" : "la facture"} {doc.numero}
+            Envoyer {docArticle} {doc.numero}
           </DialogTitle>
         </DialogHeader>
 
@@ -182,8 +220,8 @@ export default function SendEmailDialog(props: Props) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Le {type === "devis" ? "devis" : "la facture"} sera intégré{type === "facture" ? "e" : ""} dans l'email avec le même rendu que dans l'application.
-            {type === "devis" ? " Le devis passera au statut « Envoyé »." : " La facture passera au statut « Envoyée »."}
+            Le document sera intégré dans l'email avec le même rendu que dans l'application.
+            {type !== "facture" ? " Le document passera au statut « Envoyé »." : " La facture passera au statut « Envoyée »."}
           </p>
         </div>
 

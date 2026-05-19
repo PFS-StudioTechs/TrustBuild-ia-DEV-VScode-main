@@ -16,7 +16,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Bot, FileText, Receipt, Trash2, Download, PenLine, CreditCard,
   Send, Eye, Phone, Mail, MapPin, Wrench, FileX, Edit2, Sparkles, Printer, Loader2, FilePlus, Percent,
+  CheckCircle2, XCircle,
 } from "lucide-react";
+import SendEmailDialog from "@/components/SendEmailDialog";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
 import type { Database } from "@/integrations/supabase/types";
@@ -279,6 +281,9 @@ export default function Documents() {
 
   // ── Delete ──
   const [deleteDialog, setDeleteDialog] = useState<{ id: string; table: string; label: string } | null>(null);
+  const [emailDocOpen, setEmailDocOpen] = useState(false);
+  const [emailDocType, setEmailDocType] = useState<"avenant" | "ts">("avenant");
+  const [emailDocInfo, setEmailDocInfo] = useState<{ id: string; numero: string; montant_ht: number; tva: number; created_at: string; clientEmail: string | null; clientNom: string } | null>(null);
 
   // ── PDF preview (A4 sheet) ──
   const [pdfPreviewOpen, setPdfPreviewOpen]   = useState(false);
@@ -645,6 +650,18 @@ export default function Documents() {
   };
 
   // ── Delete handler ────────────────────────────────────────────────────────
+  const handleUpdateStatut = async (table: string, id: string, statut: string) => {
+    await (supabase as any).from(table).update({ statut }).eq("id", id);
+    fetchData();
+  };
+
+  const openEmailDoc = (type: "avenant" | "ts", doc: { id: string; numero: string; montant_ht: number; tva: number; created_at: string }, client: ClientDetail | undefined) => {
+    const clientNom = client ? `${client.prenom ?? ""} ${client.nom}`.trim() : "";
+    setEmailDocType(type);
+    setEmailDocInfo({ id: doc.id, numero: doc.numero, montant_ht: doc.montant_ht, tva: doc.tva, created_at: doc.created_at, clientEmail: client?.email ?? null, clientNom });
+    setEmailDocOpen(true);
+  };
+
   const handleDelete = async () => {
     if (!deleteDialog) return;
     const { error } = await (supabase as any).from(deleteDialog.table).delete().eq("id", deleteDialog.id);
@@ -833,7 +850,21 @@ export default function Documents() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0" onClick={stopProp}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier" onClick={() => openEdit("avenant", av)}><Edit2 className="w-4 h-4" /></Button>
+                      {(av.statut === "brouillon" || av.statut === "envoye") && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" title="Envoyer par email" onClick={() => openEmailDoc("avenant", { id: av.id, numero: av.numero || "AVN", montant_ht: Number(av.montant_ht), tva: Number(av.tva), created_at: av.created_at }, client)}><Mail className="w-4 h-4" /></Button>
+                      )}
+                      {av.statut === "brouillon" && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" title="Marquer envoyé" onClick={() => handleUpdateStatut("avenants", av.id, "envoye")}><Send className="w-4 h-4" /></Button>
+                      )}
+                      {av.statut === "envoye" && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title="Marquer signé" onClick={() => handleUpdateStatut("avenants", av.id, "signe")}><CheckCircle2 className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Refusé" onClick={() => handleUpdateStatut("avenants", av.id, "refuse")}><XCircle className="w-4 h-4" /></Button>
+                        </>
+                      )}
+                      {av.statut === "brouillon" && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Modifier" onClick={() => openEdit("avenant", av)}><Edit2 className="w-4 h-4" /></Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Supprimer" onClick={() => setDeleteDialog({ id: av.id, table: "avenants", label: "Avenant" })}><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </div>
@@ -869,7 +900,21 @@ export default function Documents() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit("ts", ts)}><Edit2 className="w-4 h-4" /></Button>
+                      {(ts.statut === "brouillon" || ts.statut === "envoye") && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" title="Envoyer par email" onClick={() => openEmailDoc("ts", { id: ts.id, numero: ts.numero, montant_ht: Number(ts.montant_ht), tva: Number(ts.tva), created_at: ts.created_at }, client)}><Mail className="w-4 h-4" /></Button>
+                      )}
+                      {ts.statut === "brouillon" && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" title="Marquer envoyé" onClick={() => handleUpdateStatut("travaux_supplementaires", ts.id, "envoye")}><Send className="w-4 h-4" /></Button>
+                      )}
+                      {ts.statut === "envoye" && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title="Marquer signé" onClick={() => handleUpdateStatut("travaux_supplementaires", ts.id, "signe")}><CheckCircle2 className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Refusé" onClick={() => handleUpdateStatut("travaux_supplementaires", ts.id, "refuse")}><XCircle className="w-4 h-4" /></Button>
+                        </>
+                      )}
+                      {ts.statut === "brouillon" && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit("ts", ts)}><Edit2 className="w-4 h-4" /></Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteDialog({ id: ts.id, table: "travaux_supplementaires", label: "TS" })}><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </div>
@@ -1444,6 +1489,18 @@ export default function Documents() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {emailDocOpen && emailDocInfo && (
+        <SendEmailDialog
+          type={emailDocType}
+          doc={emailDocInfo}
+          clientEmail={emailDocInfo.clientEmail}
+          clientNom={emailDocInfo.clientNom}
+          open={emailDocOpen}
+          onClose={() => { setEmailDocOpen(false); setEmailDocInfo(null); }}
+          onSent={() => { setEmailDocOpen(false); setEmailDocInfo(null); fetchData(); }}
+        />
+      )}
 
       {/* ── A4 PDF Preview Sheet ── */}
       <Sheet open={pdfPreviewOpen} onOpenChange={setPdfPreviewOpen}>

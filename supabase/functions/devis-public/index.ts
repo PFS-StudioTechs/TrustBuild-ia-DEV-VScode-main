@@ -51,6 +51,7 @@ interface DevisPdfParams {
   date_validite?: string | null;
   montant_ht: number;
   tva: number;
+  docLabel?: string;
   artisan: { nom: string; prenom: string; siret?: string | null; adresse?: string | null; telephone?: string | null; email?: string | null };
   client: { nom: string; prenom?: string | null; adresse?: string | null } | null;
   chantier?: { nom?: string | null; adresse_chantier?: string | null } | null;
@@ -108,7 +109,7 @@ async function buildDevisPdf(params: DevisPdfParams, outcome: DevisOutcome): Pro
   }
 
   // ── EN-TÊTE ──
-  drawText("DEVIS", LEFT, y, 22, true, BLUE);
+  drawText(params.docLabel ?? "DEVIS", LEFT, y, 22, true, BLUE);
   drawTextRight(`N° ${params.numero}`, RIGHT, y, 13, true);
   y -= 18;
   drawTextRight(`Date : ${fmtDate(params.created_at)}`, RIGHT, y, 9);
@@ -332,6 +333,112 @@ async function fetchDevisFullData(
   };
 }
 
+// ── Récupération données complètes avenant/TS ─────────────────────────────────
+
+async function fetchAvenantFullData(
+  db: ReturnType<typeof createClient>,
+  avenantRow: Record<string, unknown>,
+) {
+  const artisanId = avenantRow.artisan_id as string;
+  const [{ data: artisanProfile }, { data: artisanEmail }] = await Promise.all([
+    db.from("profiles").select("nom, prenom, siret, adresse, telephone").eq("user_id", artisanId).single(),
+    db.rpc("get_user_email", { p_user_id: artisanId }),
+  ]);
+
+  let clientData: { nom: string; prenom?: string | null; adresse?: string | null } | null = null;
+  let chantierData: { nom?: string | null; adresse_chantier?: string | null } | null = null;
+
+  if (avenantRow.devis_id) {
+    const { data: dv } = await db.from("devis").select("client_id, chantier_id").eq("id", avenantRow.devis_id as string).maybeSingle();
+    if (dv) {
+      if ((dv as any).client_id) {
+        const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", (dv as any).client_id).single();
+        clientData = cl as any;
+      }
+      if ((dv as any).chantier_id) {
+        const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (dv as any).chantier_id).maybeSingle();
+        chantierData = ch as any;
+        if (!clientData && (ch as any)?.client_id) {
+          const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", (ch as any).client_id).single();
+          clientData = cl as any;
+        }
+      }
+    }
+  }
+
+  const { data: lignesData } = await (db as any).from("lignes_avenant")
+    .select("designation, quantite, unite, prix_unitaire, section_nom").eq("avenant_id", avenantRow.id as string).order("ordre");
+
+  return {
+    artisan: {
+      nom: (artisanProfile as any)?.nom ?? "",
+      prenom: (artisanProfile as any)?.prenom ?? "",
+      siret: (artisanProfile as any)?.siret ?? null,
+      adresse: (artisanProfile as any)?.adresse ?? null,
+      telephone: (artisanProfile as any)?.telephone ?? null,
+      email: artisanEmail ?? null,
+    },
+    client: clientData,
+    chantier: chantierData,
+    lignes: (lignesData ?? []).length > 0
+      ? (lignesData ?? []).map((l: any) => ({ designation: l.designation ?? "", quantite: Number(l.quantite) || 0, unite: l.unite ?? "u", prix_unitaire: Number(l.prix_unitaire) || 0, section_nom: l.section_nom ?? null }))
+      : avenantRow.description ? [{ designation: avenantRow.description as string, quantite: 1, unite: "forfait", prix_unitaire: Number(avenantRow.montant_ht) || 0, section_nom: null }] : [],
+  };
+}
+
+async function fetchTsFullData(
+  db: ReturnType<typeof createClient>,
+  tsRow: Record<string, unknown>,
+) {
+  const artisanId = tsRow.artisan_id as string;
+  const [{ data: artisanProfile }, { data: artisanEmail }] = await Promise.all([
+    db.from("profiles").select("nom, prenom, siret, adresse, telephone").eq("user_id", artisanId).single(),
+    db.rpc("get_user_email", { p_user_id: artisanId }),
+  ]);
+
+  let clientData: { nom: string; prenom?: string | null; adresse?: string | null } | null = null;
+  let chantierData: { nom?: string | null; adresse_chantier?: string | null } | null = null;
+
+  if (tsRow.client_id) {
+    const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", tsRow.client_id as string).single();
+    clientData = cl as any;
+  }
+  if (tsRow.chantier_id) {
+    const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", tsRow.chantier_id as string).maybeSingle();
+    chantierData = ch as any;
+    if (!clientData && (ch as any)?.client_id) {
+      const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", (ch as any).client_id).single();
+      clientData = cl as any;
+    }
+  }
+  if (!clientData && tsRow.devis_id) {
+    const { data: dv } = await db.from("devis").select("client_id, chantier_id").eq("id", tsRow.devis_id as string).maybeSingle();
+    if (dv && (dv as any).client_id) {
+      const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", (dv as any).client_id).single();
+      clientData = cl as any;
+    }
+  }
+
+  const { data: lignesData } = await (db as any).from("lignes_ts")
+    .select("designation, quantite, unite, prix_unitaire, section_nom").eq("ts_id", tsRow.id as string).order("ordre");
+
+  return {
+    artisan: {
+      nom: (artisanProfile as any)?.nom ?? "",
+      prenom: (artisanProfile as any)?.prenom ?? "",
+      siret: (artisanProfile as any)?.siret ?? null,
+      adresse: (artisanProfile as any)?.adresse ?? null,
+      telephone: (artisanProfile as any)?.telephone ?? null,
+      email: artisanEmail ?? null,
+    },
+    client: clientData,
+    chantier: chantierData,
+    lignes: (lignesData ?? []).length > 0
+      ? (lignesData ?? []).map((l: any) => ({ designation: l.designation ?? "", quantite: Number(l.quantite) || 0, unite: l.unite ?? "u", prix_unitaire: Number(l.prix_unitaire) || 0, section_nom: l.section_nom ?? null }))
+      : tsRow.description ? [{ designation: tsRow.description as string, quantite: 1, unite: "forfait", prix_unitaire: Number(tsRow.montant_ht) || 0, section_nom: null }] : [],
+  };
+}
+
 // ── Sauvegarde message entrant (action client) ────────────────────────────────
 
 async function saveInboundMessage(
@@ -341,7 +448,8 @@ async function saveInboundMessage(
     fromClientName: string;
     subject: string;
     body: string;
-    devisId: string;
+    documentId: string;
+    documentType: string;
     annotationsData?: unknown[] | null;
   },
 ) {
@@ -356,8 +464,8 @@ async function saveInboundMessage(
       direction: "inbound",
       from_client_name: opts.fromClientName,
       annotations_data: opts.annotationsData ?? null,
-      document_type: "devis",
-      document_id: opts.devisId,
+      document_type: opts.documentType,
+      document_id: opts.documentId,
       read: false,
     });
   } catch (e) {
@@ -438,57 +546,132 @@ serve(async (req) => {
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
 
-  // ── GET : récupère le devis par token public ──────────────────────────────
+  // ── GET : récupère le document par token public (devis, avenant ou TS) ──────
   if (req.method === "GET") {
     if (!token || !UUID_RE.test(token)) return json({ error: "Token invalide" }, 400);
 
-    const { data: devis, error } = await db
+    // Résolution du document par token (devis en priorité, puis avenant, puis TS)
+    let docType = "devis";
+    let doc: Record<string, unknown> | null = null;
+
+    const { data: devisRow } = await db
       .from("devis")
       .select("id, numero, statut, montant_ht, tva, date_validite, created_at, artisan_id, client_id, chantier_id, token_expires_at")
       .eq("token_public", token)
-      .single();
+      .maybeSingle();
+    if (devisRow) { doc = devisRow as any; docType = "devis"; }
 
-    if (error || !devis) return json({ error: "Devis introuvable" }, 404);
+    if (!doc) {
+      const { data: avenantRow } = await (db as any)
+        .from("avenants")
+        .select("id, numero, statut, montant_ht, tva, date, created_at, artisan_id, devis_id, token_expires_at")
+        .eq("token_public", token)
+        .maybeSingle();
+      if (avenantRow) { doc = avenantRow; docType = "avenant"; }
+    }
 
-    if ((devis as any).token_expires_at && new Date((devis as any).token_expires_at) < new Date()) {
+    if (!doc) {
+      const { data: tsRow } = await (db as any)
+        .from("travaux_supplementaires")
+        .select("id, numero, statut, montant_ht, tva, date, date_validite, created_at, artisan_id, client_id, chantier_id, devis_id, token_expires_at")
+        .eq("token_public", token)
+        .maybeSingle();
+      if (tsRow) { doc = tsRow; docType = "ts"; }
+    }
+
+    if (!doc) return json({ error: "Document introuvable" }, 404);
+
+    if (doc.token_expires_at && new Date(doc.token_expires_at as string) < new Date()) {
       return json({ error: "Lien expiré", expired: true }, 410);
     }
 
     const { data: profile } = await db
       .from("profiles")
       .select("nom, prenom, siret, email, adresse, code_postal, ville, telephone")
-      .eq("user_id", (devis as any).artisan_id)
+      .eq("user_id", doc.artisan_id as string)
       .single();
 
     let client = null;
-    const clientId = (devis as any).client_id;
-    if (clientId) {
-      const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", clientId).single();
-      client = cl;
-    }
-
     let chantier = null;
-    if ((devis as any).chantier_id) {
-      const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (devis as any).chantier_id).maybeSingle();
-      chantier = ch;
-      if (!client && ch?.client_id) {
-        const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", ch.client_id).single();
+
+    if (docType === "devis") {
+      if (doc.client_id) {
+        const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", doc.client_id as string).single();
         client = cl;
+      }
+      if (doc.chantier_id) {
+        const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", doc.chantier_id as string).maybeSingle();
+        chantier = ch;
+        if (!client && (ch as any)?.client_id) {
+          const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", (ch as any).client_id).single();
+          client = cl;
+        }
+      }
+    } else if (docType === "avenant") {
+      if (doc.devis_id) {
+        const { data: dv } = await db.from("devis").select("client_id, chantier_id").eq("id", doc.devis_id as string).maybeSingle();
+        if (dv) {
+          if ((dv as any).client_id) {
+            const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", (dv as any).client_id).single();
+            client = cl;
+          }
+          if ((dv as any).chantier_id) {
+            const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (dv as any).chantier_id).maybeSingle();
+            chantier = ch;
+            if (!client && (ch as any)?.client_id) {
+              const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", (ch as any).client_id).single();
+              client = cl;
+            }
+          }
+        }
+      }
+    } else {
+      if (doc.client_id) {
+        const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", doc.client_id as string).single();
+        client = cl;
+      }
+      if (doc.chantier_id) {
+        const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", doc.chantier_id as string).maybeSingle();
+        chantier = ch;
+        if (!client && (ch as any)?.client_id) {
+          const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", (ch as any).client_id).single();
+          client = cl;
+        }
+      }
+      if (!client && doc.devis_id) {
+        const { data: dv } = await db.from("devis").select("client_id").eq("id", doc.devis_id as string).maybeSingle();
+        if ((dv as any)?.client_id) {
+          const { data: cl } = await db.from("clients").select("nom, prenom, adresse, email, telephone").eq("id", (dv as any).client_id).single();
+          client = cl;
+        }
       }
     }
 
-    const { data: lignes } = await db
-      .from("lignes_devis")
-      .select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre")
-      .eq("devis_id", (devis as any).id)
-      .order("ordre");
+    // Lignes selon le type
+    let lignes: unknown[] = [];
+    if (docType === "devis") {
+      const { data: l } = await db.from("lignes_devis").select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre").eq("devis_id", doc.id as string).order("ordre");
+      lignes = l ?? [];
+    } else if (docType === "avenant") {
+      const { data: l } = await (db as any).from("lignes_avenant").select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre").eq("avenant_id", doc.id as string).order("ordre");
+      lignes = l ?? [];
+    } else {
+      const { data: l } = await (db as any).from("lignes_ts").select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre").eq("ts_id", doc.id as string).order("ordre");
+      lignes = l ?? [];
+    }
 
     const { data: annotations } = await db
       .from("devis_annotations")
       .select("id, type, ligne_id, contenu")
-      .eq("devis_id", (devis as any).id);
+      .eq("doc_type", docType)
+      .eq("doc_id", doc.id as string);
 
-    return json({ devis, artisan: profile ?? {}, client, chantier, lignes: lignes ?? [], annotations: annotations ?? [] });
+    return json({
+      doc,
+      doc_type: docType,
+      ...(docType === "devis" ? { devis: doc } : {}),
+      artisan: profile ?? {}, client, chantier, lignes, annotations: annotations ?? [],
+    });
   }
 
   // ── POST : actions client (annotate / refuse / sign) ─────────────────────
@@ -508,27 +691,61 @@ serve(async (req) => {
     const effectiveToken = (body.token as string | undefined) ?? token;
     if (!effectiveToken || !UUID_RE.test(effectiveToken)) return json({ error: "Token invalide" }, 400);
 
-    const { data: devis } = await db
+    // Résolution du document par token (devis, avenant ou TS)
+    let postDocType = "devis";
+    let doc: Record<string, unknown> | null = null;
+
+    const { data: postDevisRow } = await db
       .from("devis")
       .select("id, statut, artisan_id, numero, client_id, chantier_id, montant_ht, tva, created_at, date_validite, token_expires_at")
       .eq("token_public", effectiveToken)
-      .single();
+      .maybeSingle();
+    if (postDevisRow) { doc = postDevisRow as any; postDocType = "devis"; }
 
-    if (!devis) return json({ error: "Devis introuvable" }, 404);
+    if (!doc) {
+      const { data: avenantRow } = await (db as any)
+        .from("avenants")
+        .select("id, statut, artisan_id, numero, devis_id, montant_ht, tva, date, created_at, token_expires_at")
+        .eq("token_public", effectiveToken)
+        .maybeSingle();
+      if (avenantRow) { doc = avenantRow; postDocType = "avenant"; }
+    }
 
-    if ((devis as any).token_expires_at && new Date((devis as any).token_expires_at) < new Date()) {
+    if (!doc) {
+      const { data: tsRow } = await (db as any)
+        .from("travaux_supplementaires")
+        .select("id, statut, artisan_id, numero, client_id, chantier_id, devis_id, montant_ht, tva, date, date_validite, created_at, token_expires_at")
+        .eq("token_public", effectiveToken)
+        .maybeSingle();
+      if (tsRow) { doc = tsRow; postDocType = "ts"; }
+    }
+
+    if (!doc) return json({ error: "Document introuvable" }, 404);
+
+    if (doc.token_expires_at && new Date(doc.token_expires_at as string) < new Date()) {
       return json({ error: "Lien expiré", expired: true }, 410);
     }
 
-    const devisId = (devis as any).id;
-    const artisanId = (devis as any).artisan_id;
-    const devisNumero = (devis as any).numero;
-    const clientId = (devis as any).client_id;
+    const docId = doc.id as string;
+    const artisanId = doc.artisan_id as string;
+    const docNumero = doc.numero as string;
+    const clientId = (doc.client_id as string | undefined) ?? null;
     const action = body.action as string;
 
+    // Alias devis pour rétro-compat (actions devis utilisent ces vars)
+    const devis = postDocType === "devis" ? doc : null;
+    const devisId = postDocType === "devis" ? docId : "";
+    const devisNumero = postDocType === "devis" ? docNumero : "";
+
+    let resolvedClientId: string | null = clientId;
+    if (!resolvedClientId && postDocType === "avenant" && doc.devis_id) {
+      const { data: dv } = await db.from("devis").select("client_id").eq("id", doc.devis_id as string).maybeSingle();
+      resolvedClientId = (dv as any)?.client_id ?? null;
+    }
+
     let clientNom = "Votre client";
-    if (clientId) {
-      const { data: cl } = await db.from("clients").select("nom, prenom").eq("id", clientId).single();
+    if (resolvedClientId) {
+      const { data: cl } = await db.from("clients").select("nom, prenom").eq("id", resolvedClientId).single();
       if (cl) clientNom = `${(cl as any).prenom ?? ""} ${(cl as any).nom ?? ""}`.trim() || "Votre client";
     }
 
@@ -544,9 +761,9 @@ serve(async (req) => {
           return json({ error: "Format ligne_id invalide" }, 400);
       }
 
-      await db.from("devis_annotations").delete().eq("devis_id", devisId);
+      await db.from("devis_annotations").delete().eq("doc_type", postDocType).eq("doc_id", docId);
       if (annotations.length > 0) {
-        await db.from("devis_annotations").insert(annotations.map((a: any) => ({ ...a, devis_id: devisId })));
+        await db.from("devis_annotations").insert(annotations.map((a: any) => ({ ...a, doc_type: postDocType, doc_id: docId })));
       }
 
       const annotationsSummary = annotations
@@ -557,19 +774,20 @@ serve(async (req) => {
       await saveInboundMessage(db, {
         artisanId,
         fromClientName: clientNom,
-        subject: `Devis ${devisNumero} — ${clientNom} a laissé des annotations`,
-        body: `${annotations.length} annotation(s) sur le devis ${devisNumero}.\n\n${annotationsSummary}`,
-        devisId,
+        subject: `${docNumero} — ${clientNom} a laissé des annotations`,
+        body: `${annotations.length} annotation(s) sur le document ${docNumero}.\n\n${annotationsSummary}`,
+        documentId: docId,
+        documentType: postDocType,
         annotationsData: annotations,
       });
 
       await notifyArtisan(
         db,
         artisanId,
-        `Devis ${devisNumero} — ${clientNom} a laissé des annotations`,
-        `Bonjour,\n\n${clientNom} vient d'annoter le devis ${devisNumero} (${annotations.length} annotation(s)).\n\nConnectez-vous à TrustBuild-IA pour consulter les détails et modifier le devis.\n\nCordialement,\nL'équipe TrustBuild-IA`,
+        `${docNumero} — ${clientNom} a laissé des annotations`,
+        `Bonjour,\n\n${clientNom} vient d'annoter le document ${docNumero} (${annotations.length} annotation(s)).\n\nConnectez-vous à TrustBuild-IA pour consulter les détails.\n\nCordialement,\nL'équipe TrustBuild-IA`,
       );
-      await db.from("app_logs").insert({ user_id: artisanId, action: "devis.client_annotate", entity_type: "devis", entity_id: devisId, status: "success", details: { ip: clientIp, client_nom: clientNom, count: annotations.length } });
+      await db.from("app_logs").insert({ user_id: artisanId, action: `${postDocType}.client_annotate`, entity_type: postDocType, entity_id: docId, status: "success", details: { ip: clientIp, client_nom: clientNom, count: annotations.length } });
       return json({ ok: true });
     }
 
@@ -580,43 +798,61 @@ serve(async (req) => {
       if (typeof comment === "string" && comment.length > 2000)
         return json({ error: "Motif trop long (max 2000 caractères)" }, 400);
 
-      await db.from("devis").update({ statut: "refuse" }).eq("id", devisId);
+      if (postDocType === "devis") {
+        await db.from("devis").update({ statut: "refuse" }).eq("id", docId);
+      } else if (postDocType === "avenant") {
+        await (db as any).from("avenants").update({ statut: "refuse" }).eq("id", docId);
+      } else {
+        await (db as any).from("travaux_supplementaires").update({ statut: "refuse" }).eq("id", docId);
+      }
 
       if (comment?.trim()) {
         await db.from("devis_annotations").insert({
-          devis_id: devisId,
+          doc_type: postDocType,
+          doc_id: docId,
           type: "refus_comment",
           contenu: comment.trim(),
         });
       }
 
       const motif = comment?.trim() ? `\n\nMotif : ${comment.trim()}` : "";
+      const docLabelRefus = postDocType === "devis" ? "devis" : postDocType === "avenant" ? "l'avenant" : "les travaux supplémentaires";
 
       await saveInboundMessage(db, {
         artisanId,
         fromClientName: clientNom,
-        subject: `Devis ${devisNumero} — ${clientNom} a refusé le devis`,
+        subject: `${docNumero} — ${clientNom} a refusé`,
         body: comment?.trim() ? `Motif : ${comment.trim()}` : "Aucun motif précisé.",
-        devisId,
+        documentId: docId,
+        documentType: postDocType,
       });
 
       let pdfAttachment: { content: string; filename: string } | undefined;
       try {
-        const fullData = await fetchDevisFullData(db, devis as any, clientId);
+        const docLabel = postDocType === "devis" ? "DEVIS" : postDocType === "avenant" ? "AVENANT" : "TRAVAUX SUPPLÉMENTAIRES";
+        let fullData;
+        if (postDocType === "devis") {
+          fullData = await fetchDevisFullData(db, doc, resolvedClientId);
+        } else if (postDocType === "avenant") {
+          fullData = await fetchAvenantFullData(db, doc);
+        } else {
+          fullData = await fetchTsFullData(db, doc);
+        }
         const pdfBytes = await buildDevisPdf(
           {
-            numero: devisNumero,
-            created_at: (devis as any).created_at,
-            date_validite: (devis as any).date_validite,
-            montant_ht: Number((devis as any).montant_ht),
-            tva: Number((devis as any).tva),
+            numero: docNumero,
+            created_at: doc.created_at as string,
+            date_validite: (doc.date_validite ?? doc.date) as string | null,
+            montant_ht: Number(doc.montant_ht),
+            tva: Number(doc.tva),
+            docLabel,
             ...fullData,
           },
           { type: "refused", reason: comment },
         );
         pdfAttachment = {
           content: btoa(Array.from(pdfBytes, (b) => String.fromCharCode(b)).join("")),
-          filename: `devis-${devisNumero}-refuse.pdf`,
+          filename: `${postDocType}-${docNumero}-refuse.pdf`,
         };
         console.log("[refuse] PDF refusé généré, taille:", pdfBytes.byteLength, "bytes");
       } catch (e) {
@@ -626,11 +862,11 @@ serve(async (req) => {
       await notifyArtisan(
         db,
         artisanId,
-        `Devis ${devisNumero} — ${clientNom} a refusé le devis`,
-        `Bonjour,\n\n${clientNom} vient de refuser le devis ${devisNumero}.${motif}\n\nLe devis est joint à ce message en pièce jointe PDF.\n\nCordialement,\nL'équipe TrustBuild-IA`,
+        `${docNumero} — ${clientNom} a refusé`,
+        `Bonjour,\n\n${clientNom} vient de refuser ${docLabelRefus} ${docNumero}.${motif}\n\nLe document est joint à ce message en pièce jointe PDF.\n\nCordialement,\nL'équipe TrustBuild-IA`,
         pdfAttachment,
       );
-      await db.from("app_logs").insert({ user_id: artisanId, action: "devis.client_refuse", entity_type: "devis", entity_id: devisId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
+      await db.from("app_logs").insert({ user_id: artisanId, action: `${postDocType}.client_refuse`, entity_type: postDocType, entity_id: docId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
       return json({ ok: true });
     }
 
@@ -642,32 +878,49 @@ serve(async (req) => {
 
       const bonPourAccord = (body.bon_pour_accord as string) || "Bon pour accord";
 
-      await db.from("devis_signatures").delete().eq("devis_id", devisId);
+      await db.from("devis_signatures").delete().eq("doc_type", postDocType).eq("doc_id", docId);
       await db.from("devis_signatures").insert({
-        devis_id: devisId,
+        doc_type: postDocType,
+        doc_id: docId,
         signature_data: signatureData,
         bon_pour_accord: bonPourAccord,
         ip_address: req.headers.get("x-forwarded-for") ?? null,
       });
-      await db.from("devis").update({ statut: "signe" }).eq("id", devisId);
+
+      if (postDocType === "devis") {
+        await db.from("devis").update({ statut: "signe" }).eq("id", docId);
+      } else if (postDocType === "avenant") {
+        await (db as any).from("avenants").update({ statut: "signe" }).eq("id", docId);
+      } else {
+        await (db as any).from("travaux_supplementaires").update({ statut: "signe" }).eq("id", docId);
+      }
 
       let pdfAttachment: { content: string; filename: string } | undefined;
       try {
-        const fullData = await fetchDevisFullData(db, devis as any, clientId);
+        const docLabel = postDocType === "devis" ? "DEVIS" : postDocType === "avenant" ? "AVENANT" : "TRAVAUX SUPPLÉMENTAIRES";
+        let fullData;
+        if (postDocType === "devis") {
+          fullData = await fetchDevisFullData(db, doc, resolvedClientId);
+        } else if (postDocType === "avenant") {
+          fullData = await fetchAvenantFullData(db, doc);
+        } else {
+          fullData = await fetchTsFullData(db, doc);
+        }
         const pdfBytes = await buildDevisPdf(
           {
-            numero: devisNumero,
-            created_at: (devis as any).created_at,
-            date_validite: (devis as any).date_validite,
-            montant_ht: Number((devis as any).montant_ht),
-            tva: Number((devis as any).tva),
+            numero: docNumero,
+            created_at: doc.created_at as string,
+            date_validite: (doc.date_validite ?? doc.date) as string | null,
+            montant_ht: Number(doc.montant_ht),
+            tva: Number(doc.tva),
+            docLabel,
             ...fullData,
           },
           { type: "signed", signatureData, bonPourAccord },
         );
         pdfAttachment = {
           content: btoa(Array.from(pdfBytes, (b) => String.fromCharCode(b)).join("")),
-          filename: `devis-${devisNumero}-signe.pdf`,
+          filename: `${postDocType}-${docNumero}-signe.pdf`,
         };
         console.log("[sign] PDF signé généré, taille:", pdfBytes.byteLength, "bytes");
       } catch (e) {
@@ -677,11 +930,11 @@ serve(async (req) => {
       await notifyArtisan(
         db,
         artisanId,
-        `Devis ${devisNumero} — ${clientNom} a signé le devis ✓`,
-        `Bonjour,\n\n${clientNom} vient de signer le devis ${devisNumero} — bon pour accord.\n\nLe devis signé est joint à ce message en pièce jointe PDF.\n\nCordialement,\nL'équipe TrustBuild-IA`,
+        `${docNumero} — ${clientNom} a signé ✓`,
+        `Bonjour,\n\n${clientNom} vient de signer le document ${docNumero} — bon pour accord.\n\nLe document signé est joint à ce message en pièce jointe PDF.\n\nCordialement,\nL'équipe TrustBuild-IA`,
         pdfAttachment,
       );
-      await db.from("app_logs").insert({ user_id: artisanId, action: "devis.client_sign", entity_type: "devis", entity_id: devisId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
+      await db.from("app_logs").insert({ user_id: artisanId, action: `${postDocType}.client_sign`, entity_type: postDocType, entity_id: docId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
       return json({ ok: true });
     }
 

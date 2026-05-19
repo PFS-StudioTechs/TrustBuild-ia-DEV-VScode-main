@@ -30,6 +30,7 @@ import Fournisseurs from "@/pages/Fournisseurs";
 import Contacts from "@/pages/Contacts";
 import Messagerie from "@/pages/Messagerie";
 import DevisPublic from "@/pages/DevisPublic";
+import DocumentPublic from "@/pages/DocumentPublic";
 import { Button } from "@/components/ui/button";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
@@ -165,6 +166,7 @@ const App = () => {
             <BrowserRouter>
               <Routes>
                 <Route path="/devis/view/:token" element={<DevisPublic />} />
+                <Route path="/document/view/:token" element={<DocumentPublic />} />
                 <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
