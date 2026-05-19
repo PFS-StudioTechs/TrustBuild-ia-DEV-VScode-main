@@ -1995,23 +1995,27 @@ function DevisCard({
                 </Button>
               </div>
             ) : devis.statut === "signe" ? (
-              <div className="flex gap-2 flex-wrap">
-                {!devis.chantier_id && (
-                  <Button size="sm" onClick={handleCreateChantier} className="bg-primary/90 hover:bg-primary">
-                    <Building2 className="w-3.5 h-3.5 mr-1" /> Créer le chantier
-                    <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                  </Button>
-                )}
+              <div className="flex flex-col gap-2">
                 {devis.chantier_id && (
-                  <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
-                    <Building2 className="w-3 h-3 mr-1" /> Chantier lié
-                  </Badge>
+                  <div>
+                    <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs">
+                      <Building2 className="w-3 h-3 mr-1" /> Chantier lié
+                    </Badge>
+                  </div>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}><FileText className="w-3.5 h-3.5 mr-1" /> Voir le devis</Button>
-                <Button size="sm" variant="outline" onClick={handleCreateNouvelleVersion} disabled={creatingVersion} className="text-violet-600 border-violet-300">
-                  {creatingVersion ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1" />}
-                  Nouvelle version
-                </Button>
+                <div className="flex gap-2 flex-wrap">
+                  {!devis.chantier_id && (
+                    <Button size="sm" onClick={handleCreateChantier} className="bg-primary/90 hover:bg-primary">
+                      <Building2 className="w-3.5 h-3.5 mr-1" /> Créer le chantier
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}><FileText className="w-3.5 h-3.5 mr-1" /> Voir le devis</Button>
+                  <Button size="sm" variant="outline" onClick={handleCreateNouvelleVersion} disabled={creatingVersion} className="text-violet-600 border-violet-300">
+                    {creatingVersion ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1" />}
+                    Nouvelle version
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="flex gap-2 flex-wrap">
@@ -2131,21 +2135,21 @@ function DevisCard({
             )}
 
             <Tabs defaultValue="avenants" className="w-full">
-              <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
-                <TabsTrigger value="avenants" className="text-xs">
-                  <Wrench className="w-3 h-3 mr-1" /> Avenants ({devisAvenants.length})
+              <TabsList className="w-full flex overflow-x-auto gap-0.5 h-auto p-1">
+                <TabsTrigger value="avenants" className="text-xs flex-shrink-0 whitespace-nowrap">
+                  Avenants ({devisAvenants.length})
                 </TabsTrigger>
-                <TabsTrigger value="avoirs" className="text-xs">
-                  <XCircle className="w-3 h-3 mr-1" /> Avoirs ({devisAvoirs.length})
+                <TabsTrigger value="avoirs" className="text-xs flex-shrink-0 whitespace-nowrap">
+                  Avoirs ({devisAvoirs.length})
                 </TabsTrigger>
-                <TabsTrigger value="acomptes" className="text-xs">
-                  <CreditCard className="w-3 h-3 mr-1" /> Acomptes ({devisAcomptes.length})
+                <TabsTrigger value="acomptes" className="text-xs flex-shrink-0 whitespace-nowrap">
+                  Acomptes ({devisAcomptes.length})
                 </TabsTrigger>
-                <TabsTrigger value="factures" className="text-xs">
-                  <FileText className="w-3 h-3 mr-1" /> Factures ({devisFactures.length})
+                <TabsTrigger value="factures" className="text-xs flex-shrink-0 whitespace-nowrap">
+                  Factures ({devisFactures.length})
                 </TabsTrigger>
-                <TabsTrigger value="ts" className="text-xs">
-                  <ClipboardList className="w-3 h-3 mr-1" /> TS ({devisTs.length})
+                <TabsTrigger value="ts" className="text-xs flex-shrink-0 whitespace-nowrap">
+                  TS ({devisTs.length})
                 </TabsTrigger>
               </TabsList>
 
