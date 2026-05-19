@@ -514,6 +514,7 @@ async function notifyArtisan(
         content: attachment.content,
         type: "application/pdf",
         filename: attachment.filename,
+        disposition: "attachment",
       }];
     }
 
@@ -927,11 +928,14 @@ serve(async (req) => {
         console.error("[sign] Erreur génération PDF:", e);
       }
 
+      const pdfNote = pdfAttachment
+        ? "Le document signé est joint à ce message en pièce jointe PDF."
+        : "Connectez-vous à TrustBuild-IA pour télécharger le document signé.";
       await notifyArtisan(
         db,
         artisanId,
         `${docNumero} — ${clientNom} a signé ✓`,
-        `Bonjour,\n\n${clientNom} vient de signer le document ${docNumero} — bon pour accord.\n\nLe document signé est joint à ce message en pièce jointe PDF.\n\nCordialement,\nL'équipe TrustBuild-IA`,
+        `Bonjour,\n\n${clientNom} vient de signer le document ${docNumero} — bon pour accord.\n\n${pdfNote}\n\nCordialement,\nL'équipe TrustBuild-IA`,
         pdfAttachment,
       );
       await db.from("app_logs").insert({ user_id: artisanId, action: `${postDocType}.client_sign`, entity_type: postDocType, entity_id: docId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
