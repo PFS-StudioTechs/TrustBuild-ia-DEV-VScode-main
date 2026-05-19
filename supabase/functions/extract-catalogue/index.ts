@@ -47,15 +47,16 @@ serve(async (req) => {
     const artisanId = user.id;
 
     const body = await req.json();
-    const { import_id, storage_path, fichier_type } = body as {
+    const { import_id, storage_path, fichier_type, catalogue_fournisseur_id } = body as {
       import_id: string;
       storage_path: string;
       fichier_type: "csv" | "image" | "pdf";
+      catalogue_fournisseur_id: string;
     };
 
-    if (!import_id || !storage_path || !fichier_type) {
+    if (!import_id || !storage_path || !fichier_type || !catalogue_fournisseur_id) {
       return new Response(
-        JSON.stringify({ error: "import_id, storage_path et fichier_type sont requis" }),
+        JSON.stringify({ error: "import_id, storage_path, fichier_type et catalogue_fournisseur_id sont requis" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -73,7 +74,7 @@ serve(async (req) => {
       });
     }
 
-    const fournisseurId = importRecord.fournisseur_id;
+    const fournisseurId = catalogue_fournisseur_id;
 
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("artisan-documents")
@@ -149,7 +150,6 @@ serve(async (req) => {
     const { data: existants } = await supabase
       .from("produits")
       .select("id, reference, designation, unite, prix_achat, statut_import")
-      .eq("artisan_id", artisanId)
       .eq("fournisseur_id", fournisseurId)
       .eq("actif", true);
 
@@ -193,15 +193,12 @@ serve(async (req) => {
         }
       } else {
         toInsert.push({
-          artisan_id: artisanId,
           fournisseur_id: fournisseurId,
           import_id,
           reference: p.reference,
           designation: p.designation,
           unite: p.unite,
           prix_achat: p.prix_achat,
-          prix_negocie: false,
-          prix_negocie_valeur: null,
           statut_import: statutImport,
         });
       }

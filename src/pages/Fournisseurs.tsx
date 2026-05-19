@@ -7,15 +7,90 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Phone, Mail, Pencil, Trash2, Truck, User, MapPin, FileText, BookOpen } from "lucide-react";
+import { Plus, Search, Phone, Mail, Pencil, Trash2, Truck, User, MapPin, FileText, BookOpen, Library } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
 import CatalogueDialog from "@/components/CatalogueDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 const CATEGORIES = [
   "Matériaux", "Électricité", "Plomberie", "Outillage",
   "Menuiserie", "Isolation", "Peinture", "Location", "Autre",
 ];
+
+interface CatalogueFournisseur { id: string; nom: string; logo_url: string | null; }
+
+function DepuisCatalogueDialog({
+  open,
+  onOpenChange,
+  mesFournisseurIds,
+  onAdd,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  mesFournisseurIds: Set<string>;
+  onAdd: (cf: CatalogueFournisseur) => Promise<void>;
+}) {
+  const [liste, setListe] = useState<CatalogueFournisseur[]>([]);
+  const [search, setSearch] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    (supabase as any).from("catalogue_fournisseurs").select("id, nom, logo_url").order("nom")
+      .then(({ data }: any) => setListe(data ?? []));
+  }, [open]);
+
+  const filtered = liste.filter(cf =>
+    cf.nom.toLowerCase().includes(search.toLowerCase()) && !mesFournisseurIds.has(cf.id)
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">Ajouter depuis le catalogue</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher un fournisseur…"
+            autoFocus
+          />
+          <div className="max-h-72 overflow-y-auto space-y-1">
+            {filtered.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                {search ? "Aucun résultat" : "Tous les fournisseurs sont déjà dans votre liste"}
+              </p>
+            ) : filtered.map(cf => (
+              <div key={cf.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/50">
+                <span className="text-sm font-medium">{cf.nom}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  disabled={adding === cf.id}
+                  onClick={async () => {
+                    setAdding(cf.id);
+                    await onAdd(cf);
+                    setAdding(null);
+                  }}
+                >
+                  {adding === cf.id ? "Ajout…" : <><Plus className="w-3 h-3 mr-1" />Ajouter</>}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Fermer</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function FournisseurDialog({
   open,
@@ -241,9 +316,11 @@ function FournisseurCard({
 }
 
 export default function Fournisseurs() {
-  const { fournisseurs, loading, add, update, remove, emptyForm } = useFournisseurs();
+  const { user } = useAuth();
+  const { fournisseurs, loading, add, update, remove, emptyForm, refresh } = useFournisseurs();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Fournisseur | null>(null);
   const [catalogueTarget, _setCatalogueTarget] = useState<Fournisseur | null>(null);
   const setCatalogueTarget = (v: import("@/hooks/useFournisseurs").Fournisseur | null) => {
@@ -264,6 +341,20 @@ export default function Fournisseurs() {
       (f.nom_contact ?? "").toLowerCase().includes(q)
     );
   });
+
+  const mesFournisseurIds = new Set(fournisseurs.map(f => f.catalogue_fournisseur_id).filter(Boolean) as string[]);
+
+  const handleAddDepuisCatalogue = async (cf: CatalogueFournisseur) => {
+    if (!user) return;
+    const { error } = await (supabase as any).from("fournisseurs").insert({
+      artisan_id: user.id,
+      nom: cf.nom,
+      catalogue_fournisseur_id: cf.id,
+    });
+    if (error) { toast.error("Erreur lors de l'ajout"); return; }
+    toast.success(`${cf.nom} ajouté à vos fournisseurs`);
+    await refresh();
+  };
 
   const openNew = () => { setEditTarget(null); setDialogOpen(true); };
   const openEdit = (f: Fournisseur) => { setEditTarget(f); setDialogOpen(true); };
@@ -297,9 +388,14 @@ export default function Fournisseurs() {
             {fournisseurs.length} fournisseur{fournisseurs.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button onClick={openNew} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
-          <Plus className="w-4 h-4 mr-1" /> Ajouter
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setCatalogueOpen(true)} className="touch-target gap-1.5">
+            <Library className="w-4 h-4" /> Depuis le catalogue
+          </Button>
+          <Button onClick={openNew} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
+            <Plus className="w-4 h-4 mr-1" /> Ajouter
+          </Button>
+        </div>
       </div>
 
       {/* Recherche */}
@@ -359,6 +455,13 @@ export default function Fournisseurs() {
           onOpenChange={v => { if (!v) setCatalogueTarget(null); }}
         />
       )}
+
+      <DepuisCatalogueDialog
+        open={catalogueOpen}
+        onOpenChange={setCatalogueOpen}
+        mesFournisseurIds={mesFournisseurIds}
+        onAdd={handleAddDepuisCatalogue}
+      />
     </div>
   );
 }

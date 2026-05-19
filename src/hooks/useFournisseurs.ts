@@ -15,6 +15,7 @@ export interface Fournisseur {
   categorie: string | null;
   notes: string | null;
   api_config_id: string | null;
+  catalogue_fournisseur_id: string | null;
   created_at: string;
   updated_at: string;
 }

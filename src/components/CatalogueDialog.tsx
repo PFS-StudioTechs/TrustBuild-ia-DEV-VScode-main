@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pencil, Trash2, Check, X, Upload, Loader2, PackageOpen, Plus } from "lucide-react";
@@ -23,55 +22,37 @@ const STATUT_CLASS: Record<Produit["statut_import"], string> = {
 };
 
 const ACCEPT = ".csv,.pdf,.jpg,.jpeg,.png,.webp";
-const EMPTY_FORM: ProduitUpdate = { reference: null, designation: "", unite: "u", prix_achat: 0, prix_negocie_valeur: null, prix_negocie: false };
-
-function IndeterminateCheckbox({ checked, indeterminate, onChange }: {
-  checked: boolean; indeterminate: boolean; onChange: () => void;
-}) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate; }, [indeterminate]);
-  return <input type="checkbox" ref={ref} checked={checked} onChange={onChange} className="cursor-pointer" />;
-}
+const EMPTY_FORM: ProduitUpdate = { reference: null, designation: "", unite: "u", prix_achat: 0, prix_negocie_valeur: null };
 
 export default function CatalogueDialog({
   fournisseur, open, onOpenChange,
 }: {
   fournisseur: Fournisseur; open: boolean; onOpenChange: (v: boolean) => void;
 }) {
-  const { produits, loading, importing, fetchProduits, createProduit, updateProduit, validerProduit, validerProduits, deleteProduit, deleteProduits, uploadCatalogue } = useProduits();
+  const { produits, loading, importing, fetchProduits, createProduit, updateProduit, deleteProduit, uploadCatalogue } = useProduits();
+  const catalogueFournisseurId = fournisseur.catalogue_fournisseur_id ?? "";
 
   const [filtre, setFiltre] = useState<Filtre>("tous");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<ProduitUpdate>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [newForm, setNewForm] = useState<ProduitUpdate>(EMPTY_FORM);
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    console.log('[CatalogueDialog] open prop =', open);
     if (open) {
       setFiltre("tous");
       setEditingId(null);
-      setSelectedIds(new Set());
       setAdding(false);
       setNewForm(EMPTY_FORM);
-      fetchProduits(fournisseur.id);
+      fetchProduits(catalogueFournisseurId);
     }
   }, [open, fournisseur.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    console.log('[CatalogueDialog] MONTÉ');
-    return () => { console.log('[CatalogueDialog] DÉMONTÉ'); };
-  }, []);
-
-  useEffect(() => { setSelectedIds(new Set()); }, [filtre]);
-
   const startEdit = (p: Produit) => {
     setEditingId(p.id);
-    setEditForm({ reference: p.reference, designation: p.designation, unite: p.unite, prix_achat: p.prix_achat, prix_negocie_valeur: p.prix_negocie_valeur, prix_negocie: p.prix_negocie });
+    setEditForm({ reference: p.reference, designation: p.designation, unite: p.unite, prix_achat: p.prix_achat, prix_negocie_valeur: p.prix_negocie_valeur });
   };
 
   const cancelEdit = () => setEditingId(null);
@@ -80,7 +61,7 @@ export default function CatalogueDialog({
     if (!editingId) return;
     if (!editForm.designation.trim()) { toast.error("La désignation est obligatoire"); return; }
     setSaving(true);
-    await updateProduit(editingId, { ...editForm, designation: editForm.designation.trim() });
+    await updateProduit(editingId, catalogueFournisseurId, { ...editForm, designation: editForm.designation.trim() });
     setSaving(false);
     setEditingId(null);
   };
@@ -88,7 +69,7 @@ export default function CatalogueDialog({
   const handleCreate = async () => {
     if (!newForm.designation.trim()) { toast.error("La désignation est obligatoire"); return; }
     setSaving(true);
-    const ok = await createProduit(fournisseur.id, { ...newForm, designation: newForm.designation.trim() });
+    const ok = await createProduit(catalogueFournisseurId, { ...newForm, designation: newForm.designation.trim() });
     setSaving(false);
     if (ok) { setAdding(false); setNewForm(EMPTY_FORM); }
   };
@@ -97,39 +78,13 @@ export default function CatalogueDialog({
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    await uploadCatalogue(fournisseur.id, file);
+    await uploadCatalogue(catalogueFournisseurId, fournisseur.id, file);
   };
 
   const nbIA = produits.filter(p => p.statut_import === "ia").length;
   const filtered = filtre === "tous" ? produits : produits.filter(p => p.statut_import === filtre);
-  const selectableFiltered = filtered.filter(p => p.id !== editingId);
-  const allSelected = selectableFiltered.length > 0 && selectableFiltered.every(p => selectedIds.has(p.id));
-  const someSelected = selectableFiltered.some(p => selectedIds.has(p.id));
-  const selectedIACount = filtered.filter(p => selectedIds.has(p.id) && p.statut_import === "ia").length;
-
-  const toggleAll = () => {
-    if (allSelected) setSelectedIds(prev => { const n = new Set(prev); selectableFiltered.forEach(p => n.delete(p.id)); return n; });
-    else setSelectedIds(prev => { const n = new Set(prev); selectableFiltered.forEach(p => n.add(p.id)); return n; });
-  };
-  const toggleOne = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const handleBulkValidate = async () => {
-    const ids = filtered.filter(p => selectedIds.has(p.id) && p.statut_import === "ia").map(p => p.id);
-    if (ids.length === 0) return;
-    await validerProduits(ids);
-    setSelectedIds(new Set());
-  };
-
-  const handleBulkDelete = async () => {
-    const ids = filtered.filter(p => selectedIds.has(p.id) && p.statut_import !== "valide").map(p => p.id);
-    if (ids.length === 0) return;
-    await deleteProduits(ids);
-    setSelectedIds(new Set());
-    setConfirmDeleteOpen(false);
-  };
 
   return (
-    <>
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
         className="max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0"
@@ -164,11 +119,6 @@ export default function CatalogueDialog({
                 {f === "ia" && nbIA > 0 && <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{nbIA}</span>}
               </button>
             ))}
-            {selectedIds.size > 0 && (
-              <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 h-7 text-xs" onClick={() => setConfirmDeleteOpen(true)}>
-                <Trash2 className="w-3.5 h-3.5" /> Supprimer ({selectedIds.size})
-              </Button>
-            )}
             <span className="ml-auto text-xs text-muted-foreground self-center">{filtered.length} produit{filtered.length !== 1 ? "s" : ""}</span>
             <Button size="sm" variant="outline" className="gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50 h-7 text-xs" onClick={() => { setAdding(true); setFiltre("tous"); }} disabled={adding}>
               <Plus className="w-3.5 h-3.5" /> Ajouter un article
@@ -219,7 +169,6 @@ export default function CatalogueDialog({
                 <table className="min-w-max w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-background border-b">
                     <tr>
-                      <th className="px-3 py-2 whitespace-nowrap"><IndeterminateCheckbox checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} /></th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Référence</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Désignation</th>
                       <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">Unité</th>
@@ -234,11 +183,21 @@ export default function CatalogueDialog({
                       <tr key={p.id} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
                         {editingId === p.id ? (
                           <>
-                            <td className="px-3 py-1.5" />
-                            <td className="px-2 py-1.5"><Input value={editForm.reference ?? ""} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs" placeholder="Réf." /></td>
-                            <td className="px-2 py-1.5"><Input value={editForm.designation} onChange={e => setEditForm(f => ({ ...f, designation: e.target.value }))} className="h-7 text-xs" placeholder="Désignation" /></td>
-                            <td className="px-2 py-1.5"><Input value={editForm.unite} onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-14" placeholder="u" /></td>
-                            <td className="px-2 py-1.5 text-right text-xs font-mono text-muted-foreground">{editForm.prix_achat.toFixed(2)}</td>
+                            {p.statut_import === "manuel" ? (
+                              <>
+                                <td className="px-2 py-1.5"><Input value={editForm.reference ?? ""} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value || null }))} className="h-7 text-xs" placeholder="Réf." /></td>
+                                <td className="px-2 py-1.5"><Input value={editForm.designation} onChange={e => setEditForm(f => ({ ...f, designation: e.target.value }))} className="h-7 text-xs" placeholder="Désignation" /></td>
+                                <td className="px-2 py-1.5"><Input value={editForm.unite} onChange={e => setEditForm(f => ({ ...f, unite: e.target.value }))} className="h-7 text-xs w-14" placeholder="u" /></td>
+                                <td className="px-2 py-1.5 text-right text-xs font-mono text-muted-foreground">{editForm.prix_achat.toFixed(2)}</td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-3 py-2 text-xs text-muted-foreground font-mono whitespace-nowrap">{p.reference ?? "—"}</td>
+                                <td className="px-3 py-2 text-xs whitespace-nowrap">{p.designation}</td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{p.unite}</td>
+                                <td className="px-3 py-2 text-xs text-right font-mono text-muted-foreground whitespace-nowrap">{p.prix_achat.toFixed(2)}</td>
+                              </>
+                            )}
                             <td className="px-2 py-1.5">
                               <div className="flex items-center gap-1">
                                 <Input
@@ -265,7 +224,6 @@ export default function CatalogueDialog({
                           </>
                         ) : (
                           <>
-                            <td className="px-3 py-1.5 whitespace-nowrap">{p.statut_import !== "valide" && <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleOne(p.id)} className="cursor-pointer" />}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground font-mono whitespace-nowrap">{p.reference ?? "—"}</td>
                             <td className="px-3 py-2 text-xs whitespace-nowrap">{p.designation}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{p.unite}</td>
@@ -281,7 +239,7 @@ export default function CatalogueDialog({
                             <td className="px-2 py-1.5">
                               <div className="flex gap-1 justify-end">
                                 <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => startEdit(p)}><Pencil className="w-3.5 h-3.5" /></Button>
-                                {p.statut_import !== "valide" && (
+                                {p.statut_import === "manuel" && (
                                   <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteProduit(p.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                                 )}
                               </div>
@@ -298,23 +256,5 @@ export default function CatalogueDialog({
         </div>
       </DialogContent>
     </Dialog>
-
-    <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Supprimer {selectedIds.size} article{selectedIds.size > 1 ? "s" : ""} ?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Cette action est irréversible. Les articles sélectionnés seront définitivement supprimés du catalogue.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Annuler</AlertDialogCancel>
-          <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
-            Supprimer
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    </>
   );
 }
