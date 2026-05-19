@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { X, Send, Bot, User, Scale, Wrench, Mic, Smartphone, Monitor, FilePlus, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -63,6 +62,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
   const [activeDocType, setActiveDocType] = useState<"devis" | "facture" | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lastTranscription, setLastTranscription] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const mimeTypeRef = useRef<string>("");
@@ -98,6 +98,16 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.overflowY = "hidden";
+    el.style.height = "0px";
+    const sh = el.scrollHeight;
+    el.style.height = Math.min(sh, 200) + "px";
+    if (sh > 200) el.style.overflowY = "auto";
+  }, [input]);
 
   // Listen for active doc set by DevisCard / FactureCard expand
   useEffect(() => {
@@ -550,12 +560,16 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
             Transcription prête — vérifiez et envoyez
           </div>
         )}
-        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-2 p-2">
-          <Input
+        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="flex gap-2 p-2 items-end">
+          <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
             placeholder={transcribing ? "Transcription en cours..." : "Posez votre question à Jarvis…"}
-            className="text-xs h-10"
+            rows={1}
+            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ minHeight: "40px", overflowY: "hidden" }}
             disabled={loading || transcribing}
           />
           <Button type="button" size="icon" variant="outline" onClick={toggleRecording} disabled={loading || transcribing}
