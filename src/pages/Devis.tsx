@@ -1601,6 +1601,10 @@ function DevisCard({
   const [loadedMsgId, setLoadedMsgId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (autoOpen) setExpanded(true);
+  }, [autoOpen]);
+
+  useEffect(() => {
     if (!autoOpen || !pendingMessageId) return;
     (supabase as any).from("messages").select("annotations_data").eq("id", pendingMessageId).single()
       .then(({ data }: any) => {

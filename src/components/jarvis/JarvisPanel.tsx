@@ -3,7 +3,7 @@ import { X, Send, Bot, User, Scale, Wrench, Mic, Smartphone, Monitor, FilePlus, 
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,6 +69,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const ensureConversation = async (): Promise<string | null> => {
     if (conversationId) return conversationId;
@@ -461,8 +462,11 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                     <DevisCreationForm
                       data={msg.devisData}
                       onCreated={(devisId?: string) => {
-                        if (devisId) { setActiveDocId(devisId); setActiveDocType("devis"); }
                         setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisData: null } : m)));
+                        if (devisId) {
+                          navigate(`/devis?open=${devisId}`);
+                          onClose();
+                        }
                       }}
                     />
                   </JarvisFormBoundary>
@@ -471,8 +475,12 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                   <JarvisFormBoundary>
                     <DevisUpdateForm
                       data={msg.devisUpdateData}
-                      onCreated={() => {
+                      onCreated={(devisId?: string) => {
                         setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, devisUpdateData: null } : m)));
+                        if (devisId) {
+                          navigate(`/devis?open=${devisId}`);
+                          onClose();
+                        }
                       }}
                     />
                   </JarvisFormBoundary>

@@ -47,7 +47,7 @@ export function stripDevisUpdateData(text: string): string {
 
 interface Props {
   data: DevisUpdateData;
-  onCreated: () => void;
+  onCreated: (devisId?: string) => void;
 }
 
 export default function DevisUpdateForm({ data, onCreated }: Props) {
@@ -156,7 +156,7 @@ export default function DevisUpdateForm({ data, onCreated }: Props) {
         parts.push(`${lignesValides.length} ligne(s) ajoutée(s)`);
 
       toast.success(parts.join(" · ") + " — devis mis à jour !");
-      onCreated();
+      onCreated(data.devis_id);
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de la mise à jour");
     } finally {
