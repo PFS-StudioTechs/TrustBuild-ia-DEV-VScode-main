@@ -39,14 +39,14 @@ export function exportMarkdownToPdf(opts: PdfExportOptions): void {
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
-  const MARGIN = 20;
+  const MARGIN = 10;
   const MAX_W = pageW - MARGIN * 2;
-  let y = 20;
+  let y = 10;
 
   const checkPage = (needed = 10) => {
-    if (y + needed > 277) {
+    if (y + needed > 287) {
       doc.addPage();
-      y = 22;
+      y = 14;
     }
   };
 
@@ -85,20 +85,20 @@ export function exportMarkdownToPdf(opts: PdfExportOptions): void {
 
   // ── Header banner ──────────────────────────────────────────────────────────
   doc.setFillColor(...headerColor);
-  doc.rect(0, 0, pageW, 14, "F");
+  doc.rect(0, 0, pageW, 10, "F");
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255);
-  doc.text("TrustBuild-IA", MARGIN, 9);
+  doc.text("TrustBuild-IA", MARGIN, 6);
   doc.setFont("helvetica", "normal");
   doc.text(
     new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }),
     pageW - MARGIN,
-    9,
+    6,
     { align: "right" },
   );
 
-  y = 24;
+  y = 14;
 
   // ── Title ──────────────────────────────────────────────────────────────────
   addText(clean(title), 15, "bold", 20, 20, 20);
@@ -201,7 +201,7 @@ export function exportMarkdownToPdf(opts: PdfExportOptions): void {
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(160);
-    doc.text(`Page ${p} / ${pageCount}`, pageW - MARGIN, 287, { align: "right" });
+    doc.text(`Page ${p} / ${pageCount}`, pageW - MARGIN, 292, { align: "right" });
   }
 
   doc.save(filename);
