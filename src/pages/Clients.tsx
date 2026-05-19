@@ -185,7 +185,7 @@ function ClientDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Prénom</Label>
               <Input value={form.prenom} onChange={set("prenom")} placeholder="Jean" />
@@ -205,7 +205,7 @@ function ClientDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Email <span className="text-destructive">*</span></Label>
               <Input type="email" value={form.email} onChange={set("email")} placeholder="jean@email.com" />

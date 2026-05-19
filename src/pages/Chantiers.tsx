@@ -833,7 +833,7 @@ export default function Chantiers() {
                 <SelectContent>{Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Date de début</Label>
                 <Input type="date" value={chForm.date_debut} onChange={(e) => setChForm(p => ({ ...p, date_debut: e.target.value }))} />
@@ -976,7 +976,7 @@ export default function Chantiers() {
                         <SelectContent>{Object.entries(statutLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label>Date de début</Label>
                         <Input type="date" value={detailForm.date_debut} onChange={(e) => setDetailForm(p => ({ ...p, date_debut: e.target.value }))} />
@@ -1103,7 +1103,7 @@ export default function Chantiers() {
             <DialogTitle className="font-display">Nouveau devis</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Numéro (auto si vide)</Label>
                 <Input value={newDevisForm.numero} onChange={e => setNewDevisForm(p => ({ ...p, numero: e.target.value }))} placeholder="DEV-001" />
@@ -1113,7 +1113,7 @@ export default function Chantiers() {
                 <Input type="date" value={newDevisForm.date_validite} onChange={e => setNewDevisForm(p => ({ ...p, date_validite: e.target.value }))} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>TVA (%)</Label>
                 <Select value={newDevisForm.tva} onValueChange={v => setNewDevisForm(p => ({ ...p, tva: v }))}>
@@ -1248,7 +1248,7 @@ export default function Chantiers() {
                 <SelectContent>{chantierDevis.map(d => <SelectItem key={d.id} value={d.id}>{d.numero} — {Number(d.montant_ht).toLocaleString("fr-FR")} €</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Date</Label><Input type="date" value={newAvenantForm.date} onChange={e => setNewAvenantForm(p => ({ ...p, date: e.target.value }))} /></div>
               <div className="space-y-1"><Label>TVA (%)</Label>
                 <Select value={newAvenantForm.tva} onValueChange={v => setNewAvenantForm(p => ({ ...p, tva: v }))}>
@@ -1277,7 +1277,7 @@ export default function Chantiers() {
             {newAvenantForm.mode === "montant" ? (
               <div className="space-y-1"><Label>Montant HT (€)</Label><Input type="number" value={newAvenantForm.montant_ht} onChange={e => setNewAvenantForm(p => ({ ...p, montant_ht: e.target.value }))} /></div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Pourcentage (%)</Label>
                   <Input type="number" min="0" max="100" value={newAvenantForm.pourcentage} onChange={e => setNewAvenantForm(p => ({ ...p, pourcentage: e.target.value }))} placeholder="ex: 10" />

@@ -119,7 +119,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto">
+    <div className="px-3 py-4 md:p-8 space-y-6 max-w-4xl mx-auto">
       <div className="animate-fade-up">
         <h1 className="text-h1 font-display">
           Bonjour{profile ? `, ${profile.prenom}` : ""} 👋

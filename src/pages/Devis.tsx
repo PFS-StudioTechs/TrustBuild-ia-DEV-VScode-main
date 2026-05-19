@@ -467,7 +467,7 @@ function DevisDialog({
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div><Label className="text-xs">Nom *</Label><Input value={newClient.nom} onChange={(e) => setNewClient(p => ({ ...p, nom: e.target.value }))} /></div>
                   <div><Label className="text-xs">Prénom</Label><Input value={newClient.prenom} onChange={(e) => setNewClient(p => ({ ...p, prenom: e.target.value }))} /></div>
                   <div><Label className="text-xs">Email</Label><Input value={newClient.email} onChange={(e) => setNewClient(p => ({ ...p, email: e.target.value }))} /></div>
@@ -2131,7 +2131,7 @@ function DevisCard({
             )}
 
             <Tabs defaultValue="avenants" className="w-full">
-              <TabsList className="w-full grid grid-cols-5">
+              <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
                 <TabsTrigger value="avenants" className="text-xs">
                   <Wrench className="w-3 h-3 mr-1" /> Avenants ({devisAvenants.length})
                 </TabsTrigger>

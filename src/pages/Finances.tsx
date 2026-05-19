@@ -124,7 +124,7 @@ export default function Finances() {
       <h1 className="text-h1 font-display animate-fade-up">Suivi financier</h1>
 
       <Tabs defaultValue={defaultTab} className="animate-fade-up-1">
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full">
           <TabsTrigger value="chantier" className="touch-target text-xs sm:text-sm gap-1">
             <HardHat className="w-4 h-4 hidden sm:block" /> Par chantier
           </TabsTrigger>
@@ -165,7 +165,7 @@ export default function Finances() {
         </TabsContent>
 
         <TabsContent value="tresorerie" className="space-y-4 mt-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="forge-card text-center"><p className="text-xs text-muted-foreground mb-1">Encaissé</p><p className="text-lg font-mono font-bold text-success">{totalEncaisse.toLocaleString("fr-FR")} €</p></div>
             <div className="forge-card text-center"><p className="text-xs text-muted-foreground mb-1">En attente</p><p className="text-lg font-mono font-bold text-warning">{totalAttente.toLocaleString("fr-FR")} €</p></div>
             <div className="forge-card text-center"><p className="text-xs text-muted-foreground mb-1">En retard</p><p className="text-lg font-mono font-bold text-destructive">{totalRetard.toLocaleString("fr-FR")} €</p></div>

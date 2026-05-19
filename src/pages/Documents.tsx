@@ -75,40 +75,44 @@ function LignesEditor({ lignes, onChange }: { lignes: LigneForm[]; onChange: (l:
 
   return (
     <div className="space-y-2">
-      {lignes.length > 0 && (
-        <div className="grid gap-1 text-[10px] font-medium text-muted-foreground px-0.5"
-          style={{ gridTemplateColumns: "1fr 52px 52px 80px 46px 68px 28px" }}>
-          <span>Désignation</span>
-          <span>Qté</span>
-          <span>Unité</span>
-          <span>P.U. HT €</span>
-          <span>TVA%</span>
-          <span className="text-right">Total HT</span>
-          <span />
+      <div className="overflow-x-auto">
+        <div className="min-w-[480px] space-y-1">
+          {lignes.length > 0 && (
+            <div className="grid gap-1 text-[10px] font-medium text-muted-foreground px-0.5"
+              style={{ gridTemplateColumns: "1fr 52px 52px 80px 46px 68px 28px" }}>
+              <span>Désignation</span>
+              <span>Qté</span>
+              <span>Unité</span>
+              <span>P.U. HT €</span>
+              <span>TVA%</span>
+              <span className="text-right">Total HT</span>
+              <span />
+            </div>
+          )}
+          {lignes.map((l, i) => (
+            <div key={l._key} className="grid gap-1 items-center"
+              style={{ gridTemplateColumns: "1fr 52px 52px 80px 46px 68px 28px" }}>
+              <Input value={l.designation} onChange={(e) => upd(i, "designation", e.target.value)}
+                placeholder="Désignation / prestation" className="h-8 text-xs" />
+              <Input value={l.quantite} onChange={(e) => upd(i, "quantite", e.target.value)}
+                type="number" min="0" step="0.01" className="h-8 text-xs px-1.5" />
+              <Input value={l.unite} onChange={(e) => upd(i, "unite", e.target.value)}
+                placeholder="u" className="h-8 text-xs px-1.5" />
+              <Input value={l.prix_unitaire} onChange={(e) => upd(i, "prix_unitaire", e.target.value)}
+                type="number" min="0" step="0.01" placeholder="0" className="h-8 text-xs px-1.5" />
+              <Input value={l.tva} onChange={(e) => upd(i, "tva", e.target.value)}
+                type="number" min="0" className="h-8 text-xs px-1.5" />
+              <span className="text-xs font-mono text-right pr-1 tabular-nums">
+                {fmt((parseFloat(l.quantite) || 0) * (parseFloat(l.prix_unitaire) || 0))}
+              </span>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
+                onClick={() => onChange(lignes.filter((_, j) => j !== i))}>
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
         </div>
-      )}
-      {lignes.map((l, i) => (
-        <div key={l._key} className="grid gap-1 items-center"
-          style={{ gridTemplateColumns: "1fr 52px 52px 80px 46px 68px 28px" }}>
-          <Input value={l.designation} onChange={(e) => upd(i, "designation", e.target.value)}
-            placeholder="Désignation / prestation" className="h-8 text-xs" />
-          <Input value={l.quantite} onChange={(e) => upd(i, "quantite", e.target.value)}
-            type="number" min="0" step="0.01" className="h-8 text-xs px-1.5" />
-          <Input value={l.unite} onChange={(e) => upd(i, "unite", e.target.value)}
-            placeholder="u" className="h-8 text-xs px-1.5" />
-          <Input value={l.prix_unitaire} onChange={(e) => upd(i, "prix_unitaire", e.target.value)}
-            type="number" min="0" step="0.01" placeholder="0" className="h-8 text-xs px-1.5" />
-          <Input value={l.tva} onChange={(e) => upd(i, "tva", e.target.value)}
-            type="number" min="0" className="h-8 text-xs px-1.5" />
-          <span className="text-xs font-mono text-right pr-1 tabular-nums">
-            {fmt((parseFloat(l.quantite) || 0) * (parseFloat(l.prix_unitaire) || 0))}
-          </span>
-          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={() => onChange(lignes.filter((_, j) => j !== i))}>
-            <Trash2 className="w-3 h-3" />
-          </Button>
-        </div>
-      ))}
+      </div>
       {lignes.length === 0 && (
         <p className="text-xs text-center text-muted-foreground py-4 border border-dashed rounded-lg">
           Aucune ligne — ajoutez des prestations ci-dessous
