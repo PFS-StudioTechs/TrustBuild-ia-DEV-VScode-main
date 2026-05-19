@@ -413,8 +413,8 @@ function DevisDialog({
 
       toast.success(editDevis ? "Devis mis à jour" : "Devis créé");
       log({ action: editDevis ? 'devis.updated' : 'devis.created', entity_type: 'devis', entity_id: savedDevisId, status: 'success', details: { numero, montant_ht: montantHT } });
-      onSaved();
       onClose();
+      onSaved();
     } catch (err: any) {
       toast.error(err.message || "Erreur");
       log({ action: editDevis ? 'devis.updated' : 'devis.created', entity_type: 'devis', entity_id: savedDevisId, status: 'error', details: { numero, error: err.message } });
