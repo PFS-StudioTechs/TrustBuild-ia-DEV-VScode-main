@@ -2405,7 +2405,7 @@ function DevisCard({
       <DevisDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        onSaved={onRefresh}
+        onSaved={pendingMessageId ? () => navigate("/messagerie") : onRefresh}
         clients={allClients}
         nomenclatureSettings={nomenclatureSettings}
         editDevis={devis}
