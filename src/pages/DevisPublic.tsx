@@ -69,8 +69,8 @@ export default function DevisPublic() {
         else if (d.error) { setErr(d.error); }
         else {
           setData(d);
-          if (d.devis.statut === "signe") setFinalStatus("signe");
-          if (d.devis.statut === "refuse") setFinalStatus("refuse");
+          if (d.devis?.statut === "signe") setFinalStatus("signe");
+          if (d.devis?.statut === "refuse") setFinalStatus("refuse");
         }
       })
       .catch(() => setErr("Erreur de chargement"))

@@ -135,18 +135,22 @@ export default function SendEmailDialog(props: Props) {
 
     setSending(true);
     try {
-      // Génère token frais avant envoi — garantit que lien email = lien en DB
       let finalBody = body;
       if (meta.tokenTable) {
-        const freshToken = crypto.randomUUID();
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 90);
-        await (supabase as any).from(meta.tokenTable).update({
-          token_public: freshToken,
-          token_expires_at: expiresAt.toISOString(),
-        }).eq("id", doc.id);
         if (tokenPublic) {
-          finalBody = body.replace(tokenPublic, freshToken);
+          await (supabase as any).from(meta.tokenTable).update({
+            token_expires_at: expiresAt.toISOString(),
+          }).eq("id", doc.id);
+        } else {
+          const freshToken = crypto.randomUUID();
+          await (supabase as any).from(meta.tokenTable).update({
+            token_public: freshToken,
+            token_expires_at: expiresAt.toISOString(),
+          }).eq("id", doc.id);
+          const docRoute = type === "devis" ? "devis/view" : "document/view";
+          finalBody = body + `\n\n👉 Consulter, annoter et signer votre document en ligne :\n${window.location.origin}/${docRoute}/${freshToken}`;
         }
       }
 
