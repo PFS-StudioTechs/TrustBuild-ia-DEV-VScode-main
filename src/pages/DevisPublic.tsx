@@ -230,7 +230,17 @@ export default function DevisPublic() {
     );
   }
 
-  const { devis, artisan, client, chantier, lignes } = data;
+  const { doc: docData, devis: devisData, artisan, client, chantier, lignes } = data;
+  const devis = devisData ?? docData;
+  if (!devis) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="text-center space-y-2">
+        <p className="text-2xl">🔍</p>
+        <p className="font-semibold text-gray-700">Devis introuvable</p>
+        <p className="text-sm text-gray-500">Ce lien est invalide ou expiré.</p>
+      </div>
+    </div>
+  );
   const montantTTC = Number(devis.montant_ht) * (1 + Number(devis.tva) / 100);
   const montantTVA = Number(devis.montant_ht) * (Number(devis.tva) / 100);
   const today = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
