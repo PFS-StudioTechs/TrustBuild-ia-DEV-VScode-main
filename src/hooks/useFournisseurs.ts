@@ -7,6 +7,7 @@ export interface Fournisseur {
   id: string;
   artisan_id: string;
   nom: string;
+  ville: string;
   nom_contact: string | null;
   email: string | null;
   telephone: string | null;
@@ -24,6 +25,7 @@ export type FournisseurForm = Omit<Fournisseur, "id" | "artisan_id" | "api_confi
 
 const emptyForm = (): FournisseurForm => ({
   nom: "",
+  ville: "",
   nom_contact: "",
   email: "",
   telephone: "",
@@ -56,17 +58,19 @@ export function useFournisseurs() {
   const add = async (form: FournisseurForm): Promise<boolean> => {
     if (!user) return false;
     const nomNormalise = form.nom.trim().toUpperCase();
+    const ville = form.ville.trim();
     let catalogueFournisseurId: string | null = null;
-    const { data: existing } = await (supabase as any).from("catalogue_fournisseurs").select("id").eq("nom_normalise", nomNormalise).maybeSingle();
+    const { data: existing } = await (supabase as any).from("catalogue_fournisseurs").select("id").eq("nom_normalise", nomNormalise).eq("ville", ville).maybeSingle();
     if (existing?.id) {
       catalogueFournisseurId = existing.id;
     } else {
-      const { data: inserted } = await (supabase as any).from("catalogue_fournisseurs").insert({ nom: form.nom.trim(), nom_normalise: nomNormalise }).select("id").single();
+      const { data: inserted } = await (supabase as any).from("catalogue_fournisseurs").insert({ nom: form.nom.trim(), nom_normalise: nomNormalise, ville }).select("id").single();
       catalogueFournisseurId = inserted?.id ?? null;
     }
     const { error } = await supabase.from("fournisseurs").insert({
       artisan_id: user.id,
       nom: form.nom.trim(),
+      ville,
       nom_contact: form.nom_contact?.trim() || null,
       email: form.email?.trim() || null,
       telephone: form.telephone?.trim() || null,
@@ -85,6 +89,7 @@ export function useFournisseurs() {
   const update = async (id: string, form: FournisseurForm): Promise<boolean> => {
     const { error } = await supabase.from("fournisseurs").update({
       nom: form.nom.trim(),
+      ville: form.ville.trim(),
       nom_contact: form.nom_contact?.trim() || null,
       email: form.email?.trim() || null,
       telephone: form.telephone?.trim() || null,

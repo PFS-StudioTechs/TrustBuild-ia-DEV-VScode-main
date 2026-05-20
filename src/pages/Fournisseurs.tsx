@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Phone, Mail, Pencil, Trash2, Truck, User, MapPin, FileText, BookOpen, Library, Check } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
+import VilleField from "@/components/ui/VilleField";
 import CatalogueDialog from "@/components/CatalogueDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -152,6 +153,7 @@ function FournisseurDialog({
 
   const handleSubmit = async () => {
     if (!form.nom.trim()) { toast.error("Le nom est obligatoire"); return; }
+    if (!form.ville.trim()) { toast.error("La ville est obligatoire"); return; }
     setSaving(true);
     const ok = await onSave(form);
     setSaving(false);
@@ -168,24 +170,30 @@ function FournisseurDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Nom + Catégorie */}
+          {/* Nom + Ville */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Nom <span className="text-destructive">*</span></Label>
               <Input value={form.nom} onChange={set("nom")} placeholder="Leroy Merlin" />
             </div>
             <div className="space-y-1.5">
-              <Label>Catégorie</Label>
-              <Input
-                value={form.categorie ?? ""}
-                onChange={set("categorie")}
-                list="categories-list"
-                placeholder="Matériaux…"
-              />
-              <datalist id="categories-list">
-                {CATEGORIES.map(c => <option key={c} value={c} />)}
-              </datalist>
+              <Label>Ville <span className="text-destructive">*</span></Label>
+              <VilleField value={form.ville ?? ""} onChange={v => setForm(p => ({ ...p, ville: v }))} required />
             </div>
+          </div>
+
+          {/* Catégorie */}
+          <div className="space-y-1.5">
+            <Label>Catégorie</Label>
+            <Input
+              value={form.categorie ?? ""}
+              onChange={set("categorie")}
+              list="categories-list"
+              placeholder="Matériaux…"
+            />
+            <datalist id="categories-list">
+              {CATEGORIES.map(c => <option key={c} value={c} />)}
+            </datalist>
           </div>
 
           {/* Interlocuteur */}
@@ -406,6 +414,7 @@ export default function Fournisseurs() {
   const initialForm: FournisseurForm = editTarget
     ? {
         nom: editTarget.nom,
+        ville: editTarget.ville,
         nom_contact: editTarget.nom_contact,
         email: editTarget.email,
         telephone: editTarget.telephone,
@@ -428,7 +437,7 @@ export default function Fournisseurs() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Ajouter un fournisseur :</span>
-          <Button variant="outline" onClick={() => setCatalogueOpen(true)} className="touch-target gap-1.5">
+          <Button variant="outline" onClick={() => setCatalogueOpen(true)} className="touch-target gap-1.5 border-[#C0400C]/60 text-[#C0400C] bg-[#C0400C]/10 hover:bg-[#C0400C]/20 hover:border-[#C0400C]">
             <Library className="w-4 h-4" /> Fournisseurs référencés
           </Button>
           <Button onClick={openNew} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
