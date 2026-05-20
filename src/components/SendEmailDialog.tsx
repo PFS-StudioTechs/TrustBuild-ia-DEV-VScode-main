@@ -115,14 +115,9 @@ export default function SendEmailDialog(props: Props) {
       dateInfo = `\nCe document est valable jusqu'au ${new Date((props as any).doc.date_validite).toLocaleDateString("fr-FR")}.`;
     }
 
-    const docRoute = type === "devis" ? "devis/view" : "document/view";
-    const publicLink = tokenPublic
-      ? `\n\n👉 Consulter, annoter et signer votre document en ligne :\n${window.location.origin}/${docRoute}/${tokenPublic}`
-      : "";
-
     const bodyText = type === "facture"
       ? `${greeting}\n\nVeuillez trouver ci-dessous la facture ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`
-      : `${greeting}\n\nVeuillez trouver ci-dessous ${type === "avenant" ? "l'avenant" : type === "ts" ? "les travaux supplémentaires" : "le devis"} ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}${publicLink}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`;
+      : `${greeting}\n\nVeuillez trouver ci-dessous ${type === "avenant" ? "l'avenant" : type === "ts" ? "les travaux supplémentaires" : "le devis"} ${doc.numero} d'un montant de ${montantLabel} TTC.${dateInfo}\n\nN'hésitez pas à me contacter pour toute question.\n\nCordialement,\n${artisanNom || "L'artisan"}`;
 
     setBody(bodyText);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,9 +131,11 @@ export default function SendEmailDialog(props: Props) {
     setSending(true);
     try {
       let finalBody = body;
+      let htmlBody: string | undefined;
       if (meta.tokenTable) {
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 90);
+        let usedToken = tokenPublic;
         if (tokenPublic) {
           await (supabase as any).from(meta.tokenTable).update({
             token_expires_at: expiresAt.toISOString(),
@@ -149,8 +146,16 @@ export default function SendEmailDialog(props: Props) {
             token_public: freshToken,
             token_expires_at: expiresAt.toISOString(),
           }).eq("id", doc.id);
+          usedToken = freshToken;
+        }
+        if (usedToken) {
           const docRoute = type === "devis" ? "devis/view" : "document/view";
-          finalBody = body + `\n\n👉 Consulter, annoter et signer votre document en ligne :\n${window.location.origin}/${docRoute}/${freshToken}`;
+          const docUrl = `${window.location.origin}/${docRoute}/${usedToken}`;
+          const btnLabel = type === "devis" ? "Consulter mon devis"
+            : type === "avenant" ? "Consulter mon avenant"
+            : "Consulter mes travaux supplémentaires";
+          finalBody = body + `\n\n👉 ${btnLabel} : ${docUrl}`;
+          htmlBody = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">${body.replace(/\n/g, "<br>")}<div style="margin:24px 0;text-align:center"><a href="${docUrl}" style="background:#2563eb;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;font-size:15px">${btnLabel}</a></div></div>`;
         }
       }
 
@@ -160,6 +165,7 @@ export default function SendEmailDialog(props: Props) {
           to_name: clientNom || undefined,
           subject,
           body: finalBody,
+          html_body: htmlBody,
           document_type: type,
           document_id: doc.id,
         },

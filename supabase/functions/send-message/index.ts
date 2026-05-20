@@ -28,7 +28,7 @@ serve(async (req) => {
 
   const serviceClient = createClient(supabaseUrl, serviceKey);
 
-  const { to_email, to_name, subject, body, document_type, document_id } = await req.json();
+  const { to_email, to_name, subject, body, html_body, document_type, document_id } = await req.json();
   if (!to_email || !subject || !body) {
     return new Response(JSON.stringify({ error: "Champs manquants (to_email, subject, body)" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -70,7 +70,9 @@ serve(async (req) => {
       from: { email: fromEmail, name: `${senderName} via ${fromName}` },
       reply_to: { email: replyTo, name: senderName },
       subject,
-      content: [{ type: "text/plain", value: body }],
+      content: html_body
+        ? [{ type: "text/plain", value: body }, { type: "text/html", value: html_body }]
+        : [{ type: "text/plain", value: body }],
     };
 
     if (pdfBase64 && pdfFilename) {

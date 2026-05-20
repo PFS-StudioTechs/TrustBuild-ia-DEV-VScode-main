@@ -565,7 +565,7 @@ serve(async (req) => {
     if (!doc) {
       const { data: avenantRow } = await (db as any)
         .from("avenants")
-        .select("id, numero, statut, montant_ht, tva, date, created_at, artisan_id, devis_id, token_expires_at")
+        .select("id, numero, statut, montant_ht, date, created_at, artisan_id, devis_id, token_expires_at")
         .eq("token_public", token)
         .maybeSingle();
       if (avenantRow) { doc = avenantRow; docType = "avenant"; }
@@ -656,6 +656,7 @@ serve(async (req) => {
     } else if (docType === "avenant") {
       const { data: l } = await (db as any).from("lignes_avenant").select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre").eq("avenant_id", doc.id as string).order("ordre");
       lignes = l ?? [];
+      (doc as any).tva = (lignes as any[])[0]?.tva ?? 20;
     } else {
       const { data: l } = await (db as any).from("lignes_ts").select("id, designation, quantite, unite, prix_unitaire, tva, section_nom, ordre").eq("ts_id", doc.id as string).order("ordre");
       lignes = l ?? [];
