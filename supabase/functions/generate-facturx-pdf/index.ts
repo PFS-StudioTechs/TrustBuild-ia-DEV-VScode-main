@@ -110,6 +110,7 @@ function hexToRgb(hex: string) {
 }
 
 async function buildDevisPdf(p: {
+  typeLabel: string;
   numero: string;
   dateDoc: string;
   dateValidite: string | null;
@@ -128,7 +129,7 @@ async function buildDevisPdf(p: {
   logoUrl: string | null;
 }): Promise<PDFDocument> {
   const pdfDoc = await PDFDocument.create();
-  pdfDoc.setTitle(`Devis ${p.numero}`);
+  pdfDoc.setTitle(`${p.typeLabel} ${p.numero}`);
   pdfDoc.setCreator("TrustBuild-IA");
   pdfDoc.setProducer("TrustBuild-IA / pdf-lib");
 
@@ -173,9 +174,8 @@ async function buildDevisPdf(p: {
     } catch { /* skip logo on error */ }
   }
 
-  // "DEVIS" title (right in header)
-  const titleW = fB.widthOfTextAtSize("DEVIS", 26);
-  page.drawText("DEVIS", { x: width - M - titleW, y: height - 38, size: 26, font: fB, color: white });
+  const titleW = fB.widthOfTextAtSize(p.typeLabel, 26);
+  page.drawText(p.typeLabel, { x: width - M - titleW, y: height - 38, size: 26, font: fB, color: white });
 
   const numStr = `N° : ${p.numero}`;
   page.drawText(numStr, { x: width - M - fN.widthOfTextAtSize(numStr, 9), y: height - 53, size: 9, font: fN, color: white });
@@ -770,7 +770,7 @@ serve(async (req) => {
     const body = await req.json();
 
     // Support legacy { facture_id } et nouveau { type, document_id }
-    const docType: "facture" | "avoir" | "acompte" | "devis" = body.type ?? "facture";
+    const docType: "facture" | "avoir" | "acompte" | "devis" | "avenant" | "ts" = body.type ?? "facture";
     const documentId: string = body.document_id ?? body.facture_id;
     logDocType = docType;
     logDocumentId = documentId;
@@ -1072,6 +1072,7 @@ serve(async (req) => {
       const tvaPct = Number(devis.tva) || 20;
 
       const pdfDoc = await buildDevisPdf({
+        typeLabel: "DEVIS",
         numero: devis.numero,
         dateDoc: devis.created_at,
         // deno-lint-ignore no-explicit-any
@@ -1095,6 +1096,201 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ pdf_base64: btoa(binary), numero: devis.numero }),
+        { headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ── AVENANT ───────────────────────────────────────────────────────────────
+    if (docType === "avenant") {
+      // deno-lint-ignore no-explicit-any
+      const { data: avenant, error: aErr } = await (db as any).from("avenants")
+        .select("id, numero, statut, montant_ht, date, created_at, artisan_id, devis_id")
+        .eq("id", documentId)
+        .eq("artisan_id", user.id)
+        .single();
+      if (aErr || !avenant) {
+        return new Response(JSON.stringify({ error: "Avenant introuvable" }), {
+          status: 404, headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      let chantierNom = "", chantierAdresse = "";
+      let clientNom = "", clientAdresse = "";
+      // deno-lint-ignore no-explicit-any
+      if ((avenant as any).devis_id) {
+        // deno-lint-ignore no-explicit-any
+        const { data: dv } = await db.from("devis").select("client_id, chantier_id").eq("id", (avenant as any).devis_id).maybeSingle();
+        if (dv) {
+          // deno-lint-ignore no-explicit-any
+          if ((dv as any).chantier_id) {
+            // deno-lint-ignore no-explicit-any
+            const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (dv as any).chantier_id).maybeSingle();
+            if (ch) {
+              // deno-lint-ignore no-explicit-any
+              chantierNom = (ch as any).nom ?? "";
+              // deno-lint-ignore no-explicit-any
+              chantierAdresse = (ch as any).adresse_chantier ?? "";
+              // deno-lint-ignore no-explicit-any
+              if (!(dv as any).client_id && (ch as any).client_id) {
+                // deno-lint-ignore no-explicit-any
+                const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", (ch as any).client_id).single();
+                if (cl) { clientNom = [cl.prenom, cl.nom].filter(Boolean).join(" "); clientAdresse = cl.adresse ?? ""; }
+              }
+            }
+          }
+          // deno-lint-ignore no-explicit-any
+          if ((dv as any).client_id) {
+            // deno-lint-ignore no-explicit-any
+            const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", (dv as any).client_id).single();
+            if (cl) { clientNom = [cl.prenom, cl.nom].filter(Boolean).join(" "); clientAdresse = cl.adresse ?? ""; }
+          }
+        }
+      }
+
+      // deno-lint-ignore no-explicit-any
+      const { data: rawLines } = await (db as any).from("lignes_avenant")
+        .select("designation, quantite, unite, prix_unitaire, tva")
+        .eq("avenant_id", documentId).order("ordre");
+      const lines: LineItem[] = (rawLines ?? []).map((l: any) => ({
+        designation: l.designation ?? "",
+        quantite: Number(l.quantite),
+        unite: l.unite ?? "u",
+        prix_unitaire: Number(l.prix_unitaire),
+        tva: Number(l.tva),
+      }));
+      const tvaPct = lines[0]?.tva ?? 20;
+
+      const { data: tpl } = await db.from("document_templates")
+        .select("couleur_primaire, logo_url, secteur")
+        .eq("artisan_id", user.id).eq("is_active", true)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const primaryHex = tpl?.couleur_primaire ?? SECTOR_PRIMARY[tpl?.secteur ?? "general"] ?? "#2563eb";
+      // deno-lint-ignore no-explicit-any
+      const logoUrl: string | null = tpl?.logo_url ?? (profile as any)?.logo_url ?? null;
+
+      const totalHt = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
+      const totalTva = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire * l.tva / 100, 0);
+      const totalTtc = totalHt + totalTva;
+
+      const pdfDoc = await buildDevisPdf({
+        typeLabel: "AVENANT",
+        numero: avenant.numero,
+        dateDoc: avenant.created_at,
+        dateValidite: null,
+        statut: avenant.statut ?? "brouillon",
+        seller,
+        clientNom, clientAdresse,
+        chantierNom, chantierAdresse,
+        lines, totalHt, totalTva, totalTtc, tvaPct,
+        primaryHex, logoUrl,
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      let binary = "";
+      const CHUNK = 4096;
+      for (let i = 0; i < pdfBytes.length; i += CHUNK) {
+        binary += String.fromCharCode(...pdfBytes.subarray(i, i + CHUNK));
+      }
+
+      log(db, { user_id: user.id, action: "avenant.pdf_generated", entity_type: "avenant", entity_id: documentId, status: "success", details: { numero: avenant.numero } });
+
+      return new Response(
+        JSON.stringify({ pdf_base64: btoa(binary), numero: avenant.numero }),
+        { headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
+
+    // ── TRAVAUX SUPPLÉMENTAIRES ───────────────────────────────────────────────
+    if (docType === "ts") {
+      // deno-lint-ignore no-explicit-any
+      const { data: ts, error: tsErr } = await (db as any).from("travaux_supplementaires")
+        .select("id, numero, statut, montant_ht, tva, date, date_validite, created_at, artisan_id, client_id, chantier_id, devis_id")
+        .eq("id", documentId)
+        .eq("artisan_id", user.id)
+        .single();
+      if (tsErr || !ts) {
+        return new Response(JSON.stringify({ error: "Travaux supplémentaires introuvables" }), {
+          status: 404, headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      let chantierNom = "", chantierAdresse = "";
+      let clientNom = "", clientAdresse = "";
+      // deno-lint-ignore no-explicit-any
+      let clientId: string | null = (ts as any).client_id ?? null;
+      // deno-lint-ignore no-explicit-any
+      if ((ts as any).chantier_id) {
+        // deno-lint-ignore no-explicit-any
+        const { data: ch } = await db.from("chantiers").select("nom, adresse_chantier, client_id").eq("id", (ts as any).chantier_id).maybeSingle();
+        if (ch) {
+          // deno-lint-ignore no-explicit-any
+          chantierNom = (ch as any).nom ?? "";
+          // deno-lint-ignore no-explicit-any
+          chantierAdresse = (ch as any).adresse_chantier ?? "";
+          // deno-lint-ignore no-explicit-any
+          if (!clientId) clientId = (ch as any).client_id ?? null;
+        }
+      }
+      if (!clientId && (ts as any).devis_id) {
+        // deno-lint-ignore no-explicit-any
+        const { data: dv } = await db.from("devis").select("client_id").eq("id", (ts as any).devis_id).maybeSingle();
+        // deno-lint-ignore no-explicit-any
+        if ((dv as any)?.client_id) clientId = (dv as any).client_id;
+      }
+      if (clientId) {
+        const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", clientId).single();
+        if (cl) { clientNom = [cl.prenom, cl.nom].filter(Boolean).join(" "); clientAdresse = cl.adresse ?? ""; }
+      }
+
+      // deno-lint-ignore no-explicit-any
+      const { data: rawLines } = await (db as any).from("lignes_ts")
+        .select("designation, quantite, unite, prix_unitaire, tva")
+        .eq("ts_id", documentId).order("ordre");
+      const lines: LineItem[] = (rawLines ?? []).map((l: any) => ({
+        designation: l.designation ?? "",
+        quantite: Number(l.quantite),
+        unite: l.unite ?? "u",
+        prix_unitaire: Number(l.prix_unitaire),
+        tva: Number(l.tva),
+      }));
+      const tvaPct = Number(ts.tva) || lines[0]?.tva || 20;
+
+      const { data: tpl } = await db.from("document_templates")
+        .select("couleur_primaire, logo_url, secteur")
+        .eq("artisan_id", user.id).eq("is_active", true)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const primaryHex = tpl?.couleur_primaire ?? SECTOR_PRIMARY[tpl?.secteur ?? "general"] ?? "#2563eb";
+      // deno-lint-ignore no-explicit-any
+      const logoUrl: string | null = tpl?.logo_url ?? (profile as any)?.logo_url ?? null;
+
+      const totalHt = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
+      const totalTva = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire * l.tva / 100, 0);
+      const totalTtc = totalHt + totalTva;
+
+      const pdfDoc = await buildDevisPdf({
+        typeLabel: "TRAVAUX SUPPLÉMENTAIRES",
+        numero: ts.numero,
+        dateDoc: ts.created_at,
+        dateValidite: (ts as any).date_validite ?? null,
+        statut: ts.statut ?? "brouillon",
+        seller,
+        clientNom, clientAdresse,
+        chantierNom, chantierAdresse,
+        lines, totalHt, totalTva, totalTtc, tvaPct,
+        primaryHex, logoUrl,
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      let binary = "";
+      const CHUNK = 4096;
+      for (let i = 0; i < pdfBytes.length; i += CHUNK) {
+        binary += String.fromCharCode(...pdfBytes.subarray(i, i + CHUNK));
+      }
+
+      log(db, { user_id: user.id, action: "ts.pdf_generated", entity_type: "ts", entity_id: documentId, status: "success", details: { numero: ts.numero } });
+
+      return new Response(
+        JSON.stringify({ pdf_base64: btoa(binary), numero: ts.numero }),
         { headers: { ...cors, "Content-Type": "application/json" } },
       );
     }

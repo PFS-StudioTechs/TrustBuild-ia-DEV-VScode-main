@@ -40,7 +40,8 @@ serve(async (req) => {
   // Generate PDF for devis and attach it
   let pdfBase64: string | null = null;
   let pdfFilename: string | null = null;
-  if (document_type === "devis" && document_id) {
+  const PDF_TYPES = ["devis", "avenant", "ts"];
+  if (document_id && PDF_TYPES.includes(document_type)) {
     try {
       const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
         method: "POST",
@@ -49,13 +50,14 @@ serve(async (req) => {
           "Content-Type": "application/json",
           "apikey": supabaseAnonKey,
         },
-        body: JSON.stringify({ type: "devis", document_id }),
+        body: JSON.stringify({ type: document_type, document_id }),
       });
       if (pdfRes.ok) {
         const pdfData = await pdfRes.json();
         if (pdfData.pdf_base64) {
           pdfBase64 = pdfData.pdf_base64;
-          pdfFilename = `Devis_${pdfData.numero ?? document_id}.pdf`;
+          const prefix = document_type === "avenant" ? "Avenant" : document_type === "ts" ? "TS" : "Devis";
+          pdfFilename = `${prefix}_${pdfData.numero ?? document_id}.pdf`;
         }
       }
     } catch (e) {
