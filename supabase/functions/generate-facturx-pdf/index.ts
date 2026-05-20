@@ -4,7 +4,9 @@ import { log } from "../_shared/logger.ts";
 import {
   AFRelationship,
   PDFDocument,
+  PDFImage,
   PDFName,
+  PDFPage,
   StandardFonts,
   rgb,
 } from "https://esm.sh/pdf-lib@1.17.1";
@@ -136,149 +138,171 @@ async function buildDevisPdf(p: {
   const fN = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fB = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const page = pdfDoc.addPage([595.28, 841.89]);
-  const { width, height } = page.getSize();
+  const PAGE_W = 595.28;
+  const PAGE_H = 841.89;
   const M = 40;
   const primary = hexToRgb(p.primaryHex);
   const gray = rgb(0.5, 0.5, 0.5);
   const dark = rgb(0.15, 0.15, 0.15);
   const lineCol = rgb(0.85, 0.85, 0.85);
   const white = rgb(1, 1, 1);
-  const headerH = 80;
+  const HEADER_H = 80;
+  const FOOTER_RESERVE = M + 20;
+  const TOTALS_H = 100;
+  const LINE_H = 13;
+  const TABLE_HEADER_H = 22;
+  const COL = { desig: M + 2, qty: 310, pu: 400 };
+  const TABLE_W = PAGE_W - 2 * M;
 
-  // Header band
-  page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: primary });
-
-  // Logo (left in header)
+  // Embed logo once
+  let logoImg: PDFImage | null = null;
+  let logoW = 0, logoH = 0;
   if (p.logoUrl) {
     try {
       const res = await fetch(p.logoUrl);
       if (res.ok) {
         const buf = await res.arrayBuffer();
         const ct = res.headers.get("content-type") ?? "";
-        const img = ct.includes("png") || p.logoUrl.toLowerCase().includes(".png")
+        logoImg = ct.includes("png") || p.logoUrl.toLowerCase().includes(".png")
           ? await pdfDoc.embedPng(buf)
           : await pdfDoc.embedJpg(buf);
-        const maxH = 56;
-        const maxW = 140;
-        const scale = Math.min(maxH / img.height, maxW / img.width);
-        const lw = img.width * scale;
-        const lh = img.height * scale;
-        page.drawImage(img, {
-          x: M,
-          y: height - headerH + (headerH - lh) / 2,
-          width: lw,
-          height: lh,
-        });
+        const maxH = 56, maxW = 140;
+        const scale = Math.min(maxH / logoImg.height, maxW / logoImg.width);
+        logoW = logoImg.width * scale;
+        logoH = logoImg.height * scale;
       }
-    } catch { /* skip logo on error */ }
+    } catch { /* skip logo */ }
   }
 
-  const titleW = fB.widthOfTextAtSize(p.typeLabel, 26);
-  page.drawText(p.typeLabel, { x: width - M - titleW, y: height - 38, size: 26, font: fB, color: white });
+  const addPage = (): PDFPage => {
+    const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+    page.drawRectangle({ x: 0, y: PAGE_H - HEADER_H, width: PAGE_W, height: HEADER_H, color: primary });
+    if (logoImg) {
+      page.drawImage(logoImg, {
+        x: M,
+        y: PAGE_H - HEADER_H + (HEADER_H - logoH) / 2,
+        width: logoW,
+        height: logoH,
+      });
+    }
+    const titleW = fB.widthOfTextAtSize(p.typeLabel, 26);
+    page.drawText(p.typeLabel, { x: PAGE_W - M - titleW, y: PAGE_H - 38, size: 26, font: fB, color: white });
+    const numStr = `N° : ${p.numero}`;
+    page.drawText(numStr, { x: PAGE_W - M - fN.widthOfTextAtSize(numStr, 9), y: PAGE_H - 53, size: 9, font: fN, color: white });
+    const dateStr = `Date : ${fmtDate(p.dateDoc)}`;
+    page.drawText(dateStr, { x: PAGE_W - M - fN.widthOfTextAtSize(dateStr, 9), y: PAGE_H - 65, size: 9, font: fN, color: white });
+    return page;
+  };
 
-  const numStr = `N° : ${p.numero}`;
-  page.drawText(numStr, { x: width - M - fN.widthOfTextAtSize(numStr, 9), y: height - 53, size: 9, font: fN, color: white });
+  const drawTableHeader = (page: PDFPage, y: number): number => {
+    page.drawRectangle({ x: M, y: y - 5, width: TABLE_W, height: 18, color: primary });
+    page.drawText("Description des travaux", { x: COL.desig, y: y + 1, size: 8, font: fB, color: white });
+    page.drawText("Qté / Unité", { x: COL.qty, y: y + 1, size: 8, font: fB, color: white });
+    page.drawText("P.U. HT", { x: COL.pu, y: y + 1, size: 8, font: fB, color: white });
+    page.drawText("Total HT", { x: PAGE_W - M - fB.widthOfTextAtSize("Total HT", 8), y: y + 1, size: 8, font: fB, color: white });
+    return y - TABLE_HEADER_H;
+  };
 
-  const dateStr = `Date : ${fmtDate(p.dateDoc)}`;
-  page.drawText(dateStr, { x: width - M - fN.widthOfTextAtSize(dateStr, 9), y: height - 65, size: 9, font: fN, color: white });
+  const drawFooter = (page: PDFPage) => {
+    const footerText = `${p.seller.name}${p.seller.siret ? ` — SIRET ${p.seller.siret}` : ""} — Généré par TrustBuild-IA`;
+    const ftw = fN.widthOfTextAtSize(footerText, 7.5);
+    page.drawLine({ start: { x: M, y: M + 8 }, end: { x: PAGE_W - M, y: M + 8 }, thickness: 0.5, color: lineCol });
+    page.drawText(footerText, { x: (PAGE_W - ftw) / 2, y: M - 5, size: 7.5, font: fN, color: gray });
+  };
+
+  // ─── Page 1 ───────────────────────────────────────────────────────────────
+  let cur = addPage();
+  let y = PAGE_H - HEADER_H - 16;
 
   // Artisan block
-  let y = height - headerH - 16;
-  page.drawText(p.seller.name, { x: M, y, size: 10, font: fB, color: dark });
+  cur.drawText(p.seller.name, { x: M, y, size: 10, font: fB, color: dark });
   y -= 13;
-  if (p.seller.adresse) { page.drawText(p.seller.adresse, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (p.seller.adresse) { cur.drawText(p.seller.adresse, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
   const cityLine = [p.seller.codePostal, p.seller.ville].filter(Boolean).join(" ");
-  if (cityLine) { page.drawText(cityLine, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
-  if (p.seller.siret) { page.drawText(`SIRET : ${p.seller.siret}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
-  if (p.seller.tel) { page.drawText(`Tél. : ${p.seller.tel}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
-  if (p.dateValidite) { page.drawText(`Validité : ${fmtDate(p.dateValidite)}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (cityLine) { cur.drawText(cityLine, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (p.seller.siret) { cur.drawText(`SIRET : ${p.seller.siret}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (p.seller.tel) { cur.drawText(`Tél. : ${p.seller.tel}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
+  if (p.dateValidite) { cur.drawText(`Validité : ${fmtDate(p.dateValidite)}`, { x: M, y, size: 9, font: fN, color: gray }); y -= 12; }
 
-  // Separator
   y -= 6;
-  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 1, color: primary });
+  cur.drawLine({ start: { x: M, y }, end: { x: PAGE_W - M, y }, thickness: 1, color: primary });
   y -= 14;
 
   // Chantier (left) + Client box (right)
-  const colW = (width - 2 * M - 12) / 2;
+  const colW = (PAGE_W - 2 * M - 12) / 2;
   const col2X = M + colW + 12;
   const blockTop = y;
-
   if (p.clientNom) {
     const boxH = 60;
-    page.drawRectangle({ x: col2X - 6, y: blockTop - boxH, width: colW + 6, height: boxH + 10, borderColor: primary, borderWidth: 1 });
-    page.drawText("CLIENT :", { x: col2X, y: blockTop - 2, size: 8, font: fB, color: primary });
+    cur.drawRectangle({ x: col2X - 6, y: blockTop - boxH, width: colW + 6, height: boxH + 10, borderColor: primary, borderWidth: 1 });
+    cur.drawText("CLIENT :", { x: col2X, y: blockTop - 2, size: 8, font: fB, color: primary });
     let yc = blockTop - 16;
-    page.drawText(p.clientNom, { x: col2X, y: yc, size: 9, font: fB, color: dark }); yc -= 12;
-    if (p.clientAdresse) { page.drawText(p.clientAdresse, { x: col2X, y: yc, size: 8, font: fN, color: gray }); }
+    cur.drawText(p.clientNom, { x: col2X, y: yc, size: 9, font: fB, color: dark }); yc -= 12;
+    if (p.clientAdresse) { cur.drawText(p.clientAdresse, { x: col2X, y: yc, size: 8, font: fN, color: gray }); }
   }
-
   if (p.chantierNom || p.chantierAdresse) {
-    page.drawText("Chantier :", { x: M, y: blockTop - 2, size: 8, font: fB, color: gray });
+    cur.drawText("Chantier :", { x: M, y: blockTop - 2, size: 8, font: fB, color: gray });
     let ycha = blockTop - 16;
-    if (p.chantierNom) { page.drawText(p.chantierNom, { x: M, y: ycha, size: 9, font: fB, color: dark }); ycha -= 12; }
-    if (p.chantierAdresse) { page.drawText(p.chantierAdresse, { x: M, y: ycha, size: 8, font: fN, color: gray }); }
+    if (p.chantierNom) { cur.drawText(p.chantierNom, { x: M, y: ycha, size: 9, font: fB, color: dark }); ycha -= 12; }
+    if (p.chantierAdresse) { cur.drawText(p.chantierAdresse, { x: M, y: ycha, size: 8, font: fN, color: gray }); }
   }
-
   y = blockTop - 74;
 
-  // Table header
-  const tableW = width - 2 * M;
-  const COL = { desig: M + 2, qty: 310, pu: 400, ht: 500 };
-  page.drawRectangle({ x: M, y: y - 5, width: tableW, height: 18, color: primary });
-  page.drawText("Description des travaux", { x: COL.desig, y: y + 1, size: 8, font: fB, color: white });
-  page.drawText("Qté / Unité", { x: COL.qty, y: y + 1, size: 8, font: fB, color: white });
-  page.drawText("P.U. HT", { x: COL.pu, y: y + 1, size: 8, font: fB, color: white });
-  page.drawText("Total HT", { x: width - M - fB.widthOfTextAtSize("Total HT", 8), y: y + 1, size: 8, font: fB, color: white });
-  y -= 14;
+  y = drawTableHeader(cur, y);
 
-  // Lines
-  const FOOTER_SAFE = M + 80;
+  // ─── Lines (multi-page) ───────────────────────────────────────────────────
   for (let i = 0; i < p.lines.length; i++) {
-    if (y < FOOTER_SAFE) break;
+    if (y < FOOTER_RESERVE + LINE_H) {
+      cur = addPage();
+      y = PAGE_H - HEADER_H - 20;
+      y = drawTableHeader(cur, y);
+    }
     const l = p.lines[i];
     const lineHt = l.quantite * l.prix_unitaire;
     const bg = i % 2 === 0 ? white : rgb(0.97, 0.97, 0.97);
-    page.drawRectangle({ x: M, y: y - 3, width: tableW, height: 14, color: bg });
+    cur.drawRectangle({ x: M, y: y - 3, width: TABLE_W, height: 14, color: bg });
 
     const maxDesigW = COL.qty - COL.desig - 4;
     let desig = l.designation;
     while (desig.length > 3 && fN.widthOfTextAtSize(desig, 8) > maxDesigW) desig = desig.slice(0, -1);
     if (desig !== l.designation) desig = desig.slice(0, -1) + "…";
 
-    page.drawText(desig, { x: COL.desig, y, size: 8, font: fN, color: dark });
-    page.drawText(`${n2(l.quantite)} ${l.unite || "u"}`, { x: COL.qty, y, size: 8, font: fN, color: dark });
-    page.drawText(fmtEur(l.prix_unitaire), { x: COL.pu, y, size: 8, font: fN, color: dark });
+    cur.drawText(desig, { x: COL.desig, y, size: 8, font: fN, color: dark });
+    cur.drawText(`${n2(l.quantite)} ${l.unite || "u"}`, { x: COL.qty, y, size: 8, font: fN, color: dark });
+    cur.drawText(fmtEur(l.prix_unitaire), { x: COL.pu, y, size: 8, font: fN, color: dark });
     const htStr = fmtEur(lineHt);
-    page.drawText(htStr, { x: width - M - fN.widthOfTextAtSize(htStr, 8), y, size: 8, font: fN, color: dark });
-    y -= 13;
+    cur.drawText(htStr, { x: PAGE_W - M - fN.widthOfTextAtSize(htStr, 8), y, size: 8, font: fN, color: dark });
+    y -= LINE_H;
   }
 
-  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.5, color: lineCol });
-  y -= 12;
+  // New page if not enough room for totals
+  if (y < FOOTER_RESERVE + TOTALS_H) {
+    cur = addPage();
+    y = PAGE_H - HEADER_H - 40;
+  }
 
-  // Totals
-  const SX = width / 2 + 30;
-  const htStr = fmtEur(p.totalHt);
-  page.drawText("Montant HT", { x: SX, y, size: 10, font: fN, color: gray });
-  page.drawText(htStr, { x: width - M - fN.widthOfTextAtSize(htStr, 10), y, size: 10, font: fN, color: dark });
+  // Separator + totals
+  cur.drawLine({ start: { x: M, y }, end: { x: PAGE_W - M, y }, thickness: 0.5, color: lineCol });
   y -= 16;
 
+  const SX = PAGE_W / 2 + 30;
+  const htStr = fmtEur(p.totalHt);
+  cur.drawText("Montant HT", { x: SX, y, size: 10, font: fN, color: gray });
+  cur.drawText(htStr, { x: PAGE_W - M - fN.widthOfTextAtSize(htStr, 10), y, size: 10, font: fN, color: dark });
+  y -= 20;
+
   const tvaStr = fmtEur(p.totalTva);
-  page.drawText(`TVA (${p.tvaPct}%)`, { x: SX, y, size: 10, font: fN, color: gray });
-  page.drawText(tvaStr, { x: width - M - fN.widthOfTextAtSize(tvaStr, 10), y, size: 10, font: fN, color: dark });
-  y -= 18;
+  cur.drawText(`TVA (${p.tvaPct}%)`, { x: SX, y, size: 10, font: fN, color: gray });
+  cur.drawText(tvaStr, { x: PAGE_W - M - fN.widthOfTextAtSize(tvaStr, 10), y, size: 10, font: fN, color: dark });
+  y -= 24;
 
   const ttcStr = fmtEur(p.totalTtc);
-  page.drawRectangle({ x: SX - 8, y: y - 6, width: width - M - SX + 8, height: 26, color: primary });
-  page.drawText("Total TTC", { x: SX, y: y + 3, size: 11, font: fB, color: white });
-  page.drawText(ttcStr, { x: width - M - fB.widthOfTextAtSize(ttcStr, 12), y: y + 3, size: 12, font: fB, color: white });
+  cur.drawRectangle({ x: SX - 8, y: y - 6, width: PAGE_W - M - SX + 8, height: 26, color: primary });
+  cur.drawText("Total TTC", { x: SX, y: y + 3, size: 11, font: fB, color: white });
+  cur.drawText(ttcStr, { x: PAGE_W - M - fB.widthOfTextAtSize(ttcStr, 12), y: y + 3, size: 12, font: fB, color: white });
 
-  // Footer
-  const footerText = `${p.seller.name}${p.seller.siret ? ` — SIRET ${p.seller.siret}` : ""} — Généré par TrustBuild-IA`;
-  const ftw = fN.widthOfTextAtSize(footerText, 7.5);
-  page.drawLine({ start: { x: M, y: M + 8 }, end: { x: width - M, y: M + 8 }, thickness: 0.5, color: lineCol });
-  page.drawText(footerText, { x: (width - ftw) / 2, y: M - 5, size: 7.5, font: fN, color: gray });
+  // Footer on every page
+  for (let i = 0; i < pdfDoc.getPageCount(); i++) drawFooter(pdfDoc.getPage(i));
 
   return pdfDoc;
 }
