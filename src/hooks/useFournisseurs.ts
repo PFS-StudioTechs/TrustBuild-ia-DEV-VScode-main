@@ -55,6 +55,15 @@ export function useFournisseurs() {
 
   const add = async (form: FournisseurForm): Promise<boolean> => {
     if (!user) return false;
+    const nomNormalise = form.nom.trim().toUpperCase();
+    let catalogueFournisseurId: string | null = null;
+    const { data: existing } = await (supabase as any).from("catalogue_fournisseurs").select("id").eq("nom_normalise", nomNormalise).maybeSingle();
+    if (existing?.id) {
+      catalogueFournisseurId = existing.id;
+    } else {
+      const { data: inserted } = await (supabase as any).from("catalogue_fournisseurs").insert({ nom: form.nom.trim(), nom_normalise: nomNormalise }).select("id").single();
+      catalogueFournisseurId = inserted?.id ?? null;
+    }
     const { error } = await supabase.from("fournisseurs").insert({
       artisan_id: user.id,
       nom: form.nom.trim(),
@@ -65,6 +74,7 @@ export function useFournisseurs() {
       siret: form.siret?.trim() || null,
       categorie: form.categorie?.trim() || null,
       notes: form.notes?.trim() || null,
+      catalogue_fournisseur_id: catalogueFournisseurId,
     });
     if (error) { toast.error("Erreur lors de l'ajout du fournisseur"); return false; }
     toast.success("Fournisseur ajouté");

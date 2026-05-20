@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Phone, Mail, Pencil, Trash2, Truck, User, MapPin, FileText, BookOpen, Library } from "lucide-react";
+import { Plus, Search, Phone, Mail, Pencil, Trash2, Truck, User, MapPin, FileText, BookOpen, Library, Check } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
 import CatalogueDialog from "@/components/CatalogueDialog";
@@ -19,7 +19,7 @@ const CATEGORIES = [
   "Menuiserie", "Isolation", "Peinture", "Location", "Autre",
 ];
 
-interface CatalogueFournisseur { id: string; nom: string; logo_url: string | null; }
+interface CatalogueFournisseur { id: string; nom: string; logo_url: string | null; specialites: { nom: string } | null; }
 
 function DepuisCatalogueDialog({
   open,
@@ -34,23 +34,32 @@ function DepuisCatalogueDialog({
 }) {
   const [liste, setListe] = useState<CatalogueFournisseur[]>([]);
   const [search, setSearch] = useState("");
+  const [specialiteFiltre, setSpecialiteFiltre] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    (supabase as any).from("catalogue_fournisseurs").select("id, nom, logo_url").order("nom")
+    setSearch("");
+    setSpecialiteFiltre(null);
+    (supabase as any).from("catalogue_fournisseurs").select("id, nom, logo_url, specialites(nom)").order("nom")
       .then(({ data }: any) => setListe(data ?? []));
   }, [open]);
 
-  const filtered = liste.filter(cf =>
-    cf.nom.toLowerCase().includes(search.toLowerCase()) && !mesFournisseurIds.has(cf.id)
-  );
+  const specialites = Array.from(new Set(
+    liste.map(cf => cf.specialites?.nom).filter(Boolean) as string[]
+  )).sort();
+
+  const filtered = liste.filter(cf => {
+    const matchSearch = cf.nom.toLowerCase().includes(search.toLowerCase());
+    const matchSpecialite = !specialiteFiltre || cf.specialites?.nom === specialiteFiltre;
+    return matchSearch && matchSpecialite;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display">Ajouter depuis le catalogue</DialogTitle>
+          <DialogTitle className="font-display">Fournisseurs référencés</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <Input
@@ -59,29 +68,58 @@ function DepuisCatalogueDialog({
             placeholder="Rechercher un fournisseur…"
             autoFocus
           />
+          {specialites.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap">
+              <button
+                onClick={() => setSpecialiteFiltre(null)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${!specialiteFiltre ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}
+              >
+                Tous
+              </button>
+              {specialites.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSpecialiteFiltre(prev => prev === s ? null : s)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${specialiteFiltre === s ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="max-h-72 overflow-y-auto space-y-1">
             {filtered.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">
-                {search ? "Aucun résultat" : "Tous les fournisseurs sont déjà dans votre liste"}
+                {search || specialiteFiltre ? "Aucun résultat" : "Aucun fournisseur disponible"}
               </p>
-            ) : filtered.map(cf => (
-              <div key={cf.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/50">
-                <span className="text-sm font-medium">{cf.nom}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  disabled={adding === cf.id}
-                  onClick={async () => {
-                    setAdding(cf.id);
-                    await onAdd(cf);
-                    setAdding(null);
-                  }}
-                >
-                  {adding === cf.id ? "Ajout…" : <><Plus className="w-3 h-3 mr-1" />Ajouter</>}
-                </Button>
-              </div>
-            ))}
+            ) : filtered.map(cf => {
+              const dejaAjoute = mesFournisseurIds.has(cf.id);
+              return (
+                <div key={cf.id} className={`flex items-center justify-between px-3 py-2 rounded-lg ${dejaAjoute ? "opacity-50" : "hover:bg-muted/50"}`}>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-medium">{cf.nom}</span>
+                    {cf.specialites?.nom && <span className="text-xs text-muted-foreground">{cf.specialites.nom}</span>}
+                  </div>
+                  {dejaAjoute ? (
+                    <span className="text-xs text-emerald-600 flex items-center gap-1 shrink-0"><Check className="w-3.5 h-3.5" />Ajouté</span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs shrink-0"
+                      disabled={adding === cf.id}
+                      onClick={async () => {
+                        setAdding(cf.id);
+                        await onAdd(cf);
+                        setAdding(null);
+                      }}
+                    >
+                      {adding === cf.id ? "Ajout…" : <><Plus className="w-3 h-3 mr-1" />Ajouter</>}
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
         <DialogFooter>
@@ -388,12 +426,13 @@ export default function Fournisseurs() {
             {fournisseurs.length} fournisseur{fournisseurs.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Ajouter un fournisseur :</span>
           <Button variant="outline" onClick={() => setCatalogueOpen(true)} className="touch-target gap-1.5">
-            <Library className="w-4 h-4" /> Depuis le catalogue
+            <Library className="w-4 h-4" /> Fournisseurs référencés
           </Button>
           <Button onClick={openNew} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
-            <Plus className="w-4 h-4 mr-1" /> Ajouter
+            <Plus className="w-4 h-4 mr-1" /> Nouveau fournisseur
           </Button>
         </div>
       </div>
