@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Phone, Mail, Pencil, Trash2, Truck, User, MapPin, FileText, BookOpen, Library, Check } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
-import VilleField from "@/components/ui/VilleField";
 import CatalogueDialog from "@/components/CatalogueDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +18,9 @@ const CATEGORIES = [
   "Matériaux", "Électricité", "Plomberie", "Outillage",
   "Menuiserie", "Isolation", "Peinture", "Location", "Autre",
 ];
+
+const toTitleCase = (s: string) => s.trim().replace(/\S+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+const extractVille = (adresse: string) => { const m = adresse.match(/\d{4,5}\s+(.+)$/); return m ? m[1] : ""; };
 
 interface CatalogueFournisseur { id: string; nom: string; logo_url: string | null; specialites: { nom: string } | null; }
 
@@ -136,11 +138,13 @@ function FournisseurDialog({
   onOpenChange,
   initial,
   onSave,
+  categories,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial: FournisseurForm;
   onSave: (form: FournisseurForm) => Promise<boolean>;
+  categories: string[];
 }) {
   const [form, setForm] = useState<FournisseurForm>(initial);
   const [saving, setSaving] = useState(false);
@@ -155,7 +159,7 @@ function FournisseurDialog({
     if (!form.nom.trim()) { toast.error("Le nom est obligatoire"); return; }
     if (!form.ville.trim()) { toast.error("La ville est obligatoire"); return; }
     setSaving(true);
-    const ok = await onSave(form);
+    const ok = await onSave({ ...form, categorie: form.categorie?.trim() ? toTitleCase(form.categorie) : null });
     setSaving(false);
     if (ok) onOpenChange(false);
   };
@@ -170,16 +174,10 @@ function FournisseurDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Nom + Ville */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Nom <span className="text-destructive">*</span></Label>
-              <Input value={form.nom} onChange={set("nom")} placeholder="Leroy Merlin" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Ville <span className="text-destructive">*</span></Label>
-              <VilleField value={form.ville ?? ""} onChange={v => setForm(p => ({ ...p, ville: v }))} required />
-            </div>
+          {/* Nom */}
+          <div className="space-y-1.5">
+            <Label>Nom <span className="text-destructive">*</span></Label>
+            <Input value={form.nom} onChange={set("nom")} placeholder="Leroy Merlin" />
           </div>
 
           {/* Catégorie */}
@@ -192,7 +190,7 @@ function FournisseurDialog({
               placeholder="Matériaux…"
             />
             <datalist id="categories-list">
-              {CATEGORIES.map(c => <option key={c} value={c} />)}
+              {categories.map(c => <option key={c} value={c} />)}
             </datalist>
           </div>
 
@@ -225,7 +223,11 @@ function FournisseurDialog({
             <Label>Adresse</Label>
             <AddressFields
               value={form.adresse ?? ""}
-              onChange={v => setForm(p => ({ ...p, adresse: v }))}
+              onChange={v => {
+                const ville = extractVille(v) || form.ville || "";
+                setForm(p => ({ ...p, adresse: v, ville }));
+              }}
+              required
             />
           </div>
 
@@ -324,10 +326,10 @@ function FournisseurCard({
             <Phone className="w-3 h-3 shrink-0" /> {f.telephone}
           </p>
         )}
-        {f.adresse && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
-            <MapPin className="w-3 h-3 shrink-0" />
-            <span className="truncate">{f.adresse}</span>
+        {(f.ville || f.adresse) && (
+          <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+            <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+            <span className="line-clamp-2">{f.adresse ?? f.ville}</span>
           </p>
         )}
         {f.notes && (
@@ -364,6 +366,7 @@ function FournisseurCard({
 export default function Fournisseurs() {
   const { user } = useAuth();
   const { fournisseurs, loading, add, update, remove, emptyForm, refresh } = useFournisseurs();
+  const allCategories = [...new Set([...CATEGORIES, ...fournisseurs.map(f => f.categorie).filter((c): c is string => Boolean(c))])].sort();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [catalogueOpen, setCatalogueOpen] = useState(false);
@@ -494,6 +497,7 @@ export default function Fournisseurs() {
         onOpenChange={setDialogOpen}
         initial={initialForm}
         onSave={handleSave}
+        categories={allCategories}
       />
 
       {catalogueTarget && (
