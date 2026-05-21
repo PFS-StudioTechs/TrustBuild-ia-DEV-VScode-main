@@ -19,6 +19,7 @@ import {
   GitBranch, RotateCcw, ClipboardList, Layers, Mail, Download,
 } from "lucide-react";
 import SendEmailDialog from "@/components/SendEmailDialog";
+import AddressFields from "@/components/ui/AddressFields";
 import { toast } from "sonner";
 
 // ─── Types ─────────────────────────────────────────────────
@@ -472,7 +473,7 @@ function DevisDialog({
                   <div><Label className="text-xs">Prénom</Label><Input value={newClient.prenom} onChange={(e) => setNewClient(p => ({ ...p, prenom: e.target.value }))} /></div>
                   <div><Label className="text-xs">Email</Label><Input value={newClient.email} onChange={(e) => setNewClient(p => ({ ...p, email: e.target.value }))} /></div>
                   <div><Label className="text-xs">Téléphone</Label><Input value={newClient.telephone} onChange={(e) => setNewClient(p => ({ ...p, telephone: e.target.value }))} /></div>
-                  <div className="col-span-2"><Label className="text-xs">Adresse</Label><Input value={newClient.adresse} onChange={(e) => setNewClient(p => ({ ...p, adresse: e.target.value }))} /></div>
+                  <div className="col-span-2"><Label className="text-xs">Adresse</Label><AddressFields compact value={newClient.adresse} onChange={(v) => setNewClient(p => ({ ...p, adresse: v }))} /></div>
                   <div>
                     <Label className="text-xs">Type</Label>
                     <Select value={newClient.type} onValueChange={(v) => setNewClient(p => ({ ...p, type: v }))}>
