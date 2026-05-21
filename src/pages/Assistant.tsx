@@ -29,7 +29,7 @@ export default function Assistant() {
     <div className="flex flex-col h-full">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
         <div className="px-4 pt-4 shrink-0 border-b bg-card">
-          <TabsList className="w-full grid grid-cols-1 sm:grid-cols-3">
+          <TabsList className="w-full grid grid-cols-3">
             <TabsTrigger value="jarvis" className="gap-1.5 text-xs">
               <Bot className="w-3.5 h-3.5" /> Jarvis
             </TabsTrigger>
