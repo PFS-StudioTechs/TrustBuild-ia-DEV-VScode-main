@@ -428,15 +428,15 @@ export default function Fournisseurs() {
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between animate-fade-up">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-up">
         <div>
           <h1 className="text-h1 font-display">Fournisseurs</h1>
           <p className="text-muted-foreground text-body mt-1">
             {fournisseurs.length} fournisseur{fournisseurs.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Ajouter un fournisseur :</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground w-full sm:w-auto">Ajouter un fournisseur :</span>
           <Button variant="outline" onClick={() => setCatalogueOpen(true)} className="touch-target gap-1.5 border-[#C0400C]/60 text-[#C0400C] bg-[#C0400C]/10 hover:bg-[#C0400C]/20 hover:border-[#C0400C]">
             <Library className="w-4 h-4" /> Fournisseurs référencés
           </Button>
