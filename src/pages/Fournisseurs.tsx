@@ -437,10 +437,10 @@ export default function Fournisseurs() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-muted-foreground w-full sm:w-auto">Ajouter un fournisseur :</span>
-          <Button variant="outline" onClick={() => setCatalogueOpen(true)} className="touch-target gap-1.5 border-[#C0400C]/60 text-[#C0400C] bg-[#C0400C]/10 hover:bg-[#C0400C]/20 hover:border-[#C0400C]">
+          <Button variant="outline" onClick={() => setCatalogueOpen(true)} className="touch-target gap-1.5 flex-1 sm:flex-none border-[#C0400C]/60 text-[#C0400C] bg-[#C0400C]/10 hover:bg-[#C0400C]/20 hover:border-[#C0400C]">
             <Library className="w-4 h-4" /> Fournisseurs référencés
           </Button>
-          <Button onClick={openNew} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge">
+          <Button onClick={openNew} className="touch-target flex-1 sm:flex-none bg-gradient-to-r from-primary to-primary/90 shadow-forge">
             <Plus className="w-4 h-4 mr-1" /> Nouveau fournisseur
           </Button>
         </div>
