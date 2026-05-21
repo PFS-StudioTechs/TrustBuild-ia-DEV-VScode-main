@@ -87,7 +87,10 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
   };
 
   return (
-    <div className={`forge-card border-l-4 ${!m.read ? "border-l-primary bg-primary/5" : isRefus ? "border-l-red-400" : "border-l-amber-400"}`}>
+    <div
+      className={`forge-card border-l-4 ${!m.read ? "border-l-primary bg-primary/5 cursor-pointer" : isRefus ? "border-l-red-400" : "border-l-amber-400"}`}
+      onClick={() => { if (!m.read) onMarkRead(m.id); }}
+    >
       <div className="flex items-start gap-3">
         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm ${isRefus ? "bg-red-100 text-red-600 dark:bg-red-900/30" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30"}`}>
           {(m.from_client_name ?? "C")[0].toUpperCase()}
@@ -106,7 +109,7 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
               <p className="text-sm font-medium mt-0.5 text-foreground/80">{m.subject}</p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => onDelete(m.id)}>
+              <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}>
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </div>
@@ -128,7 +131,7 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
 
           {isAnnotation && (
             <button
-              onClick={handleExpand}
+              onClick={(e) => { e.stopPropagation(); handleExpand(); }}
               className="flex items-center gap-1 text-xs text-primary hover:underline mt-1.5"
             >
               {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -201,7 +204,7 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
               size="sm"
               variant="outline"
               className="mt-2 gap-1.5 text-primary border-primary/40 hover:bg-primary/10"
-              onClick={() => navigate(`/devis?open=${m.document_id}&msgId=${m.id}`)}
+              onClick={(e) => { e.stopPropagation(); navigate(`/devis?open=${m.document_id}&msgId=${m.id}`); }}
             >
               <ArrowRight className="w-3.5 h-3.5" />
               Modifier le devis
