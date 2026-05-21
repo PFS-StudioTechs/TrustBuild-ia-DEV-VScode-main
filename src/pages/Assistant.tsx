@@ -13,14 +13,12 @@ const robertSuggestions = [
   "Quelles sont les obligations de l'artisan en matière de garantie décennale ?",
   "Rédige une mise en demeure pour retard de paiement d'un client",
   "Un client conteste des malfaçons, quels sont mes recours ?",
-  "Quelles assurances sont obligatoires pour un plombier ?",
 ];
 
 const augusteSuggestions = [
   "Quel DTU s'applique pour l'isolation thermique par l'extérieur ?",
   "Calcul de la section d'un linteau béton armé pour une ouverture de 2m",
   "Quelles sont les règles de ventilation en RE2020 ?",
-  "Comment traiter une fissure structurelle sur un mur porteur ?",
 ];
 
 export default function Assistant() {

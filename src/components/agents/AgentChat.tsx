@@ -606,7 +606,7 @@ function buildConversationHtml(params: {
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-up">
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-up pt-4">
             <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center", iconBg)}>
               <Icon className={cn("w-9 h-9", iconColor)} />
             </div>
