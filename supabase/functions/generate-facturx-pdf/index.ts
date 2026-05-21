@@ -1140,9 +1140,9 @@ serve(async (req) => {
       const logoUrl: string | null = tpl?.logo_url ?? (profile as any)?.logo_url ?? null;
 
       const totalHt = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
-      const totalTva = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire * l.tva / 100, 0);
-      const totalTtc = totalHt + totalTva;
       const tvaPct = Number(devis.tva) || 20;
+      const totalTva = totalHt * tvaPct / 100;
+      const totalTtc = totalHt + totalTva;
 
       const pdfDoc = await buildDevisPdf({
         typeLabel: "DEVIS",
@@ -1341,7 +1341,7 @@ serve(async (req) => {
       const logoUrl: string | null = tpl?.logo_url ?? (profile as any)?.logo_url ?? null;
 
       const totalHt = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
-      const totalTva = lines.reduce((s, l) => s + l.quantite * l.prix_unitaire * l.tva / 100, 0);
+      const totalTva = totalHt * tvaPct / 100;
       const totalTtc = totalHt + totalTva;
 
       const pdfDoc = await buildDevisPdf({
