@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin, CheckCircle2 } from "lucide-react";
@@ -44,9 +45,7 @@ interface AddressFieldsProps {
   onChange: (value: string) => void;
   onVilleChange?: (ville: string) => void;
   required?: boolean;
-  /** Use smaller inputs (h-8 text-xs) for compact forms */
   compact?: boolean;
-  /** Auto-normalize the initial value via BAN API (useful when Jarvis provides a raw address) */
   autoNormalize?: boolean;
 }
 
@@ -54,6 +53,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
   const lastEmitted = useRef<string>("");
   const autoNormalizeRan = useRef(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const nomVoieContainerRef = useRef<HTMLDivElement>(null);
 
   const [parts, setParts] = useState<Parts>(() => parseAddress(value));
   const [cities, setCities] = useState<string[]>([]);
@@ -62,8 +62,8 @@ export default function AddressFields({ value, onChange, onVilleChange, required
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [banNormalized, setBanNormalized] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Re-parse only when the parent sets a new value that we didn't emit ourselves
   useEffect(() => {
     if (value !== lastEmitted.current) {
       setParts(parseAddress(value));
@@ -71,7 +71,6 @@ export default function AddressFields({ value, onChange, onVilleChange, required
     }
   }, [value]);
 
-  // ── Auto-normalisation BAN au montage (adresse brute de Jarvis) ──────────
   useEffect(() => {
     if (!autoNormalize || !value || autoNormalizeRan.current) return;
     autoNormalizeRan.current = true;
@@ -103,6 +102,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
     onVilleChange?.(p.city);
     setSuggestions([]);
     setShowSuggestions(false);
+    setDropdownPos(null);
     setCities([]);
   };
 
@@ -123,11 +123,30 @@ export default function AddressFields({ value, onChange, onVilleChange, required
     }
   };
 
-  // ── Autocomplete BAN sur la voie ─────────────────────────────────────────
+  const openDropdown = (feats: BanFeature[]) => {
+    if (feats.length === 0) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setDropdownPos(null);
+      return;
+    }
+    if (nomVoieContainerRef.current) {
+      const rect = nomVoieContainerRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    setSuggestions(feats);
+    setShowSuggestions(true);
+  };
+
   const handleNomVoieChange = (val: string) => {
     update("nom_voie", val);
     clearTimeout(searchDebounce.current);
-    if (val.length < 3) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (val.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setDropdownPos(null);
+      return;
+    }
     setLoadingSuggestions(true);
     const q = [parts.numero_voie, val, parts.code_postal, parts.ville].filter(Boolean).join(" ");
     searchDebounce.current = setTimeout(async () => {
@@ -135,11 +154,12 @@ export default function AddressFields({ value, onChange, onVilleChange, required
         const res = await fetch(
           `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
         );
+        if (!res.ok) throw new Error(`BAN API ${res.status}`);
         const json = await res.json();
-        setSuggestions(json.features ?? []);
-        setShowSuggestions(true);
+        openDropdown(json.features ?? []);
       } catch {
         setSuggestions([]);
+        setShowSuggestions(false);
       } finally {
         setLoadingSuggestions(false);
       }
@@ -152,6 +172,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
       const res = await fetch(
         `https://geo.api.gouv.fr/communes?codePostal=${cp}&fields=nom&format=json`
       );
+      if (!res.ok) throw new Error(`geo API ${res.status}`);
       const data: Array<{ nom: string }> = await res.json();
       if (data.length === 1) {
         const newParts = { ...currentParts, ville: data[0].nom };
@@ -173,7 +194,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
         }
       }
     } catch {
-      // silently fail
+      // geo API unreachable — user fills manually
     } finally {
       setLoadingCities(false);
     }
@@ -184,7 +205,6 @@ export default function AddressFields({ value, onChange, onVilleChange, required
 
   return (
     <div className="space-y-2">
-      {/* Badge normalisation BAN */}
       {banNormalized && (
         <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="w-3 h-3" />
@@ -203,15 +223,15 @@ export default function AddressFields({ value, onChange, onVilleChange, required
             required={required}
           />
         </div>
-        <div className="col-span-2 relative">
+        <div className="col-span-2" ref={nomVoieContainerRef}>
           <Label className={labelCn}>Nom de la voie {required && <span className="text-destructive">*</span>}</Label>
           <div className="relative">
             <Input
               className={inputCn}
               value={parts.nom_voie}
               onChange={(e) => handleNomVoieChange(e.target.value)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => { setShowSuggestions(false); setDropdownPos(null); }, 200)}
+              onFocus={() => suggestions.length > 0 && openDropdown(suggestions)}
               placeholder="Rue des Lilas"
               required={required}
             />
@@ -219,25 +239,28 @@ export default function AddressFields({ value, onChange, onVilleChange, required
               <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground" />
             )}
           </div>
-
-          {/* Dropdown suggestions BAN */}
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg overflow-hidden">
-              {suggestions.map((feat, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onMouseDown={() => applyFeature(feat)}
-                  className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors border-b last:border-0"
-                >
-                  <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
-                  <span className="truncate">{feat.properties.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
+
+      {showSuggestions && suggestions.length > 0 && dropdownPos && createPortal(
+        <div
+          className="fixed z-[9999] bg-popover border rounded-lg shadow-lg overflow-hidden"
+          style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+        >
+          {suggestions.map((feat, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={() => applyFeature(feat)}
+              className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors border-b last:border-0"
+            >
+              <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
+              <span className="truncate">{feat.properties.label}</span>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <div>
