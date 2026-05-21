@@ -707,7 +707,7 @@ serve(async (req) => {
     if (!doc) {
       const { data: avenantRow } = await (db as any)
         .from("avenants")
-        .select("id, statut, artisan_id, numero, devis_id, montant_ht, tva, date, created_at, token_expires_at")
+        .select("id, statut, artisan_id, numero, devis_id, montant_ht, date, created_at, token_expires_at")
         .eq("token_public", effectiveToken)
         .maybeSingle();
       if (avenantRow) { doc = avenantRow; postDocType = "avenant"; }
@@ -944,7 +944,7 @@ serve(async (req) => {
               created_at: doc.created_at as string,
               date_validite: (doc.date_validite ?? doc.date) as string | null,
               montant_ht: Number(doc.montant_ht),
-              tva: Number(doc.tva),
+              tva: Number(doc.tva) || 20,
               docLabel,
               ...fullData,
             },
@@ -962,9 +962,10 @@ serve(async (req) => {
         try {
           const pdfPath = `${artisanId}/${postDocType}-${docNumero}-signe.pdf`;
           const pdfBytes = Uint8Array.from(atob(pdfAttachment.content), (c) => c.charCodeAt(0));
+          const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
           const { error: uploadErr } = await db.storage
             .from("documents-signes")
-            .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
+            .upload(pdfPath, pdfBlob, { contentType: "application/pdf", upsert: true });
           if (uploadErr) {
             console.error("[sign] Storage upload erreur:", uploadErr.message);
           } else {
