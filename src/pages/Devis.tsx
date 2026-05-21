@@ -1579,6 +1579,7 @@ function DevisCard({
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
   const [pdfTitle, setPdfTitle] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfSigneLoading, setPdfSigneLoading] = useState<string | null>(null);
   const [creatingVersion, setCreatingVersion] = useState(false);
   const [tsOpen, setTsOpen] = useState(false);
   const [editTs, setEditTs] = useState<TravailSupplementaire | null>(null);
@@ -1788,6 +1789,37 @@ function DevisCard({
     await supabase.from("acomptes").update({ statut: "encaisse", date_encaissement: new Date().toISOString() }).eq("id", acompteId);
     toast.success("Acompte marqué encaissé");
     onRefresh();
+  };
+
+  const handleDownloadSignedPdf = async (docType: string, docId: string, docNumero: string) => {
+    setPdfSigneLoading(docId);
+    try {
+      const { data: sig } = await (supabase as any)
+        .from("devis_signatures")
+        .select("pdf_signed_path")
+        .eq("doc_type", docType)
+        .eq("doc_id", docId)
+        .maybeSingle();
+      if (!sig?.pdf_signed_path) {
+        toast.error("PDF signé non disponible");
+        return;
+      }
+      const { data: urlData, error } = await supabase.storage
+        .from("documents-signes")
+        .createSignedUrl(sig.pdf_signed_path, 3600);
+      if (error || !urlData?.signedUrl) {
+        toast.error("Impossible de générer le lien de téléchargement");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = urlData.signedUrl;
+      a.download = `${docType}-${docNumero}-signe.pdf`;
+      a.click();
+    } catch {
+      toast.error("Erreur lors du téléchargement");
+    } finally {
+      setPdfSigneLoading(null);
+    }
   };
 
   const handleUpdateAvenantStatut = async (id: string, statut: string) => {
@@ -2011,6 +2043,10 @@ function DevisCard({
                     </Button>
                   )}
                   <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}><FileText className="w-3.5 h-3.5 mr-1" /> Voir le devis</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleDownloadSignedPdf("devis", devis.id, devis.numero)} disabled={pdfSigneLoading === devis.id} className="text-emerald-600 border-emerald-300">
+                    {pdfSigneLoading === devis.id ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+                    PDF signé
+                  </Button>
                   <Button size="sm" variant="outline" onClick={handleCreateNouvelleVersion} disabled={creatingVersion} className="text-violet-600 border-violet-300">
                     {creatingVersion ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <GitBranch className="w-3.5 h-3.5 mr-1" />}
                     Nouvelle version
@@ -2193,6 +2229,11 @@ function DevisCard({
                             <button onClick={() => handleUpdateAvenantStatut(av.id, "refuse")} className="text-destructive hover:opacity-80 p-0.5" title="Refusé"><XCircle className="w-3 h-3" /></button>
                             <button onClick={() => handleDeleteAvenant(av.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
                           </>
+                        )}
+                        {avStatut === "signe" && (
+                          <button onClick={() => handleDownloadSignedPdf("avenant", av.id, av.numero || "AVN")} className="text-emerald-600 hover:opacity-80 p-0.5" title="Télécharger PDF signé" disabled={pdfSigneLoading === av.id}>
+                            {pdfSigneLoading === av.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                          </button>
                         )}
                         {(avStatut === "signe" || avStatut === "refuse") && (
                           <button onClick={() => handleDeleteAvenant(av.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
@@ -2412,6 +2453,11 @@ function DevisCard({
                             <button onClick={() => handleUpdateTsStatut(t.id, "refuse")} className="text-destructive hover:opacity-80 p-0.5" title="Refusé"><XCircle className="w-3 h-3" /></button>
                             <button onClick={() => handleDeleteTs(t.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>
                           </>
+                        )}
+                        {t.statut === "signe" && (
+                          <button onClick={() => handleDownloadSignedPdf("ts", t.id, t.numero ?? "TS")} className="text-emerald-600 hover:opacity-80 p-0.5" title="Télécharger PDF signé" disabled={pdfSigneLoading === t.id}>
+                            {pdfSigneLoading === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                          </button>
                         )}
                         {(t.statut === "refuse" || t.statut === "facture") && (
                           <button onClick={() => handleDeleteTs(t.id)} className="text-destructive hover:opacity-80 p-0.5"><Trash2 className="w-3 h-3" /></button>

@@ -898,9 +898,10 @@ serve(async (req) => {
       }
 
       let pdfAttachment: { content: string; filename: string } | undefined;
+
       try {
         const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
+        const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -917,16 +918,65 @@ serve(async (req) => {
         });
         if (pdfRes.ok) {
           const { pdf_base64 } = await pdfRes.json();
-          pdfAttachment = {
-            content: pdf_base64,
-            filename: `${postDocType}-${docNumero}-signe.pdf`,
-          };
+          pdfAttachment = { content: pdf_base64, filename: `${postDocType}-${docNumero}-signe.pdf` };
           console.log("[sign] PDF signé généré via generate-facturx-pdf");
         } else {
           console.error("[sign] generate-facturx-pdf erreur:", pdfRes.status, await pdfRes.text());
         }
       } catch (e) {
-        console.error("[sign] Erreur génération PDF:", e);
+        console.error("[sign] Erreur generate-facturx-pdf:", e);
+      }
+
+      if (!pdfAttachment) {
+        try {
+          const docLabel = postDocType === "devis" ? "DEVIS" : postDocType === "avenant" ? "AVENANT" : "TRAVAUX SUPPLÉMENTAIRES";
+          let fullData;
+          if (postDocType === "devis") {
+            fullData = await fetchDevisFullData(db, doc, resolvedClientId);
+          } else if (postDocType === "avenant") {
+            fullData = await fetchAvenantFullData(db, doc);
+          } else {
+            fullData = await fetchTsFullData(db, doc);
+          }
+          const pdfBytes = await buildDevisPdf(
+            {
+              numero: docNumero,
+              created_at: doc.created_at as string,
+              date_validite: (doc.date_validite ?? doc.date) as string | null,
+              montant_ht: Number(doc.montant_ht),
+              tva: Number(doc.tva),
+              docLabel,
+              ...fullData,
+            },
+            { type: "signed", signatureData, bonPourAccord },
+          );
+          const b64 = btoa(Array.from(pdfBytes, (b) => String.fromCharCode(b)).join(""));
+          pdfAttachment = { content: b64, filename: `${postDocType}-${docNumero}-signe.pdf` };
+          console.log("[sign] PDF signé généré via fallback local, taille:", pdfBytes.byteLength, "bytes");
+        } catch (e) {
+          console.error("[sign] Erreur fallback PDF local:", e);
+        }
+      }
+
+      if (pdfAttachment) {
+        try {
+          const pdfPath = `${artisanId}/${postDocType}-${docNumero}-signe.pdf`;
+          const pdfBytes = Uint8Array.from(atob(pdfAttachment.content), (c) => c.charCodeAt(0));
+          const { error: uploadErr } = await db.storage
+            .from("documents-signes")
+            .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
+          if (uploadErr) {
+            console.error("[sign] Storage upload erreur:", uploadErr.message);
+          } else {
+            await db.from("devis_signatures")
+              .update({ pdf_signed_path: pdfPath })
+              .eq("doc_type", postDocType)
+              .eq("doc_id", docId);
+            console.log("[sign] PDF signé uploadé dans Storage:", pdfPath);
+          }
+        } catch (e) {
+          console.error("[sign] Erreur upload Storage:", e);
+        }
       }
 
       const pdfNote = pdfAttachment
