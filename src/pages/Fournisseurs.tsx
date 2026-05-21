@@ -329,7 +329,11 @@ function FournisseurCard({
         {(f.ville || f.adresse) && (
           <p className="text-xs text-muted-foreground flex items-start gap-1.5">
             <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
-            <span className="line-clamp-2">{f.adresse ?? f.ville}</span>
+            <span className="line-clamp-2">
+              {f.adresse && f.ville && !f.adresse.includes(f.ville)
+                ? `${f.adresse} ${f.ville}`
+                : (f.adresse ?? f.ville)}
+            </span>
           </p>
         )}
         {f.notes && (
