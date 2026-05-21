@@ -154,7 +154,7 @@ export function useProduits() {
         throw new Error("L'extraction a échoué. Un administrateur va traiter cet import manuellement.");
       }
       if (result?.error === "catalogue_too_large") {
-        throw new Error(`Ce catalogue est trop volumineux (${result.nb_pages} pages, max ${result.max_pages}). Un administrateur va le traiter manuellement et vous contacter.`);
+        throw new Error("Ce catalogue est trop volumineux, il a été envoyé à un administrateur pour un traitement manuel.");
       }
 
       const nb = result?.nb_produits ?? 0;
