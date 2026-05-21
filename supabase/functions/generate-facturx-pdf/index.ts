@@ -823,7 +823,7 @@ serve(async (req) => {
           headers: { ...cors, "Content-Type": "application/json" },
         });
       }
-      userId = userId;
+      userId = user.id;
     }
 
     const db = createClient(supabaseUrl, serviceKey);

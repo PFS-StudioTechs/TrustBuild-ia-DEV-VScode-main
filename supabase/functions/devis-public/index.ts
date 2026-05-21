@@ -899,11 +899,13 @@ serve(async (req) => {
 
       let pdfAttachment: { content: string; filename: string } | undefined;
       try {
-        const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
+        const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${serviceKey}`,
+            "apikey": anonKey,
           },
           body: JSON.stringify({
             type: postDocType,
