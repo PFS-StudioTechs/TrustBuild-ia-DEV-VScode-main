@@ -52,9 +52,11 @@ export default function AppLayout() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-[240px] bg-sidebar border-r border-sidebar-border shrink-0">
         <div className="flex flex-col items-center px-4 pt-5 pb-3 border-b border-white/10">
-          <TrustBuildLogo size={64} dark className="mb-2 block" />
-          <span className="font-display font-bold text-base tracking-tight text-white">TrustBuild<span className="text-sidebar-primary font-normal italic">-ia</span></span>
-          <span className="text-[10px] text-white/50 text-center leading-tight mt-0.5">Parce que la confiance se construit</span>
+          <button onClick={() => navigate('/dashboard')} className="flex flex-col items-center cursor-pointer" aria-label="Retour au tableau de bord">
+            <TrustBuildLogo size={64} dark className="mb-2 block" />
+            <span className="font-display font-bold text-base tracking-tight text-white">TrustBuild<span className="text-sidebar-primary font-normal italic">-ia</span></span>
+            <span className="text-[10px] text-white/50 text-center leading-tight mt-0.5">Parce que la confiance se construit</span>
+          </button>
         </div>
 
         <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
@@ -107,7 +109,7 @@ export default function AppLayout() {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-card shrink-0">
-          <div className="flex items-center gap-2">
+          <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 cursor-pointer" aria-label="Retour au tableau de bord">
             <TrustBuildLogo size={32} className="block" />
             <span className="font-display font-bold text-lg tracking-tight">TrustBuild<span className="text-primary font-normal italic">-ia</span></span>
             {isAdmin && (
@@ -115,7 +117,7 @@ export default function AppLayout() {
                 <Shield className="w-3 h-3" /> Admin
               </Badge>
             )}
-          </div>
+          </button>
           <button onClick={signOut} className="p-2 text-destructive">
             <LogOut className="w-5 h-5" />
           </button>
