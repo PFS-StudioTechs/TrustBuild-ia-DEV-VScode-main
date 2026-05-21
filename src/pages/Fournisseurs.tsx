@@ -227,7 +227,6 @@ function FournisseurDialog({
                 const ville = extractVille(v) || form.ville || "";
                 setForm(p => ({ ...p, adresse: v, ville }));
               }}
-              required
             />
           </div>
 
