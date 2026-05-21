@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Phone, Mail, Pencil, Trash2, Truck, User, MapPin, FileText, BookOpen, Library, Check } from "lucide-react";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
-import VilleField from "@/components/ui/VilleField";
 import CatalogueDialog from "@/components/CatalogueDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -175,16 +174,10 @@ function FournisseurDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Nom + Ville */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Nom <span className="text-destructive">*</span></Label>
-              <Input value={form.nom} onChange={set("nom")} placeholder="Leroy Merlin" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Ville <span className="text-destructive">*</span></Label>
-              <VilleField value={form.ville ?? ""} onChange={v => setForm(p => ({ ...p, ville: v }))} required />
-            </div>
+          {/* Nom */}
+          <div className="space-y-1.5">
+            <Label>Nom <span className="text-destructive">*</span></Label>
+            <Input value={form.nom} onChange={set("nom")} placeholder="Leroy Merlin" />
           </div>
 
           {/* Catégorie */}
@@ -229,11 +222,12 @@ function FournisseurDialog({
           <div className="space-y-1.5">
             <Label>Adresse</Label>
             <AddressFields
-              value={form.adresse ?? ""}
-              onChange={v => {
-                const ville = extractVille(v) || form.ville || "";
-                setForm(p => ({ ...p, adresse: v, ville }));
-              }}
+              value={form.adresse
+                ? (form.ville && !form.adresse.includes(form.ville) ? `${form.adresse} ${form.ville}` : form.adresse)
+                : ""}
+              onChange={v => setForm(p => ({ ...p, adresse: v }))}
+              onVilleChange={v => setForm(p => ({ ...p, ville: v }))}
+              required
             />
           </div>
 

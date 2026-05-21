@@ -42,6 +42,7 @@ function formatAddress(p: Parts): string {
 interface AddressFieldsProps {
   value: string;
   onChange: (value: string) => void;
+  onVilleChange?: (ville: string) => void;
   required?: boolean;
   /** Use smaller inputs (h-8 text-xs) for compact forms */
   compact?: boolean;
@@ -49,7 +50,7 @@ interface AddressFieldsProps {
   autoNormalize?: boolean;
 }
 
-export default function AddressFields({ value, onChange, required, compact, autoNormalize }: AddressFieldsProps) {
+export default function AddressFields({ value, onChange, onVilleChange, required, compact, autoNormalize }: AddressFieldsProps) {
   const lastEmitted = useRef<string>("");
   const autoNormalizeRan = useRef(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>();
@@ -99,6 +100,7 @@ export default function AddressFields({ value, onChange, required, compact, auto
     const formatted = formatAddress(newParts);
     lastEmitted.current = formatted;
     onChange(formatted);
+    onVilleChange?.(p.city);
     setSuggestions([]);
     setShowSuggestions(false);
     setCities([]);
@@ -110,6 +112,7 @@ export default function AddressFields({ value, onChange, required, compact, auto
     const formatted = formatAddress(newParts);
     lastEmitted.current = formatted;
     onChange(formatted);
+    if (field === "ville") onVilleChange?.(val);
     setBanNormalized(false);
 
     if (field === "code_postal") {
@@ -156,6 +159,7 @@ export default function AddressFields({ value, onChange, required, compact, auto
         const formatted = formatAddress(newParts);
         lastEmitted.current = formatted;
         onChange(formatted);
+        onVilleChange?.(data[0].nom);
         setCities([]);
       } else if (data.length > 1) {
         setCities(data.map((c) => c.nom));
@@ -165,6 +169,7 @@ export default function AddressFields({ value, onChange, required, compact, auto
           const formatted = formatAddress(newParts);
           lastEmitted.current = formatted;
           onChange(formatted);
+          onVilleChange?.(data[0].nom);
         }
       }
     } catch {
