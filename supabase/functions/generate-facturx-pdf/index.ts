@@ -129,6 +129,8 @@ async function buildDevisPdf(p: {
   tvaPct: number;
   primaryHex: string;
   logoUrl: string | null;
+  signatureData?: string;
+  bonPourAccord?: string;
 }): Promise<PDFDocument> {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle(`${p.typeLabel} ${p.numero}`);
@@ -300,6 +302,35 @@ async function buildDevisPdf(p: {
   cur.drawRectangle({ x: SX - 8, y: y - 6, width: PAGE_W - M - SX + 8, height: 26, color: primary });
   cur.drawText("Total TTC", { x: SX, y: y + 3, size: 11, font: fB, color: white });
   cur.drawText(ttcStr, { x: PAGE_W - M - fB.widthOfTextAtSize(ttcStr, 12), y: y + 3, size: 12, font: fB, color: white });
+
+  // Bloc signature (si document signé côté client)
+  if (p.signatureData) {
+    const SIG_RESERVE = 130;
+    if (y < FOOTER_RESERVE + SIG_RESERVE) {
+      cur = addPage();
+      y = PAGE_H - HEADER_H - 40;
+    }
+    y -= 20;
+    cur.drawLine({ start: { x: M, y }, end: { x: PAGE_W - M, y }, thickness: 1, color: primary });
+    y -= 16;
+    cur.drawText("SIGNATURE CLIENT — BON POUR ACCORD", { x: M, y, size: 11, font: fB, color: primary });
+    y -= 14;
+    cur.drawText(p.bonPourAccord ?? "Bon pour accord", { x: M, y, size: 10, font: fN, color: dark });
+    y -= 22;
+    try {
+      const isJpeg = p.signatureData.startsWith("data:image/jpeg");
+      const b64 = p.signatureData.replace(/^data:image\/(png|jpeg);base64,/, "");
+      const sigBytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const sigImg = isJpeg ? await pdfDoc.embedJpg(sigBytes) : await pdfDoc.embedPng(sigBytes);
+      const maxW = 200, maxH = 70;
+      const scale = Math.min(maxW / sigImg.width, maxH / sigImg.height, 1);
+      const sW = sigImg.width * scale;
+      const sH = sigImg.height * scale;
+      cur.drawImage(sigImg, { x: M, y: y - sH, width: sW, height: sH });
+      y -= sH + 10;
+    } catch { /* image signature indisponible */ }
+    cur.drawText(`Signé le ${fmtDate(new Date().toISOString())}`, { x: M, y, size: 8, font: fN, color: gray });
+  }
 
   // Footer on every page
   for (let i = 0; i < pdfDoc.getPageCount(); i++) drawFooter(pdfDoc.getPage(i));
@@ -777,21 +808,39 @@ serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: uErr } = await userClient.auth.getUser();
-    if (uErr || !user) {
-      return new Response(JSON.stringify({ error: "Non autorisé" }), {
-        status: 401,
-        headers: { ...cors, "Content-Type": "application/json" },
+    const reqToken = authHeader.replace(/^Bearer\s+/i, "");
+    const isInternal = reqToken === serviceKey;
+    let userId = "";
+
+    if (!isInternal) {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
       });
+      const { data: { user }, error: uErr } = await userClient.auth.getUser();
+      if (uErr || !user) {
+        return new Response(JSON.stringify({ error: "Non autorisé" }), {
+          status: 401,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      userId = userId;
     }
 
     const db = createClient(supabaseUrl, serviceKey);
     logDb = db;
-    logUserId = user.id;
     const body = await req.json();
+
+    if (isInternal) {
+      userId = (body.artisan_id as string) ?? "";
+      if (!userId) {
+        return new Response(JSON.stringify({ error: "artisan_id requis" }), {
+          status: 400,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    logUserId = userId;
 
     // Support legacy { facture_id } et nouveau { type, document_id }
     const docType: "facture" | "avoir" | "acompte" | "devis" | "avenant" | "ts" = body.type ?? "facture";
@@ -810,11 +859,11 @@ serve(async (req) => {
     const [profileRes, settingsRes] = await Promise.all([
       db.from("profiles")
         .select("nom, prenom, siret, raison_sociale, adresse, code_postal, ville, tva_intracommunautaire, logo_url")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .single(),
       db.from("artisan_settings")
         .select("preferences, coordonnees_bancaires")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .single(),
     ]);
 
@@ -841,7 +890,7 @@ serve(async (req) => {
       const { data: facture, error: fErr } = await db.from("factures")
         .select("id, numero, montant_ht, tva, created_at, date_echeance, solde_restant, devis_id")
         .eq("id", documentId)
-        .eq("artisan_id", user.id)
+        .eq("artisan_id", userId)
         .single();
       if (fErr || !facture) {
         return new Response(JSON.stringify({ error: "Facture introuvable" }), {
@@ -908,7 +957,7 @@ serve(async (req) => {
       const { data: avoir, error: aErr } = await db.from("avoirs")
         .select("id, numero, description, montant_ht, tva, date, created_at, devis_id")
         .eq("id", documentId)
-        .eq("artisan_id", user.id)
+        .eq("artisan_id", userId)
         .single();
       if (aErr || !avoir) {
         return new Response(JSON.stringify({ error: "Avoir introuvable" }), {
@@ -972,7 +1021,7 @@ serve(async (req) => {
       const { data: acompte, error: acErr } = await db.from("acomptes")
         .select("id, numero, montant, pourcentage, notes, date_echeance, created_at, devis_id, artisan_id")
         .eq("id", documentId)
-        .eq("artisan_id", user.id)
+        .eq("artisan_id", userId)
         .single();
       if (acErr || !acompte) {
         return new Response(JSON.stringify({ error: "Acompte introuvable" }), {
@@ -1020,7 +1069,7 @@ serve(async (req) => {
 
       const xml = buildXml(docParams);
       const pdfDoc = await buildPdf(docParams);
-      log(db, { user_id: user.id, action: "facturx.generated", entity_type: docType, entity_id: documentId, status: "success", details: { docType } });
+      log(db, { user_id: userId, action: "facturx.generated", entity_type: docType, entity_id: documentId, status: "success", details: { docType } });
       return finalize(pdfDoc, xml, docParams);
     }
 
@@ -1029,7 +1078,7 @@ serve(async (req) => {
       const { data: devis, error: dErr } = await db.from("devis")
         .select("id, numero, montant_ht, tva, created_at, date_validite, statut, chantier_id, client_id")
         .eq("id", documentId)
-        .eq("artisan_id", user.id)
+        .eq("artisan_id", userId)
         .single();
       if (dErr || !devis) {
         return new Response(JSON.stringify({ error: "Devis introuvable" }), {
@@ -1080,7 +1129,7 @@ serve(async (req) => {
       // Template actif pour couleurs + logo
       const { data: tpl } = await db.from("document_templates")
         .select("couleur_primaire, logo_url, secteur")
-        .eq("artisan_id", user.id)
+        .eq("artisan_id", userId)
         .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -1107,6 +1156,8 @@ serve(async (req) => {
         chantierNom, chantierAdresse,
         lines, totalHt, totalTva, totalTtc, tvaPct,
         primaryHex, logoUrl,
+        signatureData: body.signature_data as string | undefined,
+        bonPourAccord: body.bon_pour_accord as string | undefined,
       });
 
       const pdfBytes = await pdfDoc.save();
@@ -1116,7 +1167,7 @@ serve(async (req) => {
         binary += String.fromCharCode(...pdfBytes.subarray(i, i + CHUNK));
       }
 
-      log(db, { user_id: user.id, action: "devis.pdf_generated", entity_type: "devis", entity_id: documentId, status: "success", details: { numero: devis.numero } });
+      log(db, { user_id: userId, action: "devis.pdf_generated", entity_type: "devis", entity_id: documentId, status: "success", details: { numero: devis.numero } });
 
       return new Response(
         JSON.stringify({ pdf_base64: btoa(binary), numero: devis.numero }),
@@ -1130,7 +1181,7 @@ serve(async (req) => {
       const { data: avenant, error: aErr } = await (db as any).from("avenants")
         .select("id, numero, statut, montant_ht, date, created_at, artisan_id, devis_id")
         .eq("id", documentId)
-        .eq("artisan_id", user.id)
+        .eq("artisan_id", userId)
         .single();
       if (aErr || !avenant) {
         return new Response(JSON.stringify({ error: "Avenant introuvable" }), {
@@ -1186,7 +1237,7 @@ serve(async (req) => {
 
       const { data: tpl } = await db.from("document_templates")
         .select("couleur_primaire, logo_url, secteur")
-        .eq("artisan_id", user.id).eq("is_active", true)
+        .eq("artisan_id", userId).eq("is_active", true)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       const primaryHex = tpl?.couleur_primaire ?? SECTOR_PRIMARY[tpl?.secteur ?? "general"] ?? "#2563eb";
       // deno-lint-ignore no-explicit-any
@@ -1207,6 +1258,8 @@ serve(async (req) => {
         chantierNom, chantierAdresse,
         lines, totalHt, totalTva, totalTtc, tvaPct,
         primaryHex, logoUrl,
+        signatureData: body.signature_data as string | undefined,
+        bonPourAccord: body.bon_pour_accord as string | undefined,
       });
 
       const pdfBytes = await pdfDoc.save();
@@ -1216,7 +1269,7 @@ serve(async (req) => {
         binary += String.fromCharCode(...pdfBytes.subarray(i, i + CHUNK));
       }
 
-      log(db, { user_id: user.id, action: "avenant.pdf_generated", entity_type: "avenant", entity_id: documentId, status: "success", details: { numero: avenant.numero } });
+      log(db, { user_id: userId, action: "avenant.pdf_generated", entity_type: "avenant", entity_id: documentId, status: "success", details: { numero: avenant.numero } });
 
       return new Response(
         JSON.stringify({ pdf_base64: btoa(binary), numero: avenant.numero }),
@@ -1230,7 +1283,7 @@ serve(async (req) => {
       const { data: ts, error: tsErr } = await (db as any).from("travaux_supplementaires")
         .select("id, numero, statut, montant_ht, tva, date, date_validite, created_at, artisan_id, client_id, chantier_id, devis_id")
         .eq("id", documentId)
-        .eq("artisan_id", user.id)
+        .eq("artisan_id", userId)
         .single();
       if (tsErr || !ts) {
         return new Response(JSON.stringify({ error: "Travaux supplémentaires introuvables" }), {
@@ -1281,7 +1334,7 @@ serve(async (req) => {
 
       const { data: tpl } = await db.from("document_templates")
         .select("couleur_primaire, logo_url, secteur")
-        .eq("artisan_id", user.id).eq("is_active", true)
+        .eq("artisan_id", userId).eq("is_active", true)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       const primaryHex = tpl?.couleur_primaire ?? SECTOR_PRIMARY[tpl?.secteur ?? "general"] ?? "#2563eb";
       // deno-lint-ignore no-explicit-any
@@ -1302,6 +1355,8 @@ serve(async (req) => {
         chantierNom, chantierAdresse,
         lines, totalHt, totalTva, totalTtc, tvaPct,
         primaryHex, logoUrl,
+        signatureData: body.signature_data as string | undefined,
+        bonPourAccord: body.bon_pour_accord as string | undefined,
       });
 
       const pdfBytes = await pdfDoc.save();
@@ -1311,7 +1366,7 @@ serve(async (req) => {
         binary += String.fromCharCode(...pdfBytes.subarray(i, i + CHUNK));
       }
 
-      log(db, { user_id: user.id, action: "ts.pdf_generated", entity_type: "ts", entity_id: documentId, status: "success", details: { numero: ts.numero } });
+      log(db, { user_id: userId, action: "ts.pdf_generated", entity_type: "ts", entity_id: documentId, status: "success", details: { numero: ts.numero } });
 
       return new Response(
         JSON.stringify({ pdf_base64: btoa(binary), numero: ts.numero }),

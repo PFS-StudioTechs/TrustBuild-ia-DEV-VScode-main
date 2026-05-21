@@ -899,32 +899,30 @@ serve(async (req) => {
 
       let pdfAttachment: { content: string; filename: string } | undefined;
       try {
-        const docLabel = postDocType === "devis" ? "DEVIS" : postDocType === "avenant" ? "AVENANT" : "TRAVAUX SUPPLÉMENTAIRES";
-        let fullData;
-        if (postDocType === "devis") {
-          fullData = await fetchDevisFullData(db, doc, resolvedClientId);
-        } else if (postDocType === "avenant") {
-          fullData = await fetchAvenantFullData(db, doc);
-        } else {
-          fullData = await fetchTsFullData(db, doc);
-        }
-        const pdfBytes = await buildDevisPdf(
-          {
-            numero: docNumero,
-            created_at: doc.created_at as string,
-            date_validite: (doc.date_validite ?? doc.date) as string | null,
-            montant_ht: Number(doc.montant_ht),
-            tva: Number(doc.tva),
-            docLabel,
-            ...fullData,
+        const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceKey}`,
           },
-          { type: "signed", signatureData, bonPourAccord },
-        );
-        pdfAttachment = {
-          content: btoa(Array.from(pdfBytes, (b) => String.fromCharCode(b)).join("")),
-          filename: `${postDocType}-${docNumero}-signe.pdf`,
-        };
-        console.log("[sign] PDF signé généré, taille:", pdfBytes.byteLength, "bytes");
+          body: JSON.stringify({
+            type: postDocType,
+            document_id: docId,
+            artisan_id: artisanId,
+            signature_data: signatureData,
+            bon_pour_accord: bonPourAccord,
+          }),
+        });
+        if (pdfRes.ok) {
+          const { pdf_base64 } = await pdfRes.json();
+          pdfAttachment = {
+            content: pdf_base64,
+            filename: `${postDocType}-${docNumero}-signe.pdf`,
+          };
+          console.log("[sign] PDF signé généré via generate-facturx-pdf");
+        } else {
+          console.error("[sign] generate-facturx-pdf erreur:", pdfRes.status, await pdfRes.text());
+        }
       } catch (e) {
         console.error("[sign] Erreur génération PDF:", e);
       }
@@ -940,6 +938,16 @@ serve(async (req) => {
         pdfAttachment,
       );
       await db.from("app_logs").insert({ user_id: artisanId, action: `${postDocType}.client_sign`, entity_type: postDocType, entity_id: docId, status: "success", details: { ip: clientIp, client_nom: clientNom } });
+      await saveInboundMessage(db, {
+        artisanId,
+        fromClientName: clientNom,
+        subject: `${docNumero} — ${clientNom} a signé ✓`,
+        body: pdfAttachment
+          ? `${clientNom} vient de signer le document ${docNumero} — bon pour accord.\n\nLe document signé est joint en pièce jointe PDF.`
+          : `${clientNom} vient de signer le document ${docNumero} — bon pour accord.`,
+        documentId: docId,
+        documentType: postDocType,
+      });
       return json({ ok: true });
     }
 
