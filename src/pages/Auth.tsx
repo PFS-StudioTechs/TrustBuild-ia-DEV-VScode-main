@@ -73,58 +73,42 @@ export default function Auth() {
     setSiretStatus("loading");
     setSiretError("");
     setSiretData(null);
-    try {
-      const res = await fetch(
-        `https://recherche-entreprises.api.gouv.fr/search?q=${siretClean}&page=1&per_page=1`
-      );
-      if (!res.ok) throw new Error("API indisponible");
-      const json = await res.json();
-      const result = json.results?.[0];
-      const siretMatch =
-        result?.siege?.siret === siretClean ||
-        result?.matching_etablissements?.some((e: any) => e.siret === siretClean);
-      if (!result || !siretMatch) {
-        setSiretStatus("error");
-        setSiretError("SIRET introuvable dans le registre");
-        return;
-      }
-      const etab = result.matching_etablissements?.find((e: any) => e.siret === siretClean) ?? result.siege;
-      if (etab?.etat_administratif !== "A") {
-        setSiretStatus("inactive");
-        setSiretError("Cet établissement est fermé (état administratif inactif)");
-        return;
-      }
-      const siege = result.siege ?? {};
-      const adresse = [
-        etab?.numero_voie ?? siege.numero_voie,
-        etab?.type_voie ?? siege.type_voie,
-        etab?.libelle_voie ?? siege.libelle_voie,
-      ].filter(Boolean).join(" ");
-      const raisonSociale = result.nom_complet || result.nom_raison_sociale || "";
-      const { data: available } = await supabase.rpc("check_siret_available", { p_siret: siretClean });
-      if (available === false) {
-        setSiretStatus("error");
-        setSiretError("Ce SIRET est déjà associé à un compte TrustBuild-IA");
-        return;
-      }
-      setSiretData({
-        siret: siretClean,
-        siren: result.siren ?? siretClean.slice(0, 9),
-        raisonSociale,
-        nomCommercial: raisonSociale,
-        adresse,
-        codePostal: etab?.code_postal ?? siege.code_postal ?? "",
-        ville: etab?.libelle_commune ?? siege.libelle_commune ?? "",
-        pays: "France",
-        activite: result.activite_principale ?? "",
-        formeJuridique: result.nature_juridique ?? "",
-        actif: true,
-      });
-      setSiretStatus("valid");
-    } catch (err: any) {
+
+    const { data, error } = await supabase.functions.invoke("validate-siret", {
+      body: { siret: siretClean },
+    });
+
+    if (error) {
+      let msg = "Service de vérification indisponible, réessayez dans un instant";
+      try {
+        const body = await (error as any).context?.json();
+        if (body?.error) msg = body.error;
+      } catch {}
       setSiretStatus("error");
-      setSiretError(err.message || "Impossible de vérifier le SIRET");
+      setSiretError(msg);
+      return;
     }
+
+    if (!data.actif) {
+      setSiretStatus("inactive");
+      setSiretError("Cet établissement est fermé (état administratif inactif)");
+      return;
+    }
+
+    setSiretData({
+      siret: data.siret,
+      siren: data.siren,
+      raisonSociale: data.raisonSociale,
+      nomCommercial: data.nomCommercial,
+      adresse: data.adresse,
+      codePostal: data.codePostal,
+      ville: data.ville,
+      pays: data.pays,
+      activite: data.activite,
+      formeJuridique: data.formeJuridique,
+      actif: true,
+    });
+    setSiretStatus("valid");
   };
 
   const handleRegister = async () => {
