@@ -37,9 +37,10 @@ serve(async (req) => {
   const senderName = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() || fromName : fromName;
   const replyTo = profile?.email ?? user.email ?? fromEmail;
 
-  // Generate PDF for devis and attach it
+  // Generate PDF for devis and attach it (existing flow — generate-facturx-pdf)
   let pdfBase64: string | null = null;
   let pdfFilename: string | null = null;
+  let pdfDocNumero: string | null = null;
   const PDF_TYPES = ["devis", "avenant", "ts"];
   if (document_id && PDF_TYPES.includes(document_type)) {
     try {
@@ -56,12 +57,41 @@ serve(async (req) => {
         const pdfData = await pdfRes.json();
         if (pdfData.pdf_base64) {
           pdfBase64 = pdfData.pdf_base64;
+          pdfDocNumero = pdfData.numero ?? document_id;
           const prefix = document_type === "avenant" ? "Avenant" : document_type === "ts" ? "TS" : "Devis";
-          pdfFilename = `${prefix}_${pdfData.numero ?? document_id}.pdf`;
+          pdfFilename = `${prefix}_${pdfDocNumero}.pdf`;
         }
       }
     } catch (e) {
       console.warn("PDF generation failed:", e);
+    }
+  }
+
+  if (pdfBase64 && document_id && PDF_TYPES.includes(document_type)) {
+    try {
+      const tableName = document_type === "ts"
+        ? "travaux_supplementaires"
+        : document_type === "avenant"
+        ? "avenants"
+        : "devis";
+      const storagePath = `${user.id}/${document_type}-${pdfDocNumero ?? document_id}.pdf`;
+      const pdfBytes = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
+      const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
+
+      const { error: uploadErr } = await serviceClient.storage
+        .from("documents-originaux")
+        .upload(storagePath, pdfBlob, { contentType: "application/pdf", upsert: true });
+
+      if (uploadErr) {
+        console.error("[send-message] Erreur upload PDF original:", uploadErr.message);
+      } else {
+        await serviceClient.from(tableName)
+          .update({ original_pdf_path: storagePath, original_pdf_generated_at: new Date().toISOString() })
+          .eq("id", document_id);
+        console.log("[send-message] PDF original stocké:", storagePath);
+      }
+    } catch (e) {
+      console.error("[send-message] Erreur stockage PDF original:", e);
     }
   }
 
