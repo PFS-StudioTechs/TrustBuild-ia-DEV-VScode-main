@@ -169,7 +169,8 @@ function FournisseurDialog({
       <DialogContent
         className="max-w-lg max-h-[90vh] overflow-y-auto"
         onInteractOutside={(e) => {
-          if ((e.target as HTMLElement)?.closest?.('[data-ban-suggestion]')) {
+          const target = (e as CustomEvent).detail?.originalEvent?.target as HTMLElement;
+          if (target?.closest?.('[data-ban-suggestion]')) {
             e.preventDefault();
           }
         }}
