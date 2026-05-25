@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin, CheckCircle2 } from "lucide-react";
@@ -261,11 +262,18 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
         </div>
       </div>
 
-      {/* Dropdown BAN — position:fixed échappe overflow:auto sans portal (évite le onInteractOutside Radix) */}
-      {showSuggestions && suggestions.length > 0 && dropdownPos && (
+      {/* Dropdown BAN via portal — échappe overflow:auto ET le transform du Dialog Radix */}
+      {showSuggestions && suggestions.length > 0 && dropdownPos && createPortal(
         <div
-          className="fixed z-[9999] bg-popover border rounded-lg shadow-lg overflow-hidden"
-          style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+          data-ban-suggestion="true"
+          className="bg-popover border rounded-lg shadow-lg overflow-hidden"
+          style={{
+            position: "fixed",
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            zIndex: 9999,
+          }}
         >
           {suggestions.map((feat, i) => (
             <button
@@ -278,7 +286,8 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
               <span className="truncate">{feat.properties.label}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
 
       <div className="grid grid-cols-2 gap-2">

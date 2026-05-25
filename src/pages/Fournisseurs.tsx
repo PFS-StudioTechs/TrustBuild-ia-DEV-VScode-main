@@ -166,7 +166,14 @@ function FournisseurDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-lg max-h-[90vh] overflow-y-auto"
+        onInteractOutside={(e) => {
+          if ((e.target as HTMLElement)?.closest?.('[data-ban-suggestion]')) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="font-display">
             {initial.nom ? "Modifier le fournisseur" : "Nouveau fournisseur"}
