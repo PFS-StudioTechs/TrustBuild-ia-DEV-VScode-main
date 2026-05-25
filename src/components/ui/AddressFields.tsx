@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin, CheckCircle2 } from "lucide-react";
@@ -262,8 +261,8 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
         </div>
       </div>
 
-      {/* Dropdown BAN via portal — contourne le overflow:auto du Dialog parent */}
-      {showSuggestions && suggestions.length > 0 && dropdownPos && createPortal(
+      {/* Dropdown BAN — position:fixed échappe overflow:auto sans portal (évite le onInteractOutside Radix) */}
+      {showSuggestions && suggestions.length > 0 && dropdownPos && (
         <div
           className="fixed z-[9999] bg-popover border rounded-lg shadow-lg overflow-hidden"
           style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
@@ -279,8 +278,7 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
               <span className="truncate">{feat.properties.label}</span>
             </button>
           ))}
-        </div>,
-        document.body
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-2">
