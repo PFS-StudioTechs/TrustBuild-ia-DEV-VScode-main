@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin, CheckCircle2 } from "lucide-react";
@@ -56,7 +55,6 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
   const lastEmittedVille = useRef<string>("");
   const autoNormalizeRan = useRef(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>();
-  const nomVoieContainerRef = useRef<HTMLDivElement>(null);
 
   const [parts, setParts] = useState<Parts>(() => {
     const parsed = parseAddress(value);
@@ -68,7 +66,6 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [banNormalized, setBanNormalized] = useState(false);
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     if (value !== lastEmitted.current) {
@@ -78,7 +75,6 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
     }
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync villeValue depuis le parent (source de vérité pour la ville)
   useEffect(() => {
     if (villeValue !== undefined && villeValue !== lastEmittedVille.current) {
       setParts(p => ({ ...p, ville: villeValue }));
@@ -117,7 +113,6 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
     onVilleChange?.(p.city);
     setSuggestions([]);
     setShowSuggestions(false);
-    setDropdownPos(null);
     setCities([]);
   };
 
@@ -141,28 +136,12 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
     }
   };
 
-  const openDropdown = (feats: BanFeature[]) => {
-    if (feats.length === 0) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      setDropdownPos(null);
-      return;
-    }
-    if (nomVoieContainerRef.current) {
-      const rect = nomVoieContainerRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    }
-    setSuggestions(feats);
-    setShowSuggestions(true);
-  };
-
   const handleNomVoieChange = (val: string) => {
     update("nom_voie", val);
     clearTimeout(searchDebounce.current);
     if (val.length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
-      setDropdownPos(null);
       return;
     }
     setLoadingSuggestions(true);
@@ -174,7 +153,9 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
         );
         if (!res.ok) throw new Error(`BAN API ${res.status}`);
         const json = await res.json();
-        openDropdown(json.features ?? []);
+        const feats: BanFeature[] = json.features ?? [];
+        setSuggestions(feats);
+        setShowSuggestions(feats.length > 0);
       } catch {
         setSuggestions([]);
         setShowSuggestions(false);
@@ -243,15 +224,15 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
             required={required}
           />
         </div>
-        <div className="col-span-2" ref={nomVoieContainerRef}>
+        <div className="col-span-2">
           <Label className={labelCn}>Nom de la voie {required && <span className="text-destructive">*</span>}</Label>
           <div className="relative">
             <Input
               className={inputCn}
               value={parts.nom_voie}
               onChange={(e) => handleNomVoieChange(e.target.value)}
-              onBlur={() => setTimeout(() => { setShowSuggestions(false); setDropdownPos(null); }, 200)}
-              onFocus={() => suggestions.length > 0 && openDropdown(suggestions)}
+              onBlur={() => setTimeout(() => { setShowSuggestions(false); }, 200)}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
               placeholder="Rue des Lilas"
               required={required}
             />
@@ -259,36 +240,23 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
               <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground" />
             )}
           </div>
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="bg-popover border rounded-lg shadow-lg overflow-hidden mt-1">
+              {suggestions.map((feat, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onMouseDown={() => applyFeature(feat)}
+                  className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors border-b last:border-0"
+                >
+                  <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
+                  <span className="truncate">{feat.properties.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Dropdown BAN via portal — échappe overflow:auto ET le transform du Dialog Radix */}
-      {showSuggestions && suggestions.length > 0 && dropdownPos && createPortal(
-        <div
-          data-ban-suggestion="true"
-          className="bg-popover border rounded-lg shadow-lg overflow-hidden"
-          style={{
-            position: "fixed",
-            top: dropdownPos.top,
-            left: dropdownPos.left,
-            width: dropdownPos.width,
-            zIndex: 9999,
-          }}
-        >
-          {suggestions.map((feat, i) => (
-            <button
-              key={i}
-              type="button"
-              onMouseDown={() => applyFeature(feat)}
-              className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors border-b last:border-0"
-            >
-              <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
-              <span className="truncate">{feat.properties.label}</span>
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
 
       <div className="grid grid-cols-2 gap-2">
         <div>
