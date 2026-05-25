@@ -246,7 +246,7 @@ export default function AddressFields({ value, onChange, onVilleChange, villeVal
                 <button
                   key={i}
                   type="button"
-                  onMouseDown={() => applyFeature(feat)}
+                  onMouseDown={(e) => { e.preventDefault(); applyFeature(feat); }}
                   className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors border-b last:border-0"
                 >
                   <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
