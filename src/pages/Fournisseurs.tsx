@@ -222,9 +222,8 @@ function FournisseurDialog({
           <div className="space-y-1.5">
             <Label>Adresse</Label>
             <AddressFields
-              value={form.adresse
-                ? (form.ville && !form.adresse.includes(form.ville) ? `${form.adresse} ${form.ville}` : form.adresse)
-                : ""}
+              value={form.adresse ?? ""}
+              villeValue={form.ville ?? ""}
               onChange={v => setForm(p => ({ ...p, adresse: v }))}
               onVilleChange={v => setForm(p => ({ ...p, ville: v }))}
               required

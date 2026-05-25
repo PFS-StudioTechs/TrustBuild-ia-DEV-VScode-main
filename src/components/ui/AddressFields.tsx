@@ -44,18 +44,24 @@ interface AddressFieldsProps {
   value: string;
   onChange: (value: string) => void;
   onVilleChange?: (ville: string) => void;
+  /** Ville contrôlée séparément — évite les allers-retours via parseAddress */
+  villeValue?: string;
   required?: boolean;
   compact?: boolean;
   autoNormalize?: boolean;
 }
 
-export default function AddressFields({ value, onChange, onVilleChange, required, compact, autoNormalize }: AddressFieldsProps) {
+export default function AddressFields({ value, onChange, onVilleChange, villeValue, required, compact, autoNormalize }: AddressFieldsProps) {
   const lastEmitted = useRef<string>("");
+  const lastEmittedVille = useRef<string>("");
   const autoNormalizeRan = useRef(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>();
   const nomVoieContainerRef = useRef<HTMLDivElement>(null);
 
-  const [parts, setParts] = useState<Parts>(() => parseAddress(value));
+  const [parts, setParts] = useState<Parts>(() => {
+    const parsed = parseAddress(value);
+    return villeValue !== undefined ? { ...parsed, ville: villeValue } : parsed;
+  });
   const [cities, setCities] = useState<string[]>([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [suggestions, setSuggestions] = useState<BanFeature[]>([]);
@@ -66,10 +72,18 @@ export default function AddressFields({ value, onChange, onVilleChange, required
 
   useEffect(() => {
     if (value !== lastEmitted.current) {
-      setParts(parseAddress(value));
+      const parsed = parseAddress(value);
+      setParts(villeValue !== undefined ? { ...parsed, ville: villeValue } : parsed);
       setCities([]);
     }
-  }, [value]);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync villeValue depuis le parent (source de vérité pour la ville)
+  useEffect(() => {
+    if (villeValue !== undefined && villeValue !== lastEmittedVille.current) {
+      setParts(p => ({ ...p, ville: villeValue }));
+    }
+  }, [villeValue]);
 
   useEffect(() => {
     if (!autoNormalize || !value || autoNormalizeRan.current) return;
@@ -98,6 +112,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
     setParts(newParts);
     const formatted = formatAddress(newParts);
     lastEmitted.current = formatted;
+    lastEmittedVille.current = p.city;
     onChange(formatted);
     onVilleChange?.(p.city);
     setSuggestions([]);
@@ -112,7 +127,10 @@ export default function AddressFields({ value, onChange, onVilleChange, required
     const formatted = formatAddress(newParts);
     lastEmitted.current = formatted;
     onChange(formatted);
-    if (field === "ville") onVilleChange?.(val);
+    if (field === "ville") {
+      lastEmittedVille.current = val;
+      onVilleChange?.(val);
+    }
     setBanNormalized(false);
 
     if (field === "code_postal") {
@@ -179,6 +197,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
         setParts(newParts);
         const formatted = formatAddress(newParts);
         lastEmitted.current = formatted;
+        lastEmittedVille.current = data[0].nom;
         onChange(formatted);
         onVilleChange?.(data[0].nom);
         setCities([]);
@@ -189,6 +208,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
           setParts(newParts);
           const formatted = formatAddress(newParts);
           lastEmitted.current = formatted;
+          lastEmittedVille.current = data[0].nom;
           onChange(formatted);
           onVilleChange?.(data[0].nom);
         }
@@ -242,6 +262,7 @@ export default function AddressFields({ value, onChange, onVilleChange, required
         </div>
       </div>
 
+      {/* Dropdown BAN via portal — contourne le overflow:auto du Dialog parent */}
       {showSuggestions && suggestions.length > 0 && dropdownPos && createPortal(
         <div
           className="fixed z-[9999] bg-popover border rounded-lg shadow-lg overflow-hidden"
