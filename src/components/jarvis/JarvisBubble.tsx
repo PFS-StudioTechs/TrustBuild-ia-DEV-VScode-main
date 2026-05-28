@@ -89,7 +89,7 @@ export default function JarvisBubble() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className={cn(
-          "fixed z-50 w-16 h-16 flex items-center justify-center transition-all duration-300 touch-none select-none bg-transparent border-none outline-none",
+          "fixed z-50 w-16 h-16 flex items-center justify-center transition-all duration-300 touch-none select-none bg-transparent border-none outline-none rounded-full overflow-hidden",
           open
             ? "scale-0 opacity-0 pointer-events-none"
             : "scale-100 opacity-100",
@@ -105,7 +105,7 @@ export default function JarvisBubble() {
         <img
           src="/jarvis-eye.jpeg"
           alt="Jarvis"
-          className="w-full h-full object-contain pointer-events-none select-none mix-blend-multiply"
+          className="w-full h-full object-cover pointer-events-none select-none"
           draggable={false}
         />
       </button>
