@@ -1,5 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { X } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import JarvisPanel from "./JarvisPanel";
 
@@ -55,14 +54,6 @@ export default function JarvisBubble() {
     }
   }, [dragging, pos]);
 
-  // Panel position follows bubble
-  const panelStyle = pos
-    ? {
-        bottom: `${window.innerHeight - pos.y}px`,
-        right: `${window.innerWidth - pos.x}px`,
-      }
-    : undefined;
-
   const bubbleStyle = pos
     ? { left: `${pos.x}px`, top: `${pos.y}px`, right: "auto", bottom: "auto" }
     : {};
@@ -114,7 +105,7 @@ export default function JarvisBubble() {
         <img
           src="/jarvis-eye.jpeg"
           alt="Jarvis"
-          className="w-full h-full object-contain pointer-events-none select-none"
+          className="w-full h-full object-contain pointer-events-none select-none mix-blend-multiply"
           draggable={false}
         />
       </button>
