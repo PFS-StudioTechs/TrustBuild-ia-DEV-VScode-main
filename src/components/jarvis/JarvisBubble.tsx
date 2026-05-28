@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Bot, X } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import JarvisPanel from "./JarvisPanel";
 
@@ -97,18 +97,26 @@ export default function JarvisBubble() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        style={bubbleStyle}
         className={cn(
-          "fixed z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-opacity duration-300 touch-none select-none",
+          "fixed z-50 w-16 h-16 flex items-center justify-center transition-all duration-300 touch-none select-none bg-transparent border-none outline-none",
           open
-            ? "bg-muted text-muted-foreground scale-0 opacity-0 pointer-events-none"
-            : "bg-gradient-to-br from-primary to-accent text-primary-foreground scale-100 opacity-100 animate-cta-pulse",
+            ? "scale-0 opacity-0 pointer-events-none"
+            : "scale-100 opacity-100",
           !pos && "bottom-20 right-4 md:bottom-6 md:right-6",
           dragging && "cursor-grabbing"
         )}
+        style={{
+          ...bubbleStyle,
+          filter: open ? undefined : "drop-shadow(0 0 10px rgba(194, 65, 12, 0.75)) drop-shadow(0 0 4px rgba(249, 115, 22, 0.5))",
+        }}
         aria-label="Ouvrir Jarvis"
       >
-        <Bot className="w-6 h-6 pointer-events-none" />
+        <img
+          src="/jarvis-eye.jpeg"
+          alt="Jarvis"
+          className="w-full h-full object-contain pointer-events-none select-none"
+          draggable={false}
+        />
       </button>
     </>
   );
