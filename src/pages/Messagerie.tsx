@@ -41,7 +41,7 @@ interface Recipient {
 
 function statusBadge(status: string) {
   if (status === "sent") return <Badge className="bg-emerald-500/10 text-emerald-600 text-[10px]"><CheckCircle2 className="w-3 h-3 mr-1" />Envoyé</Badge>;
-  if (status === "no_sendgrid") return <Badge className="bg-amber-500/10 text-amber-600 text-[10px]"><AlertCircle className="w-3 h-3 mr-1" />Sans clé SendGrid</Badge>;
+  if (status === "no_brevo") return <Badge className="bg-amber-500/10 text-amber-600 text-[10px]"><AlertCircle className="w-3 h-3 mr-1" />Sans clé Brevo</Badge>;
   if (status === "received") return <Badge className="bg-blue-500/10 text-blue-600 text-[10px]"><MessageSquare className="w-3 h-3 mr-1" />Reçu</Badge>;
   return <Badge className="bg-red-500/10 text-red-600 text-[10px]"><AlertCircle className="w-3 h-3 mr-1" />Erreur</Badge>;
 }
@@ -293,7 +293,7 @@ export default function Messagerie() {
       });
       if (error) throw new Error(error.message);
       if (data?.status === "sent") toast.success("Message envoyé");
-      else if (data?.status === "no_sendgrid") toast.success("Message enregistré (SendGrid non configuré)");
+      else if (data?.status === "no_brevo") toast.success("Message enregistré (Brevo non configuré)");
       else toast.error("Erreur lors de l'envoi");
       setComposeOpen(false);
       resetCompose();

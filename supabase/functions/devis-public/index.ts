@@ -80,14 +80,14 @@ async function notifyArtisan(
 ) {
   try {
     console.log("[notifyArtisan] Début — artisanId:", artisanId, "| subject:", subject);
-    const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-    if (!sendgridApiKey) {
-      console.warn("[notifyArtisan] SENDGRID_API_KEY absent");
+    const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+    if (!brevoApiKey) {
+      console.warn("[notifyArtisan] BREVO_API_KEY absent");
       return;
     }
 
-    const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
-    const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
+    const fromEmail = Deno.env.get("BREVO_FROM_EMAIL") ?? "noreply@trustbuild.ia";
+    const fromName = Deno.env.get("BREVO_FROM_NAME") ?? "TrustBuild-IA";
 
     const { data: profile } = await db.from("profiles").select("prenom, nom").eq("user_id", artisanId).single();
     const artisanName = `${(profile as any)?.prenom ?? ""} ${(profile as any)?.nom ?? ""}`.trim() || "Artisan";
@@ -98,30 +98,28 @@ async function notifyArtisan(
       return;
     }
 
-    const sgBody: Record<string, unknown> = {
-      personalizations: [{ to: [{ email: toEmail, name: artisanName }] }],
-      from: { email: fromEmail, name: fromName },
+    const brevoBody: Record<string, unknown> = {
+      to: [{ email: toEmail, name: artisanName }],
+      sender: { email: fromEmail, name: fromName },
       subject,
-      content: [{ type: "text/plain", value: bodyText }],
+      textContent: bodyText,
     };
 
     if (attachment) {
-      sgBody.attachments = [{
+      brevoBody.attachment = [{
         content: attachment.content,
-        type: "application/pdf",
-        filename: attachment.filename,
-        disposition: "attachment",
+        name: attachment.filename,
       }];
     }
 
-    const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${sendgridApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(sgBody),
+      headers: { "api-key": brevoApiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(brevoBody),
     });
 
-    if (!sgRes.ok) {
-      console.error("[notifyArtisan] SendGrid erreur", sgRes.status, await sgRes.text());
+    if (!brevoRes.ok) {
+      console.error("[notifyArtisan] Brevo erreur", brevoRes.status, await brevoRes.text());
     } else {
       console.log("[notifyArtisan] Email envoyé à", toEmail);
     }

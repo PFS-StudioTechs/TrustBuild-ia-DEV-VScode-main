@@ -7,12 +7,12 @@
  *   - kbis_deadline est dans moins de 30 jours (rappel 5 mois)
  *   - kbis_deadline n'est PAS encore dépassée
  *
- * Envoie un email via SendGrid (SENDGRID_API_KEY requis dans les secrets Supabase).
+ * Envoie un email via Brevo (BREVO_API_KEY requis dans les secrets Supabase).
  *
  * Variables d'environnement requises :
- *   SENDGRID_API_KEY   — clé API SendGrid
- *   SENDGRID_FROM_EMAIL — adresse expéditeur vérifiée (ex : "noreply@trustbuild.fr")
- *   SENDGRID_FROM_NAME  — nom expéditeur (ex : "TrustBuild-IA") — optionnel
+ *   BREVO_API_KEY      — clé API Brevo
+ *   BREVO_FROM_EMAIL   — adresse expéditeur vérifiée (ex : "noreply@trustbuild.fr")
+ *   BREVO_FROM_NAME    — nom expéditeur (ex : "TrustBuild-IA") — optionnel
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  */
@@ -27,15 +27,15 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
+  const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+  const fromEmail = Deno.env.get("BREVO_FROM_EMAIL") ?? "noreply@trustbuild.ia";
+  const fromName = Deno.env.get("BREVO_FROM_NAME") ?? "TrustBuild-IA";
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  if (!sendgridApiKey) {
+  if (!brevoApiKey) {
     return new Response(
-      JSON.stringify({ error: "SENDGRID_API_KEY non configuré" }),
+      JSON.stringify({ error: "BREVO_API_KEY non configuré" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -87,17 +87,17 @@ serve(async (req) => {
       </div>
     `;
 
-    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${sendgridApiKey}`,
+        "api-key": brevoApiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email }] }],
-        from: { email: fromEmail, name: fromName },
+        to: [{ email }],
+        sender: { email: fromEmail, name: fromName },
         subject: `⚠️ Rappel : déposez votre KBIS dans ${daysLeft} jour${daysLeft > 1 ? "s" : ""}`,
-        content: [{ type: "text/html", value: emailBody }],
+        htmlContent: emailBody,
       }),
     });
 

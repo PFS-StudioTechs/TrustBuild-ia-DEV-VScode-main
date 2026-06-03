@@ -96,26 +96,23 @@ serve(async (req) => {
 
       if (totalPages === null || totalPages > MAX_PAGES) {
         await supabase.from("catalogue_imports").update({ statut: "erreur" }).eq("id", import_id);
-        const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
-        const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
-        if (sendgridKey && fromEmail) {
+        const brevoKey = Deno.env.get("BREVO_API_KEY");
+        const fromEmail = Deno.env.get("BREVO_FROM_EMAIL");
+        if (brevoKey && fromEmail) {
           const [{ data: fournisseur }, { data: profile }] = await Promise.all([
             supabase.from("fournisseurs").select("nom").eq("id", fournisseurId).single(),
             supabase.from("profiles").select("prenom, nom").eq("user_id", artisanId).single(),
           ]);
           const artisanNom = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() : artisanId;
           const fournisseurNom = fournisseur?.nom ?? fournisseurId;
-          await fetch("https://api.sendgrid.com/v3/mail/send", {
+          await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
-            headers: { "Authorization": `Bearer ${sendgridKey}`, "Content-Type": "application/json" },
+            headers: { "api-key": brevoKey, "Content-Type": "application/json" },
             body: JSON.stringify({
-              personalizations: [{ to: [{ email: "contact@pfs-studio-techs.fr" }] }],
-              from: { email: fromEmail, name: "TrustBuild-IA" },
+              to: [{ email: "contact@pfs-studio-techs.fr" }],
+              sender: { email: fromEmail, name: "TrustBuild-IA" },
               subject: `[Cataverif] Catalogue trop volumineux — ${fournisseurNom}`,
-              content: [{
-                type: "text/plain",
-                value: `Un catalogue n'a pas pu être importé automatiquement.\n\nFournisseur : ${fournisseurNom}\nNombre de pages : ${totalPages ?? "inconnu"} (max : ${MAX_PAGES})\nArtisan : ${artisanNom}\n\nConnectez-vous à Cataverif pour traiter cet import manuellement.`,
-              }],
+              textContent: `Un catalogue n'a pas pu être importé automatiquement.\n\nFournisseur : ${fournisseurNom}\nNombre de pages : ${totalPages ?? "inconnu"} (max : ${MAX_PAGES})\nArtisan : ${artisanNom}\n\nConnectez-vous à Cataverif pour traiter cet import manuellement.`,
             }),
           });
         }
@@ -217,30 +214,27 @@ serve(async (req) => {
       .update({ statut: "termine", nb_produits_extraits: nbTotal })
       .eq("id", import_id);
 
-    const sendgridKey = Deno.env.get("SENDGRID_API_KEY");
-    const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
-    console.log("[email] SENDGRID_API_KEY présent:", !!sendgridKey, "| SENDGRID_FROM_EMAIL:", fromEmail ?? "NON DÉFINI");
-    if (sendgridKey && fromEmail && nbNouveaux > 0 && fichier_type !== "csv") {
+    const brevoKey = Deno.env.get("BREVO_API_KEY");
+    const fromEmail = Deno.env.get("BREVO_FROM_EMAIL");
+    console.log("[email] BREVO_API_KEY présent:", !!brevoKey, "| BREVO_FROM_EMAIL:", fromEmail ?? "NON DÉFINI");
+    if (brevoKey && fromEmail && nbNouveaux > 0 && fichier_type !== "csv") {
       const [{ data: fournisseur }, { data: profile }] = await Promise.all([
         supabase.from("fournisseurs").select("nom").eq("id", fournisseurId).single(),
         supabase.from("profiles").select("prenom, nom").eq("user_id", artisanId).single(),
       ]);
       const artisanNom = profile ? `${profile.prenom ?? ""} ${profile.nom ?? ""}`.trim() : artisanId;
       const fournisseurNom = fournisseur?.nom ?? fournisseurId;
-      const emailRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${sendgridKey}`, "Content-Type": "application/json" },
+        headers: { "api-key": brevoKey, "Content-Type": "application/json" },
         body: JSON.stringify({
-          personalizations: [{ to: [{ email: "contact@pfs-studio-techs.fr" }] }],
-          from: { email: fromEmail, name: "TrustBuild-IA" },
+          to: [{ email: "contact@pfs-studio-techs.fr" }],
+          sender: { email: fromEmail, name: "TrustBuild-IA" },
           subject: `[Cataverif] Nouveau catalogue à vérifier — ${fournisseurNom}`,
-          content: [{
-            type: "text/plain",
-            value: `Un nouveau catalogue vient d'être importé et attend vérification.\n\nFournisseur : ${fournisseurNom}\nArticles extraits : ${produits.length}\nArtisan : ${artisanNom}\n\nConnectez-vous à Cataverif pour vérifier l'import.`,
-          }],
+          textContent: `Un nouveau catalogue vient d'être importé et attend vérification.\n\nFournisseur : ${fournisseurNom}\nArticles extraits : ${produits.length}\nArtisan : ${artisanNom}\n\nConnectez-vous à Cataverif pour vérifier l'import.`,
         }),
       });
-      console.log("[email] SendGrid status:", emailRes.status, await emailRes.text());
+      console.log("[email] Brevo status:", emailRes.status, await emailRes.text());
     }
 
     return new Response(

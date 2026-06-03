@@ -16,9 +16,9 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-  const fromEmail = Deno.env.get("SENDGRID_FROM_EMAIL") ?? "noreply@trustbuild.ia";
-  const fromName = Deno.env.get("SENDGRID_FROM_NAME") ?? "TrustBuild-IA";
+  const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+  const fromEmail = Deno.env.get("BREVO_FROM_EMAIL") ?? "noreply@trustbuild.ia";
+  const fromName = Deno.env.get("BREVO_FROM_NAME") ?? "TrustBuild-IA";
 
   const userClient = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: authHeader } },
@@ -96,42 +96,38 @@ serve(async (req) => {
   }
 
   let sendStatus = "sent";
-  if (sendgridApiKey) {
+  if (brevoApiKey) {
     const payload: Record<string, unknown> = {
-      personalizations: [{ to: [{ email: to_email, name: to_name ?? to_email }] }],
-      from: { email: fromEmail, name: `${senderName} via ${fromName}` },
-      reply_to: { email: replyTo, name: senderName },
+      to: [{ email: to_email, name: to_name ?? to_email }],
+      sender: { email: fromEmail, name: `${senderName} via ${fromName}` },
+      replyTo: { email: replyTo, name: senderName },
       subject,
-      content: html_body
-        ? [{ type: "text/plain", value: body }, { type: "text/html", value: html_body }]
-        : [{ type: "text/plain", value: body }],
+      ...(html_body ? { htmlContent: html_body, textContent: body } : { textContent: body }),
     };
 
     if (pdfBase64 && pdfFilename) {
-      payload.attachments = [{
+      payload.attachment = [{
         content: pdfBase64,
-        filename: pdfFilename,
-        type: "application/pdf",
-        disposition: "attachment",
+        name: pdfFilename,
       }];
     }
 
-    const sgRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${sendgridApiKey}`, "Content-Type": "application/json" },
+      headers: { "api-key": brevoApiKey, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!sgRes.ok) {
-      const errText = await sgRes.text();
-      console.error("SendGrid error:", sgRes.status, errText);
+    if (!brevoRes.ok) {
+      const errText = await brevoRes.text();
+      console.error("Brevo error:", brevoRes.status, errText);
       sendStatus = "error";
-      log(serviceClient, { user_id: user.id, action: "email.send_failed", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "error", details: { to: to_email, subject, sg_status: sgRes.status, sg_error: errText } });
+      log(serviceClient, { user_id: user.id, action: "email.send_failed", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "error", details: { to: to_email, subject, brevo_status: brevoRes.status, brevo_error: errText } });
     } else {
       log(serviceClient, { user_id: user.id, action: "email.sent", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "success", details: { to: to_email, subject, has_pdf: !!pdfBase64 } });
     }
   } else {
-    sendStatus = "no_sendgrid";
-    log(serviceClient, { user_id: user.id, action: "email.no_sendgrid", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "info", details: { to: to_email, subject } });
+    sendStatus = "no_brevo";
+    log(serviceClient, { user_id: user.id, action: "email.no_brevo", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "info", details: { to: to_email, subject } });
   }
 
   await serviceClient.from("messages").insert({

@@ -187,9 +187,9 @@ export default function SendEmailDialog(props: Props) {
       if (data?.status === "sent") {
         toast.success(`${meta.label} ${doc.numero} envoyé${meta.labelFem ? "e" : ""} à ${toEmail}`);
         log({ action: "email.sent", entity_type: type, entity_id: doc.id, status: "success", details: { to: toEmail, subject, numero: doc.numero } });
-      } else if (data?.status === "no_sendgrid") {
-        toast.success(`${meta.label} enregistré${meta.labelFem ? "e" : ""} — SendGrid non configuré`);
-        log({ action: "email.no_sendgrid", entity_type: type, entity_id: doc.id, status: "info", details: { to: toEmail, numero: doc.numero } });
+      } else if (data?.status === "no_brevo") {
+        toast.success(`${meta.label} enregistré${meta.labelFem ? "e" : ""} — Brevo non configuré`);
+        log({ action: "email.no_brevo", entity_type: type, entity_id: doc.id, status: "info", details: { to: toEmail, numero: doc.numero } });
       } else {
         toast.error("Erreur lors de l'envoi");
         log({ action: "email.send_failed", entity_type: type, entity_id: doc.id, status: "error", details: { to: toEmail, numero: doc.numero, response: data } });
