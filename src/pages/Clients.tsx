@@ -46,7 +46,7 @@ interface Chantier {
   adresse_chantier: string | null;
 }
 
-interface DevisRow { id: string; chantier_id: string; statut: string; numero: string; montant_ht: number; }
+interface DevisRow { id: string; chantier_id: string; client_id: string | null; statut: string; numero: string; montant_ht: number; }
 interface AvRow    { id: string; devis_id: string; }
 interface FactRow  { id: string; devis_id: string; statut: string; }
 
@@ -263,6 +263,7 @@ function ClientDetail({
   onEdit: () => void;
   onEtatChange: (chantierId: string, etat: EtatProjet) => void;
 }) {
+  const navigate = useNavigate();
   const fullName = [client.prenom, client.nom].filter(Boolean).join(" ");
   const initials = [client.prenom, client.nom].filter(Boolean).map(s => s![0].toUpperCase()).join("");
 
@@ -308,11 +309,11 @@ function ClientDetail({
               {/* Compteurs */}
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: "Devis",    value: stats.nbDevis,    icon: FileText, tab: "devis" },
-                  { label: "Avenants / TS", value: stats.nbAvenants, icon: FileText, tab: "avenants" },
-                  { label: "Factures", value: stats.nbFactures, icon: Receipt, tab: "factures" },
-                ].map(({ label, value, icon: Icon, tab }) => (
-                  <div key={label} className="forge-card !p-3 text-center cursor-pointer hover:border-primary/30 transition-all" onClick={() => navigate(`/documents?tab=${tab}`)}>
+                  { label: "Devis",    value: stats.nbDevis,    icon: FileText, pageView: "devis" },
+                  { label: "Avenants / TS", value: stats.nbAvenants, icon: FileText, pageView: "devis" },
+                  { label: "Factures", value: stats.nbFactures, icon: Receipt, pageView: "factures" },
+                ].map(({ label, value, icon: Icon, pageView }) => (
+                  <div key={label} className="forge-card !p-3 text-center cursor-pointer hover:border-primary/30 transition-all" onClick={() => { onOpenChange(false); navigate(`/devis?tab=${pageView}&client=${client.id}`); }}>
                     <p className="text-2xl font-bold font-mono text-foreground">{value}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
                   </div>
@@ -560,7 +561,7 @@ export default function Clients() {
     const [cl, ch, dv, av, fa] = await Promise.all([
       supabase.from("clients").select("*").eq("artisan_id", user.id).order("nom"),
       supabase.from("chantiers").select("id, client_id, nom, statut, etat_projet, date_debut, adresse_chantier").eq("artisan_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("devis").select("id, chantier_id, statut, numero, montant_ht").eq("artisan_id", user.id),
+      supabase.from("devis").select("id, chantier_id, client_id, statut, numero, montant_ht").eq("artisan_id", user.id),
       supabase.from("avenants").select("id, devis_id").eq("artisan_id", user.id),
       supabase.from("factures").select("id, devis_id, statut").eq("artisan_id", user.id),
     ]);
@@ -577,8 +578,7 @@ export default function Clients() {
   // Calcul stats par client
   const statsFor = (clientId: string): ClientStats => {
     const chs = chantiers.filter(c => c.client_id === clientId);
-    const chIds = new Set(chs.map(c => c.id));
-    const dvs = devis.filter(d => chIds.has(d.chantier_id));
+    const dvs = devis.filter(d => d.client_id === clientId);
     const dvIds = new Set(dvs.map(d => d.id));
     const avs = avenants.filter(a => dvIds.has(a.devis_id));
     const fas = factures.filter(f => dvIds.has(f.devis_id));

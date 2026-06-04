@@ -2829,6 +2829,9 @@ export default function DevisPage() {
 
   useEffect(() => {
     if (searchParams.get("new") === "1") setCreateOpen(true);
+    if (searchParams.get("tab") === "factures") setPageView("factures");
+    const clientParam = searchParams.get("client");
+    if (clientParam) setSelectedClientId(clientParam);
   }, [searchParams]);
 
   const filteredDevis = devisList.filter(d => {
