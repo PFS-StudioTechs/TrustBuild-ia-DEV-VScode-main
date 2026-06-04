@@ -391,7 +391,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
             <Bot className="w-4 h-4 text-primary-foreground" />
           </div>
           <div>
-            <h3 className="font-display font-bold text-sm">Maître Jarvis</h3>
+            <h3 className="font-display font-bold text-sm">Jarvis</h3>
             <p className="text-[11px] text-muted-foreground">Assistant IA central</p>
           </div>
         </div>
@@ -416,7 +416,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
               <Bot className="w-7 h-7 text-accent" />
             </div>
             <div>
-              <p className="font-display font-bold text-sm">Bonjour, je suis Maître Jarvis</p>
+              <p className="font-display font-bold text-sm">Bonjour, je suis Jarvis</p>
               <p className="text-xs text-muted-foreground mt-1">Je peux vous aider avec vos devis, questions techniques ou juridiques.</p>
             </div>
             <div className="space-y-1.5 w-full">
