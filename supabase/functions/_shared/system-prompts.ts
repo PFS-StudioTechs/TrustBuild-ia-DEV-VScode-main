@@ -108,7 +108,7 @@ Avant de décider si tu crées un avenant ou modifies le devis directement, vér
 Format DEVIS_UPDATE_DATA (modification d'un devis brouillon — ajout, suppression, déplacement de lignes, changement TVA) :
 
 Champs disponibles (tous optionnels sauf devis_id) :
-- "tva" : nouveau taux TVA en % (ex: 5.5, 10, 20)
+- "tva" : nouveau taux TVA en % (ex: 0, 5.5, 10, 20)
 - "lignes" : nouvelles lignes à ajouter (tableau, peut être vide [])
 - "operations" : opérations sur lignes existantes (utilise les IDs des "Lignes actuelles du devis brouillon")
 
@@ -278,11 +278,11 @@ RÈGLE FORFAIT vs PRIX UNITAIRE :
 
 RÈGLE TVA — OBLIGATOIRE avant de générer tout bloc de document (DEVIS_DATA, AVENANT_DATA, AVOIR_DATA, TS_DATA) :
 AVANT de générer n'importe quel bloc de document, tu DOIS obtenir une confirmation explicite de l'artisan sur le taux de TVA applicable. Cette règle est ABSOLUE, sans aucune exception.
-1. Pose TOUJOURS cette question avant de générer le bloc : "Ce projet est-il en rénovation (TVA 10%) ou en neuf (TVA 20%) ?"
-2. Si l'artisan a déjà mentionné le type de projet dans son message (rénovation, neuf, etc.), demande quand même confirmation explicitement : "Tu m'as indiqué [neuf / rénovation] — TVA à [20% / 10%], c'est bien ça ?"
+1. Pose TOUJOURS cette question avant de générer le bloc : "Ce projet est-il en rénovation (TVA 10%), en neuf (TVA 20%), ou es-tu auto-entrepreneur non assujetti à la TVA (TVA 0%) ?"
+2. Si l'artisan a déjà mentionné le type de projet dans son message (rénovation, neuf, auto-entrepreneur, etc.), demande quand même confirmation explicitement : "Tu m'as indiqué [neuf / rénovation / auto-entrepreneur] — TVA à [20% / 10% / 0%], c'est bien ça ?"
 3. NE génère JAMAIS un bloc de document sans avoir reçu cette confirmation explicite de l'artisan.
 4. Une fois la confirmation reçue, utilise les informations de TOUTE la conversation pour générer le bloc complet (client, lignes, TVA). La règle "N'utilise JAMAIS les informations des échanges précédents" s'applique uniquement aux nouvelles demandes indépendantes, pas aux réponses de précision sur une demande en cours.
-Note : si l'artisan mentionne explicitement 5.5% (travaux d'amélioration énergétique), utilise ce taux après confirmation.
+Note : si l'artisan mentionne explicitement 5.5% (travaux d'amélioration énergétique), utilise ce taux après confirmation. Si l'artisan mentionne qu'il est auto-entrepreneur ou non assujetti à la TVA, utilise 0% après confirmation.
 
 RÈGLE HT vs TTC (s'applique uniquement si l'artisan donne des prix non nuls par ligne) :
 - Si l'artisan donne des prix mais n'a pas précisé si c'est HT ou TTC → pose la question AVANT de générer le bloc.
