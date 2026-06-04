@@ -16,7 +16,7 @@ import {
   Plus, X, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
-  GitBranch, RotateCcw, ClipboardList, Layers, Mail, Download,
+  GitBranch, RotateCcw, ClipboardList, Layers, Mail, Download, MailOpen, MousePointerClick,
 } from "lucide-react";
 import SendEmailDialog from "@/components/SendEmailDialog";
 import AddressFields from "@/components/ui/AddressFields";
@@ -60,6 +60,8 @@ interface DevisRow {
   base_numero: string | null;
   token_public: string | null;
   token_expires_at: string | null;
+  email_ouvert_at: string | null;
+  email_clique_at: string | null;
   client?: Client;
   lignes?: LigneDevis[];
 }
@@ -805,6 +807,7 @@ function FactureCard({
   facture,
   clientNom,
   clientEmail,
+  clientTelephone,
   chantierNom,
   devisNumero,
   onRefresh,
@@ -812,6 +815,7 @@ function FactureCard({
   facture: Facture;
   clientNom: string;
   clientEmail?: string | null;
+  clientTelephone?: string | null;
   chantierNom?: string;
   devisNumero: string;
   onRefresh: () => void;
@@ -1124,6 +1128,7 @@ function FactureCard({
           }}
           clientEmail={clientEmail ?? null}
           clientNom={clientNom}
+          clientTelephone={clientTelephone ?? null}
           open={emailOpen}
           onClose={() => setEmailOpen(false)}
           onSent={() => { setEmailOpen(false); onRefresh(); }}
@@ -1988,6 +1993,16 @@ function DevisCard({
                   <AlertTriangle className="w-3 h-3 mr-1" /> Expiré
                 </Badge>
               )}
+              {devis.email_ouvert_at && (
+                <Badge className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  <MailOpen className="w-3 h-3 mr-1" /> Ouvert {new Date(devis.email_ouvert_at).toLocaleDateString("fr-FR")}
+                </Badge>
+              )}
+              {devis.email_clique_at && (
+                <Badge className="text-xs bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                  <MousePointerClick className="w-3 h-3 mr-1" /> Cliqué {new Date(devis.email_clique_at).toLocaleDateString("fr-FR")}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
               <span>{new Date(devis.created_at).toLocaleDateString("fr-FR")}</span>
@@ -2412,6 +2427,7 @@ function DevisCard({
                     facture={f}
                     clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
                     clientEmail={devis.client?.email ?? null}
+                    clientTelephone={devis.client?.telephone ?? null}
                     devisNumero={devis.numero}
                     onRefresh={onRefresh}
                   />
@@ -2626,6 +2642,7 @@ function DevisCard({
           }}
           clientEmail={devis.client?.email ?? null}
           clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+          clientTelephone={devis.client?.telephone ?? null}
           open={emailDevisOpen}
           onClose={() => setEmailDevisOpen(false)}
           onSent={() => { setEmailDevisOpen(false); onRefresh(); }}
@@ -2644,6 +2661,7 @@ function DevisCard({
           }}
           clientEmail={devis.client?.email ?? null}
           clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+          clientTelephone={devis.client?.telephone ?? null}
           open={emailAvenantOpen}
           onClose={() => { setEmailAvenantOpen(false); setEmailAvenantDoc(null); }}
           onSent={() => { setEmailAvenantOpen(false); setEmailAvenantDoc(null); onRefresh(); }}
@@ -2663,6 +2681,7 @@ function DevisCard({
           }}
           clientEmail={devis.client?.email ?? null}
           clientNom={devis.client ? `${devis.client.nom}${devis.client.prenom ? " " + devis.client.prenom : ""}` : ""}
+          clientTelephone={devis.client?.telephone ?? null}
           open={emailTsOpen}
           onClose={() => { setEmailTsOpen(false); setEmailTsDoc(null); }}
           onSent={() => { setEmailTsOpen(false); setEmailTsDoc(null); onRefresh(); }}
@@ -2736,7 +2755,7 @@ export default function DevisPage() {
       { data: ltsData },
     ] = await Promise.all([
       supabase.from("clients").select("id,nom,prenom,email,telephone,adresse,type").eq("artisan_id", user.id).order("nom"),
-      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,version,parent_devis_id,base_numero,token_public,token_expires_at,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("devis").select("id,numero,statut,montant_ht,tva,date_validite,client_id,chantier_id,created_at,version,parent_devis_id,base_numero,token_public,token_expires_at,email_ouvert_at,email_clique_at,chantiers(client_id)").eq("artisan_id", user.id).order("created_at", { ascending: false }),
       supabase.from("avenants").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),
@@ -2831,6 +2850,7 @@ export default function DevisPage() {
       devisNumero: devisRef?.numero ?? "",
       clientNom: clientRef ? `${clientRef.nom}${clientRef.prenom ? " " + clientRef.prenom : ""}` : "",
       clientEmail: clientRef?.email ?? null,
+      clientTelephone: clientRef?.telephone ?? null,
     };
   });
 
@@ -2926,6 +2946,7 @@ export default function DevisPage() {
                 facture={f}
                 clientNom={(f as any).clientNom ?? ""}
                 clientEmail={(f as any).clientEmail ?? null}
+                clientTelephone={(f as any).clientTelephone ?? null}
                 devisNumero={(f as any).devisNumero ?? ""}
                 onRefresh={loadAll}
               />

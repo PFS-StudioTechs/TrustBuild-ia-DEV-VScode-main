@@ -28,7 +28,16 @@ serve(async (req) => {
 
   const serviceClient = createClient(supabaseUrl, serviceKey);
 
-  const { to_email, to_name, subject, body, html_body, document_type, document_id } = await req.json();
+  const { to_email, to_name, subject, body, html_body, document_type, document_id, to_phone, doc_url } = await req.json();
+
+  function normalizePhone(phone: string): string | null {
+    const clean = phone.replace(/[\s\-.() ]/g, "");
+    if (/^\+\d{8,15}$/.test(clean)) return clean;
+    if (/^00\d{9,13}$/.test(clean)) return "+" + clean.slice(2);
+    if (/^0\d{9}$/.test(clean)) return "+33" + clean.slice(1);
+    if (/^33\d{9}$/.test(clean)) return "+" + clean;
+    return null;
+  }
   if (!to_email || !subject || !body) {
     return new Response(JSON.stringify({ error: "Champs manquants (to_email, subject, body)" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -103,6 +112,7 @@ serve(async (req) => {
       replyTo: { email: replyTo, name: senderName },
       subject,
       ...(html_body ? { htmlContent: html_body, textContent: body } : { textContent: body }),
+      ...(document_id && document_type ? { tags: [`${document_type}:${document_id}`] } : {}),
     };
 
     if (pdfBase64 && pdfFilename) {
@@ -128,6 +138,29 @@ serve(async (req) => {
   } else {
     sendStatus = "no_brevo";
     log(serviceClient, { user_id: user.id, action: "email.no_brevo", entity_type: document_type ?? undefined, entity_id: document_id ?? undefined, status: "info", details: { to: to_email, subject } });
+  }
+
+  if (to_phone && brevoApiKey && sendStatus === "sent") {
+    const phone = normalizePhone(to_phone);
+    if (phone) {
+      const docLabel = document_type === "facture" ? "une facture"
+        : document_type === "avenant" ? "un avenant"
+        : document_type === "ts" ? "des travaux supplémentaires"
+        : "un devis";
+      const smsContent = doc_url
+        ? `TrustBuild : Vous avez reçu ${docLabel} de ${senderName}. Consultez-le : ${doc_url}`
+        : `TrustBuild : Vous avez reçu ${docLabel} de ${senderName}.`;
+      try {
+        const smsRes = await fetch("https://api.brevo.com/v3/transactionalSMS/sms", {
+          method: "POST",
+          headers: { "api-key": brevoApiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ sender: "TrustBuild", recipient: phone, content: smsContent, type: "transactional" }),
+        });
+        if (!smsRes.ok) console.warn("SMS Brevo error:", smsRes.status, await smsRes.text());
+      } catch (e) {
+        console.warn("SMS send failed:", e);
+      }
+    }
   }
 
   await serviceClient.from("messages").insert({

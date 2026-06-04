@@ -23,6 +23,7 @@ export interface SendEmailDialogDevisProps {
   doc: BaseDoc & { date_validite?: string | null; chantierNom?: string };
   clientEmail: string | null;
   clientNom: string;
+  clientTelephone?: string | null;
   open: boolean;
   onClose: () => void;
   onSent: () => void;
@@ -33,6 +34,7 @@ export interface SendEmailDialogFactureProps {
   doc: BaseDoc & { date_echeance: string; solde_restant: number; chantierNom?: string };
   clientEmail: string | null;
   clientNom: string;
+  clientTelephone?: string | null;
   open: boolean;
   onClose: () => void;
   onSent: () => void;
@@ -43,6 +45,7 @@ export interface SendEmailDialogAvenantProps {
   doc: BaseDoc & { date_validite?: string | null; chantierNom?: string };
   clientEmail: string | null;
   clientNom: string;
+  clientTelephone?: string | null;
   open: boolean;
   onClose: () => void;
   onSent: () => void;
@@ -53,6 +56,7 @@ export interface SendEmailDialogTsProps {
   doc: BaseDoc & { date_validite?: string | null; chantierNom?: string };
   clientEmail: string | null;
   clientNom: string;
+  clientTelephone?: string | null;
   open: boolean;
   onClose: () => void;
   onSent: () => void;
@@ -72,7 +76,7 @@ const DOC_LABELS: Record<string, { label: string; labelFem: boolean; table: stri
 };
 
 export default function SendEmailDialog(props: Props) {
-  const { type, doc, clientEmail, clientNom, open, onClose, onSent } = props;
+  const { type, doc, clientEmail, clientNom, clientTelephone, open, onClose, onSent } = props;
   const { user } = useAuth();
   const { log } = useLog();
 
@@ -132,6 +136,7 @@ export default function SendEmailDialog(props: Props) {
     try {
       let finalBody = body;
       let htmlBody: string | undefined;
+      let docUrl: string | null = null;
       if (meta.tokenTable) {
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 90);
@@ -150,7 +155,7 @@ export default function SendEmailDialog(props: Props) {
         }
         if (usedToken) {
           const docRoute = type === "devis" ? "devis/view" : "document/view";
-          const docUrl = `${window.location.origin}/${docRoute}/${usedToken}`;
+          docUrl = `${window.location.origin}/${docRoute}/${usedToken}`;
           const btnLabel = type === "devis" ? "Consulter mon devis"
             : type === "avenant" ? "Consulter mon avenant"
             : "Consulter mes travaux supplémentaires";
@@ -168,6 +173,8 @@ export default function SendEmailDialog(props: Props) {
           html_body: htmlBody,
           document_type: type,
           document_id: doc.id,
+          ...(clientTelephone ? { to_phone: clientTelephone } : {}),
+          ...(docUrl ? { doc_url: docUrl } : {}),
         },
       });
 
