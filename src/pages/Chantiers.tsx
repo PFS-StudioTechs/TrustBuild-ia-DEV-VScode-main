@@ -320,7 +320,8 @@ export default function Chantiers() {
       statut: "brouillon" as any,
       date_echeance: newFactureForm.date_echeance,
       solde_restant: montant,
-    });
+      type: 'standard',
+    } as any);
     if (error) { toast.error(error.message); }
     else {
       toast.success(`Facture ${numero} créée`);

@@ -12,7 +12,7 @@ import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 export interface FactureData {
   devis_id: string;
   devis_numero?: string;
-  is_acompte?: boolean;
+  type?: 'standard' | 'acompte' | 'situation' | 'solde';
   lignes: Array<{
     description: string;
     quantite: number;
@@ -46,6 +46,7 @@ interface DevisCtx {
   montantAjusteHT: number;
   tva: number;
   acomptesEncaisses: number;
+  situationsFacturees: number;
   lignesDevis: LigneDevis[];
 }
 
@@ -70,12 +71,13 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
     if (!data.devis_id) { setLoadingCtx(false); return; }
     (async () => {
       try {
-        const [devisRes, lignesRes, avenantRes, avoirRes, acompteRes] = await Promise.all([
+        const [devisRes, lignesRes, avenantRes, avoirRes, acompteRes, situationRes] = await Promise.all([
           supabase.from("devis").select("montant_ht, tva").eq("id", data.devis_id).single(),
           (supabase as any).from("lignes_devis").select("designation,quantite,unite,prix_unitaire,tva,ordre,section_nom").eq("devis_id", data.devis_id).order("ordre"),
           supabase.from("avenants").select("montant_ht").eq("devis_id", data.devis_id),
           (supabase as any).from("avoirs").select("montant_ht").eq("devis_id", data.devis_id),
           supabase.from("acomptes").select("montant, statut").eq("devis_id", data.devis_id),
+          (supabase as any).from("factures").select("montant_ht, tva").eq("devis_id", data.devis_id).eq("type", "situation"),
         ]);
         const devis = devisRes.data;
         if (!devis) return;
@@ -86,11 +88,13 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
         const acomptesEncaisses = (acompteRes.data ?? [])
           .filter((a: any) => a.statut === "encaisse")
           .reduce((s: number, a: any) => s + Number(a.montant), 0);
+        const situationsFacturees = (situationRes.data ?? [])
+          .reduce((s: number, f: any) => s + Number(f.montant_ht) * (1 + Number(f.tva) / 100), 0);
 
-        setCtx({ montantAjusteHT, tva: devis.tva, acomptesEncaisses, lignesDevis: lignesRes.data ?? [] });
+        setCtx({ montantAjusteHT, tva: devis.tva, acomptesEncaisses, situationsFacturees, lignesDevis: lignesRes.data ?? [] });
 
         // Pour acompte : si Jarvis a fourni un montant TTC dans les lignes, on l'utilise comme suggestion
-        if (data.is_acompte && data.lignes.length > 0 && data.lignes[0].prix_unitaire > 0) {
+        if (data.type === 'acompte' && data.lignes.length > 0 && data.lignes[0].prix_unitaire > 0) {
           setAcompteTTC(data.lignes[0].prix_unitaire.toFixed(2));
         }
       } finally {
@@ -104,19 +108,22 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
   const montantAjusteHT = ctx?.montantAjusteHT ?? 0;
   const montantAjusteTTC = montantAjusteHT * (1 + tva / 100);
   const acomptesEncaisses = ctx?.acomptesEncaisses ?? 0;
-  const soldeTTC = Math.max(0, montantAjusteTTC - acomptesEncaisses);
+  const situationsFacturees = ctx?.situationsFacturees ?? 0;
+  const soldeTTC = Math.max(0, montantAjusteTTC - acomptesEncaisses - situationsFacturees);
   const soldeHT = soldeTTC / (1 + tva / 100);
+  const isAcompte = data.type === 'acompte';
+  const isSituation = data.type === 'situation';
 
   const acompteTTCNum = parseFloat(acompteTTC.replace(",", ".")) || 0;
   const acompteHTNum = acompteTTCNum / (1 + tva / 100);
 
-  const finalHT = data.is_acompte ? acompteHTNum : soldeHT;
-  const finalTTC = data.is_acompte ? acompteTTCNum : soldeTTC;
+  const finalHT = (isAcompte || isSituation) ? acompteHTNum : soldeHT;
+  const finalTTC = (isAcompte || isSituation) ? acompteTTCNum : soldeTTC;
 
   const handleSubmit = async () => {
     if (!user) return;
     if (!data.devis_id) { toast.error("Identifiant du devis manquant — précisez le devis à facturer"); return; }
-    if (data.is_acompte && acompteTTCNum <= 0) { toast.error("Montant de l'acompte requis"); return; }
+    if ((isAcompte || isSituation) && acompteTTCNum <= 0) { toast.error("Montant requis"); return; }
     if (!loadingCtx && finalTTC <= 0) { toast.error("Montant à facturer nul"); return; }
 
     setSaving(true);
@@ -134,6 +141,7 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
           statut: "brouillon",
           solde_restant: Math.round(finalTTC * 100) / 100,
           date_echeance: dateEcheance,
+          type: data.type ?? 'standard',
         } as any)
         .select("id")
         .single();
@@ -142,29 +150,30 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
 
       const lignesDevis = ctx?.lignesDevis ?? [];
 
-      if (data.is_acompte) {
-        // Ligne unique "Acompte" pour la facture d'acompte
+      if (isAcompte || isSituation) {
+        const label = isAcompte ? "Acompte" : "Situation";
         await (supabase as any).from("lignes_facture").insert([{
           facture_id: newFacture.id,
           artisan_id: user.id,
-          designation: `Acompte${data.devis_numero ? ` — ${data.devis_numero}` : ""}`,
+          designation: `${label}${data.devis_numero ? ` — ${data.devis_numero}` : ""}`,
           quantite: 1,
           unite: "forfait",
           prix_unitaire: Math.round(acompteHTNum * 100) / 100,
           tva,
           ordre: 1,
         }]);
-        // Crée l'enregistrement acompte pour le suivi du solde
-        const acompteNumero = await generateDocumentNumber(user.id, "acompte");
-        await supabase.from("acomptes").insert({
-          artisan_id: user.id,
-          devis_id: data.devis_id,
-          numero: acompteNumero,
-          montant: Math.round(acompteTTCNum * 100) / 100,
-          statut: "en_attente",
-          date_echeance: dateEcheance,
-          notes: `Lié à la facture ${numero}`,
-        });
+        if (isAcompte) {
+          const acompteNumero = await generateDocumentNumber(user.id, "acompte");
+          await supabase.from("acomptes").insert({
+            artisan_id: user.id,
+            devis_id: data.devis_id,
+            numero: acompteNumero,
+            montant: Math.round(acompteTTCNum * 100) / 100,
+            statut: "en_attente",
+            date_echeance: dateEcheance,
+            notes: `Lié à la facture ${numero}`,
+          });
+        }
       } else if (lignesDevis.length > 0) {
         // Lignes réelles du devis avec section_nom
         await (supabase as any).from("lignes_facture").insert(
@@ -242,7 +251,7 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
         <CardHeader className="py-2 px-3">
           <CardTitle className="text-xs flex items-center gap-1.5">
             <Receipt className="w-3.5 h-3.5 text-emerald-600" />
-            Facture{data.is_acompte ? " d'acompte" : ""}{data.devis_numero ? ` — devis ${data.devis_numero}` : ""}
+            Facture{isAcompte ? " d'acompte" : isSituation ? " de situation" : data.type === 'solde' ? " de solde" : ""}{data.devis_numero ? ` — devis ${data.devis_numero}` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 pb-3">
@@ -265,16 +274,22 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
                 <span className="font-mono">{fmt(montantAjusteTTC)}</span>
               </div>
               {acomptesEncaisses > 0 && (
-                <>
-                  <div className="flex justify-between text-xs text-amber-600">
-                    <span>− Acomptes encaissés</span>
-                    <span className="font-mono">{fmt(acomptesEncaisses)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold text-emerald-600 border-t pt-1">
-                    <span>Solde restant</span>
-                    <span className="font-mono">{fmt(soldeTTC)}</span>
-                  </div>
-                </>
+                <div className="flex justify-between text-xs text-amber-600">
+                  <span>− Acomptes encaissés</span>
+                  <span className="font-mono">{fmt(acomptesEncaisses)}</span>
+                </div>
+              )}
+              {situationsFacturees > 0 && (
+                <div className="flex justify-between text-xs text-blue-600">
+                  <span>− Situations facturées</span>
+                  <span className="font-mono">{fmt(situationsFacturees)}</span>
+                </div>
+              )}
+              {(acomptesEncaisses > 0 || situationsFacturees > 0) && (
+                <div className="flex justify-between text-sm font-bold text-emerald-600 border-t pt-1">
+                  <span>Solde restant</span>
+                  <span className="font-mono">{fmt(soldeTTC)}</span>
+                </div>
               )}
               {ctx.lignesDevis.length > 0 && (
                 <p className="text-[10px] text-muted-foreground pt-1">
@@ -290,10 +305,10 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
       </Card>
 
       {/* Montant acompte si applicable */}
-      {data.is_acompte && (
+      {(isAcompte || isSituation) && (
         <Card className="border-muted">
           <CardContent className="px-3 pb-3 pt-3 space-y-2">
-            <Label className="text-[10px]">Montant de l'acompte TTC (€)</Label>
+            <Label className="text-[10px]">{isSituation ? "Montant de la situation TTC (€)" : "Montant de l'acompte TTC (€)"}</Label>
             <Input
               type="number"
               step="0.01"

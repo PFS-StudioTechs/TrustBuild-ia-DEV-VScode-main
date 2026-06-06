@@ -121,6 +121,7 @@ interface Facture {
   date_echeance: string;
   client_id?: string | null;
   solde_restant?: number;
+  type?: 'standard' | 'acompte' | 'situation' | 'solde';
 }
 
 interface Avoir {
@@ -1148,6 +1149,7 @@ function FactureDialog({
   montantAjusteHT,
   tva,
   acomptesEncaisses,
+  situationsFacturees,
   artisanId,
   nomenclatureSettings,
   lignesDevis,
@@ -1160,6 +1162,7 @@ function FactureDialog({
   montantAjusteHT: number;
   tva: number;
   acomptesEncaisses: number;
+  situationsFacturees: number;
   artisanId: string;
   nomenclatureSettings: NomenclatureSettings;
   lignesDevis: LigneDevis[];
@@ -1171,7 +1174,7 @@ function FactureDialog({
   const [montantTTCEditable, setMontantTTCEditable] = useState("");
 
   const montantTTC = montantAjusteHT * (1 + tva / 100);
-  const soldeRestant = Math.max(0, montantTTC - acomptesEncaisses);
+  const soldeRestant = Math.max(0, montantTTC - acomptesEncaisses - situationsFacturees);
 
   useEffect(() => {
     if (!open) return;
@@ -1200,6 +1203,7 @@ function FactureDialog({
         statut: "brouillon",
         date_echeance: dateEcheance,
         solde_restant: montantTTCFinal,
+        type: isPartial ? 'situation' : 'solde',
       } as any).select("id").single();
       if (error) throw error;
 
@@ -1254,16 +1258,22 @@ function FactureDialog({
               <span className="font-mono">{montantTTC.toFixed(2)} €</span>
             </div>
             {acomptesEncaisses > 0 && (
-              <>
-                <div className="flex justify-between text-xs text-amber-600">
-                  <span>− Acomptes encaissés</span>
-                  <span className="font-mono">{acomptesEncaisses.toFixed(2)} €</span>
-                </div>
-                <div className="flex justify-between text-sm font-bold text-primary border-t pt-1.5">
-                  <span>Solde à facturer</span>
-                  <span className="font-mono">{soldeRestant.toFixed(2)} €</span>
-                </div>
-              </>
+              <div className="flex justify-between text-xs text-amber-600">
+                <span>− Acomptes encaissés</span>
+                <span className="font-mono">{acomptesEncaisses.toFixed(2)} €</span>
+              </div>
+            )}
+            {situationsFacturees > 0 && (
+              <div className="flex justify-between text-xs text-blue-600">
+                <span>− Situations facturées</span>
+                <span className="font-mono">{situationsFacturees.toFixed(2)} €</span>
+              </div>
+            )}
+            {(acomptesEncaisses > 0 || situationsFacturees > 0) && (
+              <div className="flex justify-between text-sm font-bold text-primary border-t pt-1.5">
+                <span>Solde à facturer</span>
+                <span className="font-mono">{soldeRestant.toFixed(2)} €</span>
+              </div>
             )}
           </div>
 
@@ -1276,14 +1286,14 @@ function FactureDialog({
                 onClick={() => { setIsPartial(false); setMontantTTCEditable(soldeRestant.toFixed(2)); }}
                 className={`px-3 py-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${!isPartial ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
               >
-                Solde total<br /><span className="font-mono font-bold">{soldeRestant.toFixed(2)} €</span>
+                Facture de solde<br /><span className="font-mono font-bold">{soldeRestant.toFixed(2)} €</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsPartial(true)}
                 className={`px-3 py-2.5 rounded-lg border text-xs font-medium transition-colors text-left ${isPartial ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
               >
-                Montant partiel<br /><span className="font-mono font-bold opacity-70">personnalisé</span>
+                Situation (partielle)<br /><span className="font-mono font-bold opacity-70">montant libre</span>
               </button>
             </div>
             {isPartial && (
@@ -1761,6 +1771,9 @@ function DevisCard({
   const montantAjusteTTC = calcMontantTTC(montantAjusteHT, devis.tva);
   const totalAcomptes = devisAcomptes.reduce((s, a) => s + a.montant, 0);
   const acomptesEncaisses = devisAcomptes.filter(a => a.statut === "encaisse").reduce((s, a) => s + a.montant, 0);
+  const situationsFacturees = devisFactures
+    .filter(f => f.type === 'situation' && f.statut !== 'annulee')
+    .reduce((s, f) => s + f.montant_ht * (1 + f.tva / 100), 0);
 
   const handleChangeStatut = async (statut: string) => {
     await supabase.from("devis").update({ statut }).eq("id", devis.id);
@@ -1873,6 +1886,7 @@ function DevisCard({
         statut: "brouillon",
         date_echeance: tsFactureDateEcheance,
         solde_restant: montantTTCTs,
+        type: 'standard',
       } as any).select("id").single();
       if (error) throw error;
       if (newFacture?.id && tsItem.lignes && tsItem.lignes.length > 0) {
@@ -1927,6 +1941,7 @@ function DevisCard({
         statut: "brouillon",
         date_echeance: avoirRectifEcheance,
         solde_restant: newTTC,
+        type: 'standard',
       } as any).select("id").single();
       if (error) throw error;
       if (newF?.id && lignesOrig && lignesOrig.length > 0) {
@@ -2578,6 +2593,7 @@ function DevisCard({
         montantAjusteHT={montantAjusteHT}
         tva={devis.tva}
         acomptesEncaisses={acomptesEncaisses}
+        situationsFacturees={situationsFacturees}
         artisanId={artisanId}
         nomenclatureSettings={nomenclatureSettings}
         lignesDevis={devis.lignes ?? []}
@@ -2759,7 +2775,7 @@ export default function DevisPage() {
       supabase.from("avenants").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       (supabase as any).from("avoirs").select("id,devis_id,numero,description,montant_ht,statut,date").eq("artisan_id", user.id),
       supabase.from("acomptes").select("id,devis_id,numero,pourcentage,montant,statut,date_echeance,date_encaissement,notes").eq("artisan_id", user.id),
-      supabase.from("factures").select("id,devis_id,numero,montant_ht,tva,statut,date_echeance,client_id,solde_restant").eq("artisan_id", user.id),
+      supabase.from("factures").select("id,devis_id,numero,montant_ht,tva,statut,date_echeance,client_id,solde_restant,type").eq("artisan_id", user.id),
       supabase.from("lignes_devis").select("id,devis_id,designation,quantite,unite,prix_unitaire,tva,ordre,section_nom").eq("artisan_id", user.id).order("ordre"),
       supabase.from("lignes_avenant").select("id,avenant_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),
       (supabase as any).from("lignes_avoir").select("id,avoir_id,designation,quantite,unite,prix_unitaire,tva,ordre").eq("artisan_id", user.id).order("ordre"),

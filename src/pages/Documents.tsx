@@ -627,7 +627,8 @@ export default function Documents() {
       artisan_id: user.id, devis_id: factureForm.devis_id, numero, montant_ht: montant,
       tva: parseFloat(factureForm.tva) || 20, statut: factureForm.statut as any,
       date_echeance: factureForm.date_echeance, solde_restant: parseFloat(factureForm.solde_restant) || montant,
-    }).select("id").single();
+      type: 'standard',
+    } as any).select("id").single();
     if (error) { toast.error(error.message); setSaving(false); return; }
     if (lignesValides.length > 0) await saveLignes("facture", newFacture.id, lignesValides);
     toast.success(`Facture ${numero} créée`);
