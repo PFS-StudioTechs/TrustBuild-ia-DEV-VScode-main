@@ -17,7 +17,9 @@ export interface DevisPdfParams {
   montant_ht: number;
   tva: number;
   docLabel?: string;
-  artisan: { nom: string; prenom: string; siret?: string | null; adresse?: string | null; telephone?: string | null; email?: string | null };
+  couleur_primaire?: string | null;
+  mentions?: string[] | null;
+  artisan: { nom: string; prenom: string; raison_sociale?: string | null; siret?: string | null; tva_intracommunautaire?: string | null; adresse?: string | null; telephone?: string | null; email?: string | null };
   client: { nom: string; prenom?: string | null; adresse?: string | null } | null;
   chantier?: { nom?: string | null; adresse_chantier?: string | null } | null;
   lignes: Array<{ designation: string; quantite: number; unite: string; prix_unitaire: number; section_nom?: string | null }>;
@@ -33,7 +35,12 @@ export async function buildDevisPdf(params: DevisPdfParams, outcome: DevisOutcom
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
   const fontNormal = await doc.embedFont(StandardFonts.Helvetica);
 
-  const BLUE = rgb(0.145, 0.302, 0.859);
+  function hexToRgb(hex: string | null | undefined) {
+    const m = (hex ?? "").replace("#", "").match(/.{2}/g);
+    if (!m || m.length < 3) return rgb(0.145, 0.302, 0.859);
+    return rgb(parseInt(m[0], 16) / 255, parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255);
+  }
+  const BLUE = hexToRgb(params.couleur_primaire);
   const RED = rgb(0.8, 0.1, 0.1);
   const GRAY = rgb(0.8, 0.8, 0.8);
   const WHITE = rgb(1, 1, 1);
@@ -83,11 +90,12 @@ export async function buildDevisPdf(params: DevisPdfParams, outcome: DevisOutcom
   drawHLine(y, BLUE, 1.5);
   y -= 16;
 
-  const artisanName = `${params.artisan.prenom} ${params.artisan.nom}`.trim();
+  const artisanName = params.artisan.raison_sociale || `${params.artisan.prenom} ${params.artisan.nom}`.trim();
   drawText(artisanName, LEFT, y, 10, true);
   y -= 13;
   if (params.artisan.adresse) { drawText(params.artisan.adresse, LEFT, y, 9); y -= 12; }
   if (params.artisan.siret) { drawText(`SIRET : ${params.artisan.siret}`, LEFT, y, 9); y -= 12; }
+  if (params.artisan.tva_intracommunautaire) { drawText(`TVA : ${params.artisan.tva_intracommunautaire}`, LEFT, y, 9); y -= 12; }
   if (params.artisan.telephone) { drawText(`Tél. : ${params.artisan.telephone}`, LEFT, y, 9); y -= 12; }
   if (params.artisan.email) { drawText(params.artisan.email, LEFT, y, 9); y -= 12; }
   y -= 6;
@@ -177,6 +185,22 @@ export async function buildDevisPdf(params: DevisPdfParams, outcome: DevisOutcom
   drawTextRight(fmtMoney(TTC), RIGHT, y, 9, true, WHITE);
   y -= 28;
 
+  const defaultMentions = [
+    "Assurance Décennale souscrite — attestation disponible sur demande.",
+    "Règlement à réception de facture. Tout retard entraîne des pénalités de 3× le taux d'intérêt légal.",
+    "En cas de retard de paiement, une indemnité forfaitaire de 40 € sera appliquée.",
+  ];
+  const mentionsList = params.mentions?.length ? params.mentions : defaultMentions;
+  checkPageBreak(10 + mentionsList.length * 10);
+  drawHLine(y, GRAY, 0.3);
+  y -= 10;
+  for (const m of mentionsList) {
+    const line = `* ${m}`;
+    drawText(line.length > 100 ? line.substring(0, 99) + "…" : line, LEFT, y, 7, false, rgb(0.5, 0.5, 0.5));
+    y -= 10;
+  }
+  y -= 4;
+
   if (outcome.type !== "unsigned") {
     checkPageBreak(120);
     y -= 10;
@@ -242,10 +266,15 @@ export async function fetchDevisFullData(
 ) {
   const artisanId = devisRow.artisan_id as string;
 
-  const [{ data: artisanProfile }, { data: artisanEmail }] = await Promise.all([
-    db.from("profiles").select("nom, prenom, siret, adresse, telephone").eq("user_id", artisanId).single(),
+  const [{ data: artisanProfile }, { data: artisanEmail }, { data: settings }, { data: tpl }] = await Promise.all([
+    db.from("profiles").select("nom, prenom, siret, adresse, telephone, raison_sociale, tva_intracommunautaire").eq("user_id", artisanId).single(),
     db.rpc("get_user_email", { p_user_id: artisanId }),
+    (db as any).from("artisan_settings").select("preferences").eq("user_id", artisanId).maybeSingle(),
+    (db as any).from("document_templates").select("couleur_primaire").eq("artisan_id", artisanId).eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
+
+  const prefs = ((settings as any)?.preferences ?? {}) as Record<string, string>;
+  const adresse = prefs.adresse ?? (artisanProfile as any)?.adresse ?? null;
 
   let clientData: { nom: string; prenom?: string | null; adresse?: string | null } | null = null;
   let chantierData: { nom?: string | null; adresse_chantier?: string | null } | null = null;
@@ -264,6 +293,11 @@ export async function fetchDevisFullData(
     }
   }
 
+  if (!clientData && devisRow.client_id) {
+    const { data: cl } = await db.from("clients").select("nom, prenom, adresse").eq("id", devisRow.client_id as string).single();
+    clientData = cl as any;
+  }
+
   const { data: lignesData } = await db
     .from("lignes_devis")
     .select("designation, quantite, unite, prix_unitaire, section_nom")
@@ -274,11 +308,14 @@ export async function fetchDevisFullData(
     artisan: {
       nom: (artisanProfile as any)?.nom ?? "",
       prenom: (artisanProfile as any)?.prenom ?? "",
+      raison_sociale: (artisanProfile as any)?.raison_sociale ?? null,
       siret: (artisanProfile as any)?.siret ?? null,
-      adresse: (artisanProfile as any)?.adresse ?? null,
+      tva_intracommunautaire: (artisanProfile as any)?.tva_intracommunautaire ?? null,
+      adresse,
       telephone: (artisanProfile as any)?.telephone ?? null,
       email: artisanEmail ?? null,
     },
+    couleur_primaire: (tpl as any)?.couleur_primaire ?? null,
     client: clientData,
     chantier: chantierData,
     lignes: (lignesData ?? []).map((l: any) => ({
@@ -296,10 +333,14 @@ export async function fetchAvenantFullData(
   avenantRow: Record<string, unknown>,
 ) {
   const artisanId = avenantRow.artisan_id as string;
-  const [{ data: artisanProfile }, { data: artisanEmail }] = await Promise.all([
-    db.from("profiles").select("nom, prenom, siret, adresse, telephone").eq("user_id", artisanId).single(),
+  const [{ data: artisanProfile }, { data: artisanEmail }, { data: settings }, { data: tpl }] = await Promise.all([
+    db.from("profiles").select("nom, prenom, siret, adresse, telephone, raison_sociale, tva_intracommunautaire").eq("user_id", artisanId).single(),
     db.rpc("get_user_email", { p_user_id: artisanId }),
+    (db as any).from("artisan_settings").select("preferences").eq("user_id", artisanId).maybeSingle(),
+    (db as any).from("document_templates").select("couleur_primaire").eq("artisan_id", artisanId).eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
+  const prefs = ((settings as any)?.preferences ?? {}) as Record<string, string>;
+  const adresse = prefs.adresse ?? (artisanProfile as any)?.adresse ?? null;
 
   let clientData: { nom: string; prenom?: string | null; adresse?: string | null } | null = null;
   let chantierData: { nom?: string | null; adresse_chantier?: string | null } | null = null;
@@ -329,11 +370,14 @@ export async function fetchAvenantFullData(
     artisan: {
       nom: (artisanProfile as any)?.nom ?? "",
       prenom: (artisanProfile as any)?.prenom ?? "",
+      raison_sociale: (artisanProfile as any)?.raison_sociale ?? null,
       siret: (artisanProfile as any)?.siret ?? null,
-      adresse: (artisanProfile as any)?.adresse ?? null,
+      tva_intracommunautaire: (artisanProfile as any)?.tva_intracommunautaire ?? null,
+      adresse,
       telephone: (artisanProfile as any)?.telephone ?? null,
       email: artisanEmail ?? null,
     },
+    couleur_primaire: (tpl as any)?.couleur_primaire ?? null,
     client: clientData,
     chantier: chantierData,
     lignes: (lignesData ?? []).length > 0
@@ -347,10 +391,14 @@ export async function fetchTsFullData(
   tsRow: Record<string, unknown>,
 ) {
   const artisanId = tsRow.artisan_id as string;
-  const [{ data: artisanProfile }, { data: artisanEmail }] = await Promise.all([
-    db.from("profiles").select("nom, prenom, siret, adresse, telephone").eq("user_id", artisanId).single(),
+  const [{ data: artisanProfile }, { data: artisanEmail }, { data: settings }, { data: tpl }] = await Promise.all([
+    db.from("profiles").select("nom, prenom, siret, adresse, telephone, raison_sociale, tva_intracommunautaire").eq("user_id", artisanId).single(),
     db.rpc("get_user_email", { p_user_id: artisanId }),
+    (db as any).from("artisan_settings").select("preferences").eq("user_id", artisanId).maybeSingle(),
+    (db as any).from("document_templates").select("couleur_primaire").eq("artisan_id", artisanId).eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
+  const prefs = ((settings as any)?.preferences ?? {}) as Record<string, string>;
+  const adresse = prefs.adresse ?? (artisanProfile as any)?.adresse ?? null;
 
   let clientData: { nom: string; prenom?: string | null; adresse?: string | null } | null = null;
   let chantierData: { nom?: string | null; adresse_chantier?: string | null } | null = null;
@@ -382,11 +430,14 @@ export async function fetchTsFullData(
     artisan: {
       nom: (artisanProfile as any)?.nom ?? "",
       prenom: (artisanProfile as any)?.prenom ?? "",
+      raison_sociale: (artisanProfile as any)?.raison_sociale ?? null,
       siret: (artisanProfile as any)?.siret ?? null,
-      adresse: (artisanProfile as any)?.adresse ?? null,
+      tva_intracommunautaire: (artisanProfile as any)?.tva_intracommunautaire ?? null,
+      adresse,
       telephone: (artisanProfile as any)?.telephone ?? null,
       email: artisanEmail ?? null,
     },
+    couleur_primaire: (tpl as any)?.couleur_primaire ?? null,
     client: clientData,
     chantier: chantierData,
     lignes: (lignesData ?? []).length > 0

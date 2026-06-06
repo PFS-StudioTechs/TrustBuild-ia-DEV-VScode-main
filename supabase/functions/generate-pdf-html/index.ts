@@ -143,8 +143,9 @@ function buildHtml(params: {
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .no-print { display: none !important; }
+    .page { padding: 0 !important; }
   }
-  .page { max-width: 794px; margin: 0 auto; padding: 0; background: #fff; }
+  .page { max-width: 794px; margin: 0 auto; padding: 16px 20px; background: #fff; }
   table { border-collapse: collapse; }
   .clear { clear: both; }
 </style>
