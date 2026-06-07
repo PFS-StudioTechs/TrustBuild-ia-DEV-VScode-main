@@ -1335,6 +1335,7 @@ function AcompteDialog({
   onClose,
   onSaved,
   devisId,
+  devisNumero,
   devisMontantHT,
   devisTva,
   artisanId,
@@ -1345,6 +1346,7 @@ function AcompteDialog({
   onClose: () => void;
   onSaved: () => void;
   devisId: string;
+  devisNumero?: string;
   devisMontantHT: number;
   devisTva: number;
   artisanId: string;
@@ -1381,6 +1383,9 @@ function AcompteDialog({
     setSaving(true);
     try {
       const numero = await generateDocumentNumber(artisanId, "acompte", undefined, nomenclatureSettings);
+      const factureNumero = await generateDocumentNumber(artisanId, "facture", undefined, nomenclatureSettings);
+      const montantHT = Math.round((montant / (1 + devisTva / 100)) * 100) / 100;
+
       const { error } = await supabase.from("acomptes").insert({
         artisan_id: artisanId,
         devis_id: devisId,
@@ -1389,9 +1394,38 @@ function AcompteDialog({
         montant,
         statut: "en_attente",
         date_echeance: dateEcheance || null,
-        notes: notes || null,
+        notes: notes ? `${notes} — Lié à la facture ${factureNumero}` : `Lié à la facture ${factureNumero}`,
       });
       if (error) throw error;
+
+      const { data: newFacture, error: facErr } = await supabase
+        .from("factures")
+        .insert({
+          artisan_id: artisanId,
+          devis_id: devisId,
+          numero: factureNumero,
+          montant_ht: montantHT,
+          tva: devisTva,
+          statut: "brouillon",
+          solde_restant: Math.round(montant * 100) / 100,
+          date_echeance: dateEcheance || null,
+          type: "acompte",
+        } as any)
+        .select("id")
+        .single();
+      if (facErr) throw facErr;
+
+      await (supabase as any).from("lignes_facture").insert([{
+        facture_id: newFacture.id,
+        artisan_id: artisanId,
+        designation: `Acompte${devisNumero ? ` — ${devisNumero}` : ""}`,
+        quantite: 1,
+        unite: "forfait",
+        prix_unitaire: montantHT,
+        tva: devisTva,
+        ordre: 1,
+      }]);
+
       toast.success("Acompte créé");
       onSaved();
       onClose();
@@ -2568,6 +2602,7 @@ function DevisCard({
         onClose={() => setAcompteOpen(false)}
         onSaved={onRefresh}
         devisId={devis.id}
+        devisNumero={devis.numero}
         devisMontantHT={montantAjusteHT}
         devisTva={devis.tva}
         artisanId={artisanId}
