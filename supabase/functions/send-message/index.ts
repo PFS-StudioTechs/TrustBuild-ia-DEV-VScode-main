@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { log } from "../_shared/logger.ts";
-import { buildDevisPdf, fetchDevisFullData, fetchAvenantFullData, fetchTsFullData } from "../_shared/pdf-builder.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -53,38 +52,25 @@ serve(async (req) => {
   const PDF_TYPES = ["devis", "avenant", "ts"];
   if (document_id && PDF_TYPES.includes(document_type)) {
     try {
-      const tableName = document_type === "ts" ? "travaux_supplementaires"
-        : document_type === "avenant" ? "avenants" : "devis";
-      const docLabelMap: Record<string, string> = { devis: "DEVIS", avenant: "AVENANT", ts: "TRAVAUX SUPPLÉMENTAIRES" };
-      const { data: docRow } = await (serviceClient as any).from(tableName)
-        .select("id, numero, created_at, date_validite, date, montant_ht, tva, artisan_id, client_id, chantier_id, devis_id, description")
-        .eq("id", document_id)
-        .single();
-      if (docRow) {
-        let fullData: any;
-        if (document_type === "devis") {
-          fullData = await fetchDevisFullData(serviceClient, docRow, null);
-        } else if (document_type === "avenant") {
-          fullData = await fetchAvenantFullData(serviceClient, docRow);
-        } else {
-          fullData = await fetchTsFullData(serviceClient, docRow);
+      const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
+        method: "POST",
+        headers: {
+          "Authorization": authHeader,
+          "Content-Type": "application/json",
+          "apikey": supabaseAnonKey,
+        },
+        body: JSON.stringify({ type: document_type, document_id }),
+      });
+      if (pdfRes.ok) {
+        const pdfData = await pdfRes.json();
+        if (pdfData.pdf_base64) {
+          pdfBase64 = pdfData.pdf_base64;
+          pdfDocNumero = pdfData.numero ?? document_id;
+          const prefix = document_type === "avenant" ? "Avenant" : document_type === "ts" ? "TS" : "Devis";
+          pdfFilename = `${prefix}_${pdfDocNumero}.pdf`;
         }
-        const pdfBytes = await buildDevisPdf(
-          {
-            numero: docRow.numero ?? document_id,
-            created_at: docRow.created_at ?? new Date().toISOString(),
-            date_validite: docRow.date_validite ?? docRow.date ?? null,
-            montant_ht: Number(docRow.montant_ht) || 0,
-            tva: Number(docRow.tva) || 20,
-            docLabel: docLabelMap[document_type],
-            ...fullData,
-          },
-          { type: "unsigned" },
-        );
-        pdfDocNumero = docRow.numero ?? document_id;
-        pdfBase64 = btoa(Array.from(pdfBytes, (b: number) => String.fromCharCode(b)).join(""));
-        const prefix = document_type === "avenant" ? "Avenant" : document_type === "ts" ? "TS" : "Devis";
-        pdfFilename = `${prefix}_${pdfDocNumero}.pdf`;
+      } else {
+        console.warn("[send-message] generate-facturx-pdf erreur:", pdfRes.status, await pdfRes.text());
       }
     } catch (e) {
       console.warn("[send-message] PDF generation failed:", e);
