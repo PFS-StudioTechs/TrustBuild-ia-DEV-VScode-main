@@ -49,7 +49,7 @@ serve(async (req) => {
   let pdfBase64: string | null = null;
   let pdfFilename: string | null = null;
   let pdfDocNumero: string | null = null;
-  const PDF_TYPES = ["devis", "avenant", "ts"];
+  const PDF_TYPES = ["devis", "avenant", "ts", "facture"];
   if (document_id && PDF_TYPES.includes(document_type)) {
     try {
       const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-facturx-pdf`, {
@@ -66,7 +66,7 @@ serve(async (req) => {
         if (pdfData.pdf_base64) {
           pdfBase64 = pdfData.pdf_base64;
           pdfDocNumero = pdfData.numero ?? document_id;
-          const prefix = document_type === "avenant" ? "Avenant" : document_type === "ts" ? "TS" : "Devis";
+          const prefix = document_type === "avenant" ? "Avenant" : document_type === "ts" ? "TS" : document_type === "facture" ? "Facture" : "Devis";
           pdfFilename = `${prefix}_${pdfDocNumero}.pdf`;
         }
       } else {
@@ -83,6 +83,8 @@ serve(async (req) => {
         ? "travaux_supplementaires"
         : document_type === "avenant"
         ? "avenants"
+        : document_type === "facture"
+        ? "factures"
         : "devis";
       const storagePath = `${user.id}/${document_type}-${pdfDocNumero ?? document_id}.pdf`;
       const pdfBytes = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));

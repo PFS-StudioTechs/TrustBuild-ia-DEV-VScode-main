@@ -205,6 +205,17 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
               ordre: i + 1,
             }))
           );
+        } else {
+          await (supabase as any).from("lignes_facture").insert([{
+            facture_id: newFacture.id,
+            artisan_id: user.id,
+            designation: `Prestations${data.devis_numero ? ` — Devis ${data.devis_numero}` : ""}`,
+            quantite: 1,
+            unite: "forfait",
+            prix_unitaire: Math.round(finalHT * 100) / 100,
+            tva,
+            ordre: 1,
+          }]);
         }
       }
 

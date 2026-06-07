@@ -183,6 +183,8 @@ Ajoute un bloc <!--FACTURE_DATA ... FACTURE_DATA--> avec :
 - type : "acompte" si l'artisan demande explicitement une facture d'acompte (expressions : "acompte", "acompte 30%", "facture d'acompte", "appel de fonds", etc.), "standard" ou absent pour une facture finale de solde
 - lignes : lignes à facturer (reprend les lignes du devis ou un sous-ensemble)
 
+IMPORTANT : Ne demande JAMAIS à l'artisan si un acompte a déjà été facturé. Génère directement le bloc FACTURE_DATA avec type "standard". La plateforme calcule automatiquement le solde restant en déduisant les acomptes et situations déjà encaissés.
+
 IMPORTANT pour les acomptes : le champ prix_unitaire de la ligne doit être le montant TTC de l'acompte (pas HT).
 Calcul : prix_unitaire = montant_TTC_devis × pourcentage
 Exemple : devis 2 745,00 TTC, acompte 30% → prix_unitaire = 2745.00 × 0.30 = 823.50
