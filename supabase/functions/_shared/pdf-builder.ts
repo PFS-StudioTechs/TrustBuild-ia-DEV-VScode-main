@@ -186,9 +186,9 @@ export async function buildDevisPdf(params: DevisPdfParams, outcome: DevisOutcom
   y -= 28;
 
   const defaultMentions = [
-    "Assurance Décennale souscrite — attestation disponible sur demande.",
-    "Règlement à réception de facture. Tout retard entraîne des pénalités de 3× le taux d'intérêt légal.",
-    "En cas de retard de paiement, une indemnité forfaitaire de 40 € sera appliquée.",
+    "Assurance Décennale souscrite - attestation disponible sur demande.",
+    "Règlement à réception de facture. Tout retard entraîne des pénalités de 3x le taux d'intérêt légal.",
+    "En cas de retard de paiement, une indemnité forfaitaire de 40 EUR sera appliquée.",
   ];
   const mentionsList = params.mentions?.length ? params.mentions : defaultMentions;
   checkPageBreak(10 + mentionsList.length * 10);
@@ -196,7 +196,7 @@ export async function buildDevisPdf(params: DevisPdfParams, outcome: DevisOutcom
   y -= 10;
   for (const m of mentionsList) {
     const line = `* ${m}`;
-    drawText(line.length > 100 ? line.substring(0, 99) + "…" : line, LEFT, y, 7, false, rgb(0.5, 0.5, 0.5));
+    drawText(line.length > 100 ? line.substring(0, 99) + "..." : line, LEFT, y, 7, false, rgb(0.5, 0.5, 0.5));
     y -= 10;
   }
   y -= 4;
