@@ -58,6 +58,8 @@ interface DocParams {
   totalTtc: number;
   duePayable: number;
   devisNumero: string | null;
+  primaryHex: string;
+  logoUrl: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -601,81 +603,98 @@ async function buildPdf(p: DocParams): Promise<PDFDocument> {
   const fN = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fB = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const page = pdfDoc.addPage([595.28, 841.89]);
-  const { width, height } = page.getSize();
-  const M = 45;
-  const blue = rgb(0.09, 0.39, 0.73);
+  const PAGE_W = 595.28;
+  const PAGE_H = 841.89;
+  const M = 40;
+  const primary = hexToRgb(p.primaryHex);
   const gray = rgb(0.5, 0.5, 0.5);
   const dark = rgb(0.15, 0.15, 0.15);
-  const lightBlue = rgb(0.88, 0.93, 0.98);
   const lineCol = rgb(0.85, 0.85, 0.85);
   const white = rgb(1, 1, 1);
+  const HEADER_H = 80;
 
-  let y = height - M;
+  let logoImg: PDFImage | null = null;
+  let logoW = 0, logoH = 0;
+  if (p.logoUrl) {
+    try {
+      const res = await fetch(p.logoUrl);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        const ct = res.headers.get("content-type") ?? "";
+        logoImg = ct.includes("png") || p.logoUrl.toLowerCase().includes(".png")
+          ? await pdfDoc.embedPng(buf)
+          : await pdfDoc.embedJpg(buf);
+        const maxH = 56, maxW = 140;
+        const scale = Math.min(maxH / logoImg.height, maxW / logoImg.width);
+        logoW = logoImg.width * scale;
+        logoH = logoImg.height * scale;
+      }
+    } catch { /* skip logo */ }
+  }
 
-  // Titre document
-  page.drawText(p.typeLabel, { x: M, y, size: 24, font: fB, color: blue });
+  const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
 
-  // Bloc artisan (droite)
-  const artLines: Array<{ text: string; bold: boolean; size: number }> = [
-    { text: p.seller.name, bold: true, size: 10 },
-  ];
-  if (p.seller.adresse) artLines.push({ text: p.seller.adresse, bold: false, size: 9 });
+  page.drawRectangle({ x: 0, y: PAGE_H - HEADER_H, width: PAGE_W, height: HEADER_H, color: primary });
+  if (logoImg) {
+    page.drawImage(logoImg, {
+      x: M,
+      y: PAGE_H - HEADER_H + (HEADER_H - logoH) / 2,
+      width: logoW,
+      height: logoH,
+    });
+  }
+  const titleW = fB.widthOfTextAtSize(p.typeLabel, 26);
+  page.drawText(p.typeLabel, { x: PAGE_W - M - titleW, y: PAGE_H - 38, size: 26, font: fB, color: white });
+  const numStr = `N° : ${p.numero}`;
+  page.drawText(numStr, { x: PAGE_W - M - fN.widthOfTextAtSize(numStr, 9), y: PAGE_H - 53, size: 9, font: fN, color: white });
+  const dateStr = `Date : ${fmtDate(p.dateDoc)}`;
+  page.drawText(dateStr, { x: PAGE_W - M - fN.widthOfTextAtSize(dateStr, 9), y: PAGE_H - 65, size: 9, font: fN, color: white });
+
+  let y = PAGE_H - HEADER_H - 15;
+
+  page.drawText(p.seller.name, { x: M, y, size: 11, font: fB, color: dark });
+  y -= 13;
+  if (p.seller.adresse) {
+    page.drawText(p.seller.adresse, { x: M, y, size: 9, font: fN, color: dark });
+    y -= 12;
+  }
   if (p.seller.codePostal || p.seller.ville) {
-    artLines.push({ text: [p.seller.codePostal, p.seller.ville].filter(Boolean).join(" "), bold: false, size: 9 });
+    page.drawText([p.seller.codePostal, p.seller.ville].filter(Boolean).join(" "), { x: M, y, size: 9, font: fN, color: dark });
+    y -= 12;
   }
-  if (p.seller.siret) artLines.push({ text: `SIRET : ${p.seller.siret}`, bold: false, size: 9 });
-  if (p.seller.tel) artLines.push({ text: `Tél. : ${p.seller.tel}`, bold: false, size: 9 });
-
-  let ay = y;
-  for (const al of artLines) {
-    const f = al.bold ? fB : fN;
-    const w = f.widthOfTextAtSize(al.text, al.size);
-    page.drawText(al.text, { x: width - M - w, y: ay, size: al.size, font: f, color: dark });
-    ay -= 13;
+  if (p.seller.siret) {
+    page.drawText(`SIRET : ${p.seller.siret}`, { x: M, y, size: 9, font: fN, color: dark });
+    y -= 12;
   }
+  y -= 8;
 
-  // Numéro + dates
-  y -= 34;
-  page.drawText(`N° ${p.numero}`, { x: M, y, size: 12, font: fB, color: dark });
-  y -= 17;
-  page.drawText(`Date : ${fmtDate(p.dateDoc)}`, { x: M, y, size: 10, font: fN, color: gray });
-  if (p.dateEcheance) {
-    const echeStr = `Échéance : ${fmtDate(p.dateEcheance)}`;
-    page.drawText(echeStr, { x: M + 160, y, size: 10, font: fN, color: gray });
-  }
-
-  // Séparateur
-  y -= 16;
-  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.5, color: lineCol });
-
-  // Bloc client
-  y -= 15;
-  page.drawText("FACTURÉ À :", { x: M, y, size: 8, font: fB, color: gray });
-  y -= 14;
-  page.drawText(p.buyer.name, { x: M, y, size: 11, font: fB, color: dark });
+  const BOX_H = 55;
+  page.drawRectangle({ x: M, y: y - BOX_H, width: PAGE_W - 2 * M, height: BOX_H, borderColor: lineCol, borderWidth: 0.5 });
+  page.drawRectangle({ x: M, y: y - BOX_H, width: 3, height: BOX_H, color: primary });
+  let cy = y - 12;
+  page.drawText("CLIENT :", { x: M + 10, y: cy, size: 8, font: fB, color: primary });
+  cy -= 13;
+  page.drawText(p.buyer.name, { x: M + 10, y: cy, size: 10, font: fB, color: dark });
   if (p.buyer.adresse) {
-    y -= 13;
-    page.drawText(p.buyer.adresse, { x: M, y, size: 9, font: fN, color: dark });
+    cy -= 12;
+    page.drawText(p.buyer.adresse, { x: M + 10, y: cy, size: 9, font: fN, color: dark });
   }
+  if (p.dateEcheance) {
+    page.drawText("Echeance :", { x: PAGE_W / 2 + 20, y: y - 12, size: 8, font: fB, color: gray });
+    page.drawText(fmtDate(p.dateEcheance), { x: PAGE_W / 2 + 20, y: y - 25, size: 9, font: fB, color: dark });
+  }
+  y -= BOX_H + 15;
 
-  // Séparateur
-  y -= 16;
-  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.5, color: lineCol });
-
-  // En-tête tableau lignes
-  y -= 14;
   const COL = { desig: M + 2, qty: 300, unit: 348, pu: 396, ht: 458, tva: 524 };
-  page.drawRectangle({ x: M, y: y - 4, width: width - 2 * M, height: 18, color: lightBlue });
-  page.drawText("Désignation", { x: COL.desig, y: y + 1, size: 8, font: fB, color: dark });
-  page.drawText("Qté", { x: COL.qty, y: y + 1, size: 8, font: fB, color: dark });
-  page.drawText("Unité", { x: COL.unit, y: y + 1, size: 8, font: fB, color: dark });
-  page.drawText("PU HT", { x: COL.pu, y: y + 1, size: 8, font: fB, color: dark });
-  page.drawText("Total HT", { x: COL.ht, y: y + 1, size: 8, font: fB, color: dark });
-  page.drawText("TVA", { x: COL.tva, y: y + 1, size: 8, font: fB, color: dark });
-  y -= 14;
+  page.drawRectangle({ x: M, y: y - 6, width: PAGE_W - 2 * M, height: 22, color: primary });
+  page.drawText("Description", { x: COL.desig, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("Qte", { x: COL.qty, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("Unite", { x: COL.unit, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("PU HT", { x: COL.pu, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("Total HT", { x: COL.ht, y: y + 1, size: 8, font: fB, color: white });
+  page.drawText("TVA", { x: COL.tva, y: y + 1, size: 8, font: fB, color: white });
+  y -= 16;
 
-  // Lignes
   const FOOTER_SAFE = M + 130;
   for (const l of p.lines) {
     if (y < FOOTER_SAFE) break;
@@ -683,8 +702,7 @@ async function buildPdf(p: DocParams): Promise<PDFDocument> {
     const maxW = COL.qty - COL.desig - 4;
     let desig = l.designation;
     while (desig.length > 3 && fN.widthOfTextAtSize(desig, 8) > maxW) desig = desig.slice(0, -1);
-    if (desig !== l.designation) desig = desig.slice(0, -1) + "…";
-
+    if (desig !== l.designation) desig = desig.slice(0, -1) + "...";
     page.drawText(desig, { x: COL.desig, y, size: 8, font: fN, color: dark });
     page.drawText(n2(l.quantite), { x: COL.qty, y, size: 8, font: fN, color: dark });
     page.drawText(l.unite || "u", { x: COL.unit, y, size: 8, font: fN, color: dark });
@@ -692,42 +710,40 @@ async function buildPdf(p: DocParams): Promise<PDFDocument> {
     page.drawText(n2(lineHt), { x: COL.ht, y, size: 8, font: fN, color: dark });
     page.drawText(`${l.tva}%`, { x: COL.tva, y, size: 8, font: fN, color: dark });
     y -= 12;
-    page.drawLine({ start: { x: M, y: y + 1 }, end: { x: width - M, y: y + 1 }, thickness: 0.3, color: lineCol });
+    page.drawLine({ start: { x: M, y: y + 1 }, end: { x: PAGE_W - M, y: y + 1 }, thickness: 0.3, color: lineCol });
   }
 
   y -= 8;
-  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.5, color: lineCol });
+  page.drawLine({ start: { x: M, y }, end: { x: PAGE_W - M, y }, thickness: 0.5, color: lineCol });
 
-  // Récapitulatif (droite)
-  const SX = width / 2 + 20;
+  const SX = PAGE_W / 2 + 20;
   y -= 14;
   const htStr = fmtEur(p.totalHt);
   page.drawText("Montant HT", { x: SX, y, size: 10, font: fN, color: gray });
-  page.drawText(htStr, { x: width - M - fN.widthOfTextAtSize(htStr, 10), y, size: 10, font: fN, color: dark });
+  page.drawText(htStr, { x: PAGE_W - M - fN.widthOfTextAtSize(htStr, 10), y, size: 10, font: fN, color: dark });
 
   y -= 16;
   const tvaStr = fmtEur(p.totalTva);
   page.drawText("TVA", { x: SX, y, size: 10, font: fN, color: gray });
-  page.drawText(tvaStr, { x: width - M - fN.widthOfTextAtSize(tvaStr, 10), y, size: 10, font: fN, color: dark });
+  page.drawText(tvaStr, { x: PAGE_W - M - fN.widthOfTextAtSize(tvaStr, 10), y, size: 10, font: fN, color: dark });
 
   y -= 18;
   const ttcStr = fmtEur(p.totalTtc);
-  page.drawRectangle({ x: SX - 8, y: y - 6, width: width - M - SX + 8, height: 26, color: blue });
-  page.drawText("NET À PAYER TTC", { x: SX, y: y + 3, size: 10, font: fB, color: white });
-  page.drawText(ttcStr, { x: width - M - fB.widthOfTextAtSize(ttcStr, 11), y: y + 3, size: 11, font: fB, color: white });
+  page.drawRectangle({ x: SX - 8, y: y - 6, width: PAGE_W - M - SX + 8, height: 26, color: primary });
+  page.drawText("NET A PAYER TTC", { x: SX, y: y + 3, size: 10, font: fB, color: white });
+  page.drawText(ttcStr, { x: PAGE_W - M - fB.widthOfTextAtSize(ttcStr, 11), y: y + 3, size: 11, font: fB, color: white });
   y -= 28;
 
   if (p.duePayable < p.totalTtc - 0.005) {
     const soldStr = fmtEur(p.duePayable);
-    page.drawText("Solde restant dû", { x: SX, y, size: 10, font: fN, color: gray });
-    page.drawText(soldStr, { x: width - M - fN.widthOfTextAtSize(soldStr, 10), y, size: 10, font: fN, color: dark });
+    page.drawText("Solde restant du", { x: SX, y, size: 10, font: fN, color: gray });
+    page.drawText(soldStr, { x: PAGE_W - M - fN.widthOfTextAtSize(soldStr, 10), y, size: 10, font: fN, color: dark });
     y -= 16;
   }
 
-  // Coordonnées bancaires
   if (p.seller.iban) {
     y -= 10;
-    page.drawText("Règlement par virement :", { x: M, y, size: 9, font: fB, color: dark });
+    page.drawText("Reglement par virement :", { x: M, y, size: 9, font: fB, color: dark });
     y -= 13;
     page.drawText(`IBAN : ${p.seller.iban}`, { x: M, y, size: 9, font: fN, color: dark });
     if (p.seller.bic) {
@@ -736,13 +752,12 @@ async function buildPdf(p: DocParams): Promise<PDFDocument> {
     }
   }
 
-  // Pied de page
   const footerText = p.seller.name
-    + (p.seller.siret ? ` — SIRET ${p.seller.siret}` : "")
-    + " — Généré par TrustBuild-IA";
+    + (p.seller.siret ? ` - SIRET ${p.seller.siret}` : "")
+    + " - Genere par TrustBuild-IA";
   const ftw = fN.widthOfTextAtSize(footerText, 7.5);
-  page.drawLine({ start: { x: M, y: M + 8 }, end: { x: width - M, y: M + 8 }, thickness: 0.5, color: lineCol });
-  page.drawText(footerText, { x: (width - ftw) / 2, y: M - 5, size: 7.5, font: fN, color: gray });
+  page.drawLine({ start: { x: M, y: M + 8 }, end: { x: PAGE_W - M, y: M + 8 }, thickness: 0.5, color: lineCol });
+  page.drawText(footerText, { x: (PAGE_W - ftw) / 2, y: M - 5, size: 7.5, font: fN, color: gray });
 
   return pdfDoc;
 }
@@ -931,6 +946,16 @@ serve(async (req) => {
         ? Number(facture.solde_restant)
         : totalTtc;
 
+      const { data: tplFact } = await db.from("document_templates")
+        .select("couleur_primaire, logo_url, secteur")
+        .eq("artisan_id", userId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const primaryHex = tplFact?.couleur_primaire ?? SECTOR_PRIMARY[tplFact?.secteur ?? "general"] ?? "#2563eb";
+      const logoUrl: string | null = tplFact?.logo_url ?? (profile as any)?.logo_url ?? null;
+
       const docParams: DocParams = {
         typeCode: "380",
         typeLabel: "FACTURE",
@@ -945,6 +970,8 @@ serve(async (req) => {
         totalTtc,
         duePayable,
         devisNumero: null,
+        primaryHex,
+        logoUrl,
       };
 
       const xml = buildXml(docParams);
@@ -995,6 +1022,16 @@ serve(async (req) => {
       const totalTtc = totalHt + totalTva;
       const dateDoc = avoir.date || avoir.created_at;
 
+      const { data: tplAvoir } = await db.from("document_templates")
+        .select("couleur_primaire, logo_url, secteur")
+        .eq("artisan_id", userId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const primaryHex = tplAvoir?.couleur_primaire ?? SECTOR_PRIMARY[tplAvoir?.secteur ?? "general"] ?? "#2563eb";
+      const logoUrl: string | null = tplAvoir?.logo_url ?? (profile as any)?.logo_url ?? null;
+
       const docParams: DocParams = {
         typeCode: "381",
         typeLabel: "AVOIR",
@@ -1009,6 +1046,8 @@ serve(async (req) => {
         totalTtc,
         duePayable: totalTtc,
         devisNumero: null,
+        primaryHex,
+        logoUrl,
       };
 
       const xml = buildXml(docParams);
@@ -1051,6 +1090,16 @@ serve(async (req) => {
 
       const dateDoc = acompte.created_at;
 
+      const { data: tplAcompte } = await db.from("document_templates")
+        .select("couleur_primaire, logo_url, secteur")
+        .eq("artisan_id", userId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const primaryHex = tplAcompte?.couleur_primaire ?? SECTOR_PRIMARY[tplAcompte?.secteur ?? "general"] ?? "#2563eb";
+      const logoUrl: string | null = tplAcompte?.logo_url ?? (profile as any)?.logo_url ?? null;
+
       const docParams: DocParams = {
         typeCode: "386",
         typeLabel: "FACTURE D'ACOMPTE",
@@ -1065,6 +1114,8 @@ serve(async (req) => {
         totalTtc,
         duePayable: totalTtc,
         devisNumero: devisRes.data?.numero ?? null,
+        primaryHex,
+        logoUrl,
       };
 
       const xml = buildXml(docParams);
