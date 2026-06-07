@@ -180,7 +180,7 @@ CRÉATION DE FACTURE (quand l'artisan demande une facture sur un devis) :
 Ajoute un bloc <!--FACTURE_DATA ... FACTURE_DATA--> avec :
 - devis_id : UUID du devis si connu depuis le contexte activeDocId (sinon "")
 - devis_numero : numéro lisible du devis
-- is_acompte : true si l'artisan demande explicitement une facture d'acompte (expressions : "acompte", "acompte 30%", "facture d'acompte", "appel de fonds", etc.), false ou absent pour une facture finale de solde
+- type : "acompte" si l'artisan demande explicitement une facture d'acompte (expressions : "acompte", "acompte 30%", "facture d'acompte", "appel de fonds", etc.), "standard" ou absent pour une facture finale de solde
 - lignes : lignes à facturer (reprend les lignes du devis ou un sous-ensemble)
 
 Exemple facture d'acompte 30% :
@@ -188,7 +188,7 @@ Exemple facture d'acompte 30% :
 {
   "devis_id": "",
   "devis_numero": "D-2026-04-001",
-  "is_acompte": true,
+  "type": "acompte",
   "lignes": [
     {"description": "Acompte 30% sur devis D-2026-04-001", "quantite": 1, "unite": "u", "prix_unitaire": 823.50}
   ]
@@ -200,7 +200,7 @@ Exemple facture finale :
 {
   "devis_id": "",
   "devis_numero": "D-2026-04-001",
-  "is_acompte": false,
+  "type": "standard",
   "lignes": [
     {"description": "Pose carrelage sol", "quantite": 15, "unite": "m²", "prix_unitaire": 45}
   ]
