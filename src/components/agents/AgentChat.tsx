@@ -5,7 +5,6 @@ import { Send, User, Save, CheckCircle, Mic, Smartphone, Monitor, FileDown, Head
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
-import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { streamChat } from "@/hooks/useStreamingChat";
@@ -22,7 +21,7 @@ interface AgentChatProps {
   persona: string;
   title: string;
   subtitle: string;
-  icon: LucideIcon;
+  avatarSrc: string;
   iconColor: string;
   iconBg: string;
   suggestions: string[];
@@ -33,7 +32,7 @@ export default function AgentChat({
   persona,
   title,
   subtitle,
-  icon: Icon,
+  avatarSrc,
   iconColor,
   iconBg,
   suggestions,
@@ -607,8 +606,8 @@ function buildConversationHtml(params: {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-up pt-4">
-            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center", iconBg)}>
-              <Icon className={cn("w-9 h-9", iconColor)} />
+            <div className="w-16 h-16 rounded-2xl overflow-hidden">
+              <img src={avatarSrc} alt={title} className="w-full h-full object-cover" />
             </div>
             <div>
               <h2 className="text-h3 font-display">{title}</h2>
@@ -627,8 +626,8 @@ function buildConversationHtml(params: {
           <div key={i} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "")}>
             {msg.role === "assistant" && (
               <div className="flex flex-col items-center gap-0.5 shrink-0">
-                <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", iconBg)}>
-                  <Icon className={cn("w-4 h-4", iconColor)} />
+                <div className="w-8 h-8 rounded-full overflow-hidden">
+                  <img src={avatarSrc} alt={title} className="w-full h-full object-cover" />
                 </div>
                 <span className="text-[9px] text-muted-foreground font-medium">{title.split("—")[0]?.trim()}</span>
               </div>
@@ -680,8 +679,8 @@ function buildConversationHtml(params: {
 
         {loading && messages[messages.length - 1]?.role === "user" && (
           <div className="flex gap-3">
-            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", iconBg)}>
-              <Icon className={cn("w-4 h-4", iconColor)} />
+            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
+              <img src={avatarSrc} alt={title} className="w-full h-full object-cover" />
             </div>
             <div className={cn("border rounded-2xl rounded-bl-md px-4 py-3", iconBg.replace("/10", "/5"))}>
               <div className="flex gap-1 items-center">

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { X, Send, Bot, User, Scale, Wrench, Mic, Smartphone, Monitor, FilePlus, Save } from "lucide-react";
+import { X, Send, User, Mic, Smartphone, Monitor, FilePlus, Save } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,10 +46,10 @@ interface Message {
   tsData?: TsData | null;
 }
 
-const personaConfig: Record<string, { label: string; icon: typeof Bot; color: string }> = {
-  alfred: { label: "Alfred", icon: Bot, color: "text-accent" },
-  simone: { label: "Simone", icon: Scale, color: "text-amber-600" },
-  gustave: { label: "Gustave", icon: Wrench, color: "text-emerald-600" },
+const personaConfig: Record<string, { label: string; avatar: string; color: string }> = {
+  alfred: { label: "Alfred", avatar: "/avatar-alfred.png", color: "text-accent" },
+  simone: { label: "Simone", avatar: "/avatar-simone.png", color: "text-amber-600" },
+  gustave: { label: "Gustave", avatar: "/avatar-gustave.png", color: "text-emerald-600" },
 };
 
 export default function AlfredPanel({ onClose }: { onClose: () => void }) {
@@ -387,8 +387,8 @@ export default function AlfredPanel({ onClose }: { onClose: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-secondary/50 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Bot className="w-4 h-4 text-primary-foreground" />
+          <div className="w-8 h-8 rounded-full overflow-hidden">
+            <img src="/avatar-alfred.png" alt="Alfred" className="w-full h-full object-cover" />
           </div>
           <div>
             <h3 className="font-display font-bold text-sm">Alfred</h3>
@@ -412,8 +412,8 @@ export default function AlfredPanel({ onClose }: { onClose: () => void }) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4 animate-fade-up">
-            <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center">
-              <Bot className="w-7 h-7 text-accent" />
+            <div className="w-12 h-12 rounded-2xl overflow-hidden">
+              <img src="/avatar-alfred.png" alt="Alfred" className="w-full h-full object-cover" />
             </div>
             <div>
               <p className="font-display font-bold text-sm">Bonjour, je suis Alfred</p>
@@ -431,13 +431,12 @@ export default function AlfredPanel({ onClose }: { onClose: () => void }) {
 
         {messages.map((msg, i) => {
           const persona = msg.persona ? personaConfig[msg.persona] : personaConfig.alfred;
-          const Icon = persona?.icon || Bot;
           return (
             <div key={i} className={cn("flex gap-2", msg.role === "user" ? "justify-end" : "")}>
               {msg.role === "assistant" && (
                 <div className="flex flex-col items-center gap-0.5 shrink-0">
-                  <div className={cn("w-7 h-7 rounded-full bg-secondary flex items-center justify-center", persona?.color)}>
-                    <Icon className="w-3.5 h-3.5" />
+                  <div className="w-7 h-7 rounded-full overflow-hidden">
+                    <img src={persona?.avatar || "/avatar-alfred.png"} alt={persona?.label} className="w-full h-full object-cover" />
                   </div>
                   <span className="text-[9px] text-muted-foreground font-medium">{persona?.label}</span>
                 </div>
@@ -547,7 +546,7 @@ export default function AlfredPanel({ onClose }: { onClose: () => void }) {
 
         {loading && messages[messages.length - 1]?.role === "user" && (
           <div className="flex gap-2">
-            <div className="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center shrink-0"><Bot className="w-3.5 h-3.5 text-accent" /></div>
+            <div className="w-7 h-7 rounded-full overflow-hidden shrink-0"><img src="/avatar-alfred.png" alt="Alfred" className="w-full h-full object-cover" /></div>
             <div className="bg-accent/5 border border-accent/20 rounded-xl rounded-bl-sm px-3 py-2">
               <div className="flex gap-1 items-center">
                 <span className="w-1.5 h-1.5 bg-accent/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />

@@ -103,7 +103,7 @@ export default function AlfredBubble() {
         aria-label="Ouvrir Alfred"
       >
         <img
-          src="/jarvis-eye.jpeg"
+          src="/avatar-alfred.png"
           alt="Alfred"
           className="w-full h-full object-cover pointer-events-none select-none"
           draggable={false}
