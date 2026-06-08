@@ -6,7 +6,7 @@ import { useRole } from "@/hooks/useRole";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import JarvisBubble from "@/components/jarvis/JarvisBubble";
+import AlfredBubble from "@/components/alfred/AlfredBubble";
 import KbisWarningBanner from "@/components/kbis/KbisWarningBanner";
 
 const baseTabs = [
@@ -194,8 +194,8 @@ export default function AppLayout() {
         </nav>
       </div>
 
-      {/* Jarvis floating bubble */}
-      <JarvisBubble />
+      {/* Alfred floating bubble */}
+      <AlfredBubble />
     </div>
   );
 }

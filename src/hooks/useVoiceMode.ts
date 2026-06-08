@@ -20,7 +20,7 @@ function cleanForTts(text: string): string {
     // Remove all IA data blocks
     .replace(/<!--\w+_DATA[\s\S]*?\w+_DATA-->/g, "")
     // Remove persona prefixes
-    .replace(/^\[(Jarvis|Robert B|Auguste P)\]\s*/im, "")
+    .replace(/^\[(Alfred|Simone|Gustave)\]\s*/im, "")
     // Remove code blocks
     .replace(/```[\s\S]*?```/g, "code omis,")
     .replace(/`[^`]+`/g, "")

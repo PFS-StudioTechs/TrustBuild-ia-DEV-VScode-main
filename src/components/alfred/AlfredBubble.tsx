@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import JarvisPanel from "./JarvisPanel";
+import AlfredPanel from "./AlfredPanel";
 
-const STORAGE_KEY = "jarvis-bubble-pos";
+const STORAGE_KEY = "alfred-bubble-pos";
 
 function getInitialPos(): { x: number; y: number } | null {
   try {
@@ -12,7 +12,7 @@ function getInitialPos(): { x: number; y: number } | null {
   return null;
 }
 
-export default function JarvisBubble() {
+export default function AlfredBubble() {
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(getInitialPos);
@@ -79,7 +79,7 @@ export default function JarvisBubble() {
               }
         ) : undefined}
       >
-        {open && <JarvisPanel onClose={() => setOpen(false)} />}
+        {open && <AlfredPanel onClose={() => setOpen(false)} />}
       </div>
 
       {/* Floating Bubble */}
@@ -100,11 +100,11 @@ export default function JarvisBubble() {
           ...bubbleStyle,
           filter: open ? undefined : "drop-shadow(0 0 10px rgba(194, 65, 12, 0.75)) drop-shadow(0 0 4px rgba(249, 115, 22, 0.5))",
         }}
-        aria-label="Ouvrir Jarvis"
+        aria-label="Ouvrir Alfred"
       >
         <img
           src="/jarvis-eye.jpeg"
-          alt="Jarvis"
+          alt="Alfred"
           className="w-full h-full object-cover pointer-events-none select-none"
           draggable={false}
         />

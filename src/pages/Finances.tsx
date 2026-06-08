@@ -106,8 +106,8 @@ export default function Finances() {
       .sort((a, b) => b.joursRetard - a.joursRetard);
   }, [factures]);
 
-  const handleRelanceJarvis = (factureId: string, numero: string) => {
-    toast.info(`Relance Jarvis en préparation pour la facture ${numero}…`);
+  const handleRelanceAlfred = (factureId: string, numero: string) => {
+    toast.info(`Relance Alfred en préparation pour la facture ${numero}…`);
   };
 
   if (loading) {
@@ -225,7 +225,7 @@ export default function Finances() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" className="touch-target gap-1 text-xs" onClick={() => handleRelanceJarvis(f.id, f.numero)}>
+                        <Button size="sm" variant="outline" className="touch-target gap-1 text-xs" onClick={() => handleRelanceAlfred(f.id, f.numero)}>
                           <Bot className="w-3.5 h-3.5" /> Relancer
                         </Button>
                       </TableCell>

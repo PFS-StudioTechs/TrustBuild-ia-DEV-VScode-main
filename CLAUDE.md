@@ -27,9 +27,9 @@ n8n-workflows/        — automatisations N8N
 
 | Agent         | Rôle                                                                     |
 | ------------- | ------------------------------------------------------------------------ |
-| **Jarvis**    | Assistant principal — crée et modifie devis, factures, avenants via chat |
-| **Robert B**  | Expert réglementation et juridique BTP                                   |
-| **Auguste P** | Expert terrain et technique BTP                                          |
+| **Alfred**   | Assistant principal — crée et modifie devis, factures, avenants via chat |
+| **Simone**   | Expert réglementation et juridique BTP                                   |
+| **Gustave**  | Expert terrain et technique BTP                                          |
 
 ## Commandes utiles
 

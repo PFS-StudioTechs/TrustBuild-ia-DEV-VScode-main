@@ -353,7 +353,7 @@ export default function Knowledge() {
           <h1 className="text-h2 font-display">Base de connaissances</h1>
         </div>
         <p className="text-sm text-muted-foreground pl-12">
-          Importez vos documents métier — Jarvis les utilisera pour répondre avec précision.
+          Importez vos documents métier — Alfred les utilisera pour répondre avec précision.
         </p>
       </div>
 
@@ -426,7 +426,7 @@ export default function Knowledge() {
           <span className="text-sm font-medium">Indexer une page web</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          Collez l'URL d'une page (documentation, catalogue, article technique) — Jarvis en extraira le contenu.
+          Collez l'URL d'une page (documentation, catalogue, article technique) — Alfred en extraira le contenu.
           Les pages d'accueil de grands sites (Leroy Merlin, Amazon…) sont souvent protégées anti-bot : préférez une <strong>page produit ou catalogue spécifique</strong>.
         </p>
         <div className="flex gap-2">

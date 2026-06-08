@@ -281,7 +281,7 @@ export default function Parametres() {
     try {
       // Test sending a message
       const { data, error } = await supabase.functions.invoke("telegram-bot", {
-        body: { action: "send", chat_id: telegramChatId.trim(), text: "✅ TrustBuild-IA connecté avec succès !\nVous recevrez vos notifications Jarvis ici." },
+        body: { action: "send", chat_id: telegramChatId.trim(), text: "✅ TrustBuild-IA connecté avec succès !\nVous recevrez vos notifications Alfred ici." },
       });
       if (error) throw error;
       if (!data?.ok) throw new Error("Échec de l'envoi");
@@ -635,7 +635,7 @@ export default function Parametres() {
               {botName && <Badge variant="secondary" className="bg-success/10 text-success text-xs">@{botName}</Badge>}
             </div>
             <p className="text-small text-muted-foreground mb-3">
-              Connectez votre compte Telegram pour recevoir les notifications de Jarvis et envoyer des commandes vocales.
+              Connectez votre compte Telegram pour recevoir les notifications de Alfred et envoyer des commandes vocales.
             </p>
             <div className="space-y-3">
               <div className="space-y-1.5">

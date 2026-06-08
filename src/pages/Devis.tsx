@@ -2021,7 +2021,7 @@ function DevisCard({
         <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => {
           const next = !expanded;
           setExpanded(next);
-          window.dispatchEvent(new CustomEvent("jarvis:activeDoc", {
+          window.dispatchEvent(new CustomEvent("alfred:activeDoc", {
             detail: next ? { id: devis.id, type: "devis" } : { id: null, type: null },
           }));
         }}>

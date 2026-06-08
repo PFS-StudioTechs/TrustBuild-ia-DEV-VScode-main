@@ -188,7 +188,7 @@ export default function AgentChat({
     setLoading(true);
     resetTtsStream();
 
-    // Strip DEVIS_DATA blocks from history before sending to API (évite confusion Jarvis)
+    // Strip DEVIS_DATA blocks from history before sending to API (évite confusion Alfred)
     const stripDevisData = (content: string) =>
       content.replace(/<!--DEVIS_DATA[\s\S]*?DEVIS_DATA-->/g, "").trim();
 
@@ -224,9 +224,9 @@ export default function AgentChat({
         });
       }
 
-      // Auto-création du devis si Jarvis a inclus un bloc DEVIS_DATA
-      if (persona === "jarvis" && finalContent.includes("<!--DEVIS_DATA")) {
-        await createDevisFromJarvis(finalContent);
+      // Auto-création du devis si Alfred a inclus un bloc DEVIS_DATA
+      if (persona === "alfred" && finalContent.includes("<!--DEVIS_DATA")) {
+        await createDevisFromAlfred(finalContent);
         // Nettoie le DEVIS_DATA du message stocké pour les futurs échanges
         setMessages((prev) =>
           prev.map((m, i) =>
@@ -319,11 +319,11 @@ export default function AgentChat({
   const cleanContent = (content: string) =>
     content
       .replace(/<!--DEVIS_DATA[\s\S]*?DEVIS_DATA-->/g, "")
-      .replace(/^\[(Robert B|Auguste P|Jarvis)\]\s*/i, "")
+      .replace(/^\[(Simone|Gustave|Alfred)\]\s*/i, "")
       .trim();
 
-  // ── Création automatique du devis depuis le bloc DEVIS_DATA de Jarvis ────────
-  const createDevisFromJarvis = async (rawContent: string) => {
+  // ── Création automatique du devis depuis le bloc DEVIS_DATA de Alfred ────────
+  const createDevisFromAlfred = async (rawContent: string) => {
     if (!user) return;
     const match = rawContent.match(/<!--DEVIS_DATA\s*([\s\S]*?)\s*DEVIS_DATA-->/);
     if (!match) return;
@@ -331,8 +331,8 @@ export default function AgentChat({
     try { parsed = JSON.parse(match[1]); } catch { return; }
 
     try {
-      // 1. Client : toujours créer un nouveau client depuis les infos Jarvis
-      // (pas de recherche par email — Jarvis peut mettre l'email artisan par erreur)
+      // 1. Client : toujours créer un nouveau client depuis les infos Alfred
+      // (pas de recherche par email — Alfred peut mettre l'email artisan par erreur)
       const clientNom = (parsed.client?.nom || "Client").trim();
       const clientEmail = parsed.client?.email?.trim() || null;
       const { data: newClient, error: ce } = await (supabase as any)
@@ -699,7 +699,7 @@ function buildConversationHtml(params: {
       {voiceModeEnabled && (
         <div className="px-4 py-1.5 bg-accent/10 border-t border-accent/20 text-xs text-accent flex items-center gap-2 shrink-0">
           <Headphones className="w-3 h-3 shrink-0" />
-          <span>Mode mains-libres actif — parlez, Jarvis répondra à voix haute</span>
+          <span>Mode mains-libres actif — parlez, Alfred répondra à voix haute</span>
           {isSpeaking && (
             <span className="ml-auto flex items-center gap-1 animate-pulse font-medium">
               <VolumeX className="w-3 h-3" /> En train de parler…

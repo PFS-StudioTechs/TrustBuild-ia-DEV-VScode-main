@@ -76,7 +76,7 @@ const STATUT_BUG: Record<string, { label: string; className: string }> = {
 
 const FONCTIONNALITES = [
   "Authentification", "Dashboard", "Chantiers", "Clients", "Finances",
-  "Devis", "Factures", "Assistant Jarvis", "Robert B", "Auguste P",
+  "Devis", "Factures", "Assistant Alfred", "Simone", "Gustave",
   "Mes Documents", "Base de connaissances", "Administration", "Mode Test", "Autre",
 ];
 

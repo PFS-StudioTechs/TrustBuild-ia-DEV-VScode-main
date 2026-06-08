@@ -153,7 +153,7 @@ serve(async (req) => {
       artisan_id: artisanId,
       role: "user",
       content: userText,
-      persona: "jarvis",
+      persona: "alfred",
       source: "telegram",
       transcription_originale: transcription,
     });
@@ -168,7 +168,7 @@ serve(async (req) => {
       body: JSON.stringify({
         messages: [{ role: "user", content: userText }],
         stream: false,
-        persona: "jarvis",
+        persona: "alfred",
         context: { source: "telegram" },
       }),
     });
@@ -187,7 +187,7 @@ serve(async (req) => {
       artisan_id: artisanId,
       role: "assistant",
       content: assistantText,
-      persona: "jarvis",
+      persona: "alfred",
       source: "telegram",
     });
 

@@ -190,7 +190,7 @@ export default function FactureCreationForm({ data, onCreated }: Props) {
           }))
         );
       } else {
-        // Fallback : lignes Jarvis si aucune ligne devis trouvée
+        // Fallback : lignes Alfred si aucune ligne devis trouvée
         const fallback = data.lignes.filter(l => l.description.trim());
         if (fallback.length > 0) {
           await (supabase as any).from("lignes_facture").insert(

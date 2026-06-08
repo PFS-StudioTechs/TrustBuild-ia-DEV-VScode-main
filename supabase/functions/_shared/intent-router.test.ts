@@ -40,7 +40,7 @@ if (!ANTHROPIC_API_KEY) {
 // ---------------------------------------------------------------------------
 
 interface IntentResult {
-  persona: "jarvis" | "robert_b" | "auguste_p";
+  persona: "alfred" | "simone" | "gustave";
   intent:
     | "DEVIS_CREATE"
     | "DEVIS_UPDATE"
@@ -80,7 +80,7 @@ Retourne UNIQUEMENT ce JSON (sans markdown, sans texte autour) :
 
 DÉCISION — applique dans cet ordre :
 
-1. persona = "robert_b" si le message parle de :
+1. persona = "simone" si le message parle de :
    litige, dispute, conflit avec client, client ne veut pas payer, impayé, refus de paiement,
    garantie décennale, garantie biennale, garantie parfait achèvement,
    contrat de sous-traitance, sous-traitant (aspect légal), travail au noir,
@@ -88,7 +88,7 @@ DÉCISION — applique dans cet ordre :
    assurance RC pro, responsabilité civile, réserves de réception, pénalité de retard,
    retenue de garantie, CCAP, marché public.
 
-2. persona = "auguste_p" si le message parle de :
+2. persona = "gustave" si le message parle de :
    normes, réglementation, DTU, NF C, NF P, RE2020, RT2020,
    comment poser / installer / dimensionner / mettre en œuvre,
    quelle épaisseur, quelle section de câble, conformité technique,
@@ -99,14 +99,14 @@ DÉCISION — applique dans cet ordre :
    fissure, humidité, moisissure, pathologie bâtiment,
    enduit, chape, carrelage, tuile, ardoise, VMC, ventilation.
 
-3. persona = "jarvis" pour tout le reste :
+3. persona = "alfred" pour tout le reste :
    créer ou modifier un devis / facture, tarif, prix, planning, client (gestion), général.
 
 RÈGLES ABSOLUES :
-- "litige" ou "ne veut pas payer" → TOUJOURS robert_b, même si "client" ou "devis" apparaît
-- "quelles normes pour X" → TOUJOURS auguste_p, même sans "DTU" ni "NF"
-- "décennale" dans un contexte de devis → jarvis (assurance citée en passant)
-- "devis + DTU" → jarvis si l'intent principal est de chiffrer
+- "litige" ou "ne veut pas payer" → TOUJOURS simone, même si "client" ou "devis" apparaît
+- "quelles normes pour X" → TOUJOURS gustave, même sans "DTU" ni "NF"
+- "décennale" dans un contexte de devis → alfred (assurance citée en passant)
+- "devis + DTU" → alfred si l'intent principal est de chiffrer
 
 INTENT :
 - "DEVIS_CREATE" : créer un nouveau devis
@@ -118,10 +118,10 @@ INTENT :
 ENTITÉS (extraire seulement si présentes dans le message) :
 client (nom), prestation (type de travaux), surface (nombre en m²), materiau, montant (€)
 
-FORMAT EXACT : {"persona":"jarvis","intent":"GENERAL","entities":{},"confidence":0.95}`;
+FORMAT EXACT : {"persona":"alfred","intent":"GENERAL","entities":{},"confidence":0.95}`;
 
 const FALLBACK: IntentResult = {
-  persona: "jarvis",
+  persona: "alfred",
   intent: "GENERAL",
   entities: {},
   confidence: 0,
@@ -181,66 +181,66 @@ const TESTS: TestCase[] = [
     message:
       "J'ai posé 60m² de parquet chez M. Martin rue des Lilas, fourniture et pose, j'ai utilisé du chêne huilé",
     expected: {
-      persona: "jarvis",
+      persona: "alfred",
       intent: "DEVIS_CREATE",
       minConfidence: 0.9,
       entities: { client: "M. Martin", surface: 60, materiau: "chêne huilé" },
     },
-    note: "Jarvis pré-remplit le formulaire devis avec les entités",
+    note: "Alfred pré-remplit le formulaire devis avec les entités",
   },
   {
     id: 2,
     message:
       "Mon client me réclame des fissures 3 ans après la fin du chantier, est-ce que je suis couvert ?",
     expected: {
-      persona: "robert_b",
+      persona: "simone",
       intent: "QUERY_EXPERT",
       minConfidence: 0.9,
       entities: { domaine: "juridique" },
     },
-    note: "Robert B explique garantie décennale 10 ans",
+    note: "Simone explique garantie décennale 10 ans",
   },
   {
     id: 3,
     message:
       "Quelle épaisseur de laine de verre je dois mettre en combles perdus pour être en RE2020 ?",
     expected: {
-      persona: "auguste_p",
+      persona: "gustave",
       intent: "QUERY_EXPERT",
       minConfidence: 0.9,
       entities: { prestation: "isolation combles", materiau: "laine de verre" },
     },
-    note: "Auguste P donne R≥7, cite DTU 45.11",
+    note: "Gustave donne R≥7, cite DTU 45.11",
   },
   {
     id: 4,
     message:
       "J'ai un client qui veut isoler sa maison de 1920, murs en pierre de 50cm, 120m² habitable",
     expected: {
-      persona: "auguste_p",
+      persona: "gustave",
       intent: "QUOTE_SUGGEST",
       minConfidence: 0.85,
       entities: { surface: 120, prestation: "isolation", materiau: "pierre" },
     },
-    note: "Auguste P conseille ITE, passe la main à Jarvis pour chiffrer",
+    note: "Gustave conseille ITE, passe la main à Alfred pour chiffrer",
   },
   {
     id: 5,
     message:
       "Mon isolation est conforme DTU mais le client dit qu'il fait froid, il menace de pas payer",
     expected: {
-      persona: "robert_b",
+      persona: "simone",
       intent: "QUERY_EXPERT",
       minConfidence: 0.75,
     },
-    note: "Enjeu principal = impayé/litige → Robert B (DTU est secondaire)",
+    note: "Enjeu principal = impayé/litige → Simone (DTU est secondaire)",
   },
   {
     id: 6,
     message:
       "Je dois faire un devis pour une terrasse en bois, 40m², mais je sais pas si je dois mettre le DTU 51.4 dans les conditions",
     expected: {
-      persona: "jarvis",
+      persona: "alfred",
       intent: "DEVIS_CREATE",
       minConfidence: 0.8,
       entities: { prestation: "terrasse bois", surface: 40 },
@@ -251,29 +251,29 @@ const TESTS: TestCase[] = [
     id: 7,
     message: "C'est quoi la différence entre biennale et décennale ?",
     expected: {
-      persona: "robert_b",
+      persona: "simone",
       intent: "QUERY_EXPERT",
       minConfidence: 0.85,
     },
-    note: "Keywords Robert B clairs : biennale, décennale",
+    note: "Keywords Simone clairs : biennale, décennale",
   },
   {
     id: 8,
     message:
       "J'ai mis de l'isolant mais pas assez épais selon le client, il refuse de payer la dernière facture",
     expected: {
-      persona: "robert_b",
+      persona: "simone",
       intent: "QUERY_EXPERT",
       minConfidence: 0.75,
     },
-    note: "Technique sous-jacent, enjeu = impayé → Robert B (mentionne Auguste P)",
+    note: "Technique sous-jacent, enjeu = impayé → Simone (mentionne Gustave)",
   },
   {
     id: 9,
     message:
       "Euh ouais donc j'étais chez Dupont ce matin, salle de bain, robinetterie, enfin tu vois",
     expected: {
-      persona: "jarvis",
+      persona: "alfred",
       intent: "DEVIS_CREATE",
       minConfidence: 0.65,
       entities: { client: "Dupont", prestation: "robinetterie salle de bain" },
@@ -284,17 +284,17 @@ const TESTS: TestCase[] = [
     id: 10,
     message: "Bonjour",
     expected: {
-      persona: "jarvis",
+      persona: "alfred",
       intent: "GENERAL",
       minConfidence: 0.95,
     },
-    note: "Salutation simple — Jarvis répond normalement",
+    note: "Salutation simple — Alfred répond normalement",
   },
   {
     id: 11,
     message: "J'ai besoin d'un devis pour poser de la décennale sur mon camion",
     expected: {
-      persona: "jarvis",
+      persona: "alfred",
       intent: "DEVIS_CREATE",
       minConfidence: 0.8,
     },
@@ -304,45 +304,45 @@ const TESTS: TestCase[] = [
     id: 12,
     message: "DTU isolation",
     expected: {
-      persona: "auguste_p",
+      persona: "gustave",
       intent: "QUERY_EXPERT",
       minConfidence: 0.85,
     },
-    note: "Message court — Auguste P demande contexte complémentaire",
+    note: "Message court — Gustave demande contexte complémentaire",
   },
   {
     id: 13,
     message:
       "Sur le devis Leblanc, rajoute une ligne pour l'évacuation des gravats, 200 euros",
     expected: {
-      persona: "jarvis",
+      persona: "alfred",
       intent: "DEVIS_UPDATE",
       minConfidence: 0.9,
       entities: { client: "Leblanc", montant: 200, prestation: "évacuation gravats" },
     },
-    note: "Jarvis confirme la modification et met à jour",
+    note: "Alfred confirme la modification et met à jour",
   },
   {
     id: 14,
     message:
       "J'ai un sous-traitant qui veut que je le paie cash, sans contrat écrit",
     expected: {
-      persona: "robert_b",
+      persona: "simone",
       intent: "QUERY_EXPERT",
       minConfidence: 0.9,
     },
-    note: "Robert B explique obligation légale contrat écrit + risques travail au noir",
+    note: "Simone explique obligation légale contrat écrit + risques travail au noir",
   },
   {
     id: 15,
     message:
       "J'ai des moisissures dans une chambre que j'ai isolée il y a 6 mois, le client veut que je revienne",
     expected: {
-      persona: "auguste_p",
+      persona: "gustave",
       intent: "QUERY_EXPERT",
       minConfidence: 0.85,
     },
-    note: "Auguste P diagnostique condensation interstitielle, mentionne Robert B pour responsabilité",
+    note: "Gustave diagnostique condensation interstitielle, mentionne Simone pour responsabilité",
   },
 ];
 

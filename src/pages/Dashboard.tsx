@@ -42,7 +42,7 @@ export default function Dashboard() {
   const [devisBrouillon, setDevisBrouillon] = useState<{ id: string; numero: string; montant_ht: number; chantier_nom?: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [nouveauOpen, setNouveauOpen] = useState(false);
-  const [jarvisMessage, setJarvisMessage] = useState("");
+  const [alfredMessage, setAlfredMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function Dashboard() {
         chantier_nom: chantiersRes.data?.find(c => c.id === d.chantier_id)?.nom,
       })));
 
-      // Jarvis briefing
+      // Alfred briefing
       const prenom = profileRes.data?.prenom ?? "";
       const now = new Date();
       const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -90,7 +90,7 @@ export default function Dashboard() {
       } else {
         parts.push("Je peux rédiger une relance si tu veux.");
       }
-      setJarvisMessage(parts.join(" "));
+      setAlfredMessage(parts.join(" "));
 
       const { data: inboundMsgs } = await (supabase as any)
         .from("messages")
@@ -223,8 +223,8 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-      {/* Jarvis briefing banner */}
-      {loaded && jarvisMessage && (
+      {/* Alfred briefing banner */}
+      {loaded && alfredMessage && (
         <div className="animate-fade-up-4">
           <div className="rounded-xl bg-gray-900 dark:bg-black/60 border border-white/10 px-4 py-3 flex items-center gap-3">
             <div className="relative shrink-0 w-2.5 h-2.5">
@@ -232,8 +232,8 @@ export default function Dashboard() {
               <span className="relative w-2.5 h-2.5 rounded-full bg-orange-500 block" />
             </div>
             <p className="flex-1 min-w-0 text-sm text-white/90 leading-snug">
-              <span className="font-bold text-orange-400">Jarvis — </span>
-              {jarvisMessage}
+              <span className="font-bold text-orange-400">Alfred — </span>
+              {alfredMessage}
             </p>
             <Button
               size="sm"

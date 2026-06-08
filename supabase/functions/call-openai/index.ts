@@ -47,11 +47,11 @@ serve(async (req) => {
       const { data: doc, error: docErr } = await supabase.from("documents").insert({
         artisan_id: userId,
         nom: nom || "Document généré par IA",
-        description: `Généré par ${docPersona === "robert_b" ? "Robert B" : docPersona === "auguste_p" ? "Auguste P" : "Jarvis"}`,
+        description: `Généré par ${docPersona === "simone" ? "Simone" : docPersona === "gustave" ? "Gustave" : "Alfred"}`,
         type_fichier: type_fichier || "courrier",
         mime_type: "text/plain",
         storage_path: `generated/${userId}/${Date.now()}.txt`,
-        tags: ["ia-genere", docPersona || "jarvis"],
+        tags: ["ia-genere", docPersona || "alfred"],
         taille_octets: new TextEncoder().encode(contenu).length,
       }).select().single();
 
@@ -87,10 +87,10 @@ serve(async (req) => {
     }
 
     // Routing : accept persona from caller (telegram, AgentChat) — no re-routing
-    const validPersonas = ["jarvis", "robert_b", "auguste_p"];
+    const validPersonas = ["alfred", "simone", "gustave"];
     const persona = forcePersona && validPersonas.includes(forcePersona as string)
       ? (forcePersona as string)
-      : "jarvis";
+      : "alfred";
 
     let systemContent = getSystemPrompt(persona);
 

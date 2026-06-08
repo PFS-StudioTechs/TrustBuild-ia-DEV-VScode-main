@@ -15,7 +15,7 @@ import FactureCreationForm, { parseFactureData, stripFactureData, type FactureDa
 import AvoirCreationForm, { parseAvoirData, stripAvoirData, type AvoirData } from "./AvoirCreationForm";
 import TsCreationForm, { parseTsData, stripTsData, type TsData } from "./TsCreationForm";
 
-class JarvisFormBoundary extends React.Component<
+class AlfredFormBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
 > {
@@ -47,12 +47,12 @@ interface Message {
 }
 
 const personaConfig: Record<string, { label: string; icon: typeof Bot; color: string }> = {
-  jarvis: { label: "Jarvis", icon: Bot, color: "text-accent" },
-  robert_b: { label: "Robert B", icon: Scale, color: "text-amber-600" },
-  auguste_p: { label: "Auguste P", icon: Wrench, color: "text-emerald-600" },
+  alfred: { label: "Alfred", icon: Bot, color: "text-accent" },
+  simone: { label: "Simone", icon: Scale, color: "text-amber-600" },
+  gustave: { label: "Gustave", icon: Wrench, color: "text-emerald-600" },
 };
 
-export default function JarvisPanel({ onClose }: { onClose: () => void }) {
+export default function AlfredPanel({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -117,22 +117,22 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       setActiveDocId(id);
       setActiveDocType(type);
     };
-    window.addEventListener("jarvis:activeDoc", handler);
-    return () => window.removeEventListener("jarvis:activeDoc", handler);
+    window.addEventListener("alfred:activeDoc", handler);
+    return () => window.removeEventListener("alfred:activeDoc", handler);
   }, []);
 
   // Realtime subscription for Telegram messages
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel("jarvis-realtime")
+      .channel("alfred-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `artisan_id=eq.${user.id}` }, (payload) => {
         const newMsg = payload.new as any;
         if (newMsg.source === "telegram") {
           setMessages((prev) => {
             const isDup = prev.some((m) => m.content === newMsg.content && m.role === newMsg.role && m.source === "telegram");
             if (isDup) return prev;
-            return [...prev, { role: newMsg.role, content: newMsg.content, persona: newMsg.persona || "jarvis", source: "telegram" }];
+            return [...prev, { role: newMsg.role, content: newMsg.content, persona: newMsg.persona || "alfred", source: "telegram" }];
           });
         }
       })
@@ -214,12 +214,12 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
     try {
       const now = new Date();
       const dateLabel = now.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
-      const filename = `Conversation-Jarvis-${now.toISOString().slice(0, 16).replace(/:/g, "-")}.html`;
+      const filename = `Conversation-Alfred-${now.toISOString().slice(0, 16).replace(/:/g, "-")}.html`;
 
       // Build HTML — chaque message sur une ligne claire pour l'impression A4
       const messagesHtml = messages.map((m, idx) => {
-        const persona = m.persona ?? "jarvis";
-        const label = persona === "robert_b" ? "Robert B" : persona === "auguste_p" ? "Auguste P" : "Jarvis";
+        const persona = m.persona ?? "alfred";
+        const label = persona === "simone" ? "Simone" : persona === "gustave" ? "Gustave" : "Alfred";
         const isUser = m.role === "user";
         const content = stripDevisData(m.content).replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
         return `
@@ -241,7 +241,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Conversation Jarvis — ${dateLabel}</title>
+  <title>Conversation Alfred — ${dateLabel}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #111827; }
@@ -263,7 +263,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
 <body>
   <div class="page">
     <div class="header">
-      <h1>Conversation avec ${messages.some(m => m.persona === "robert_b") ? "Robert B" : messages.some(m => m.persona === "auguste_p") ? "Auguste P" : "Jarvis"}</h1>
+      <h1>Conversation avec ${messages.some(m => m.persona === "simone") ? "Simone" : messages.some(m => m.persona === "gustave") ? "Gustave" : "Alfred"}</h1>
       <p>${dateLabel} &nbsp;·&nbsp; ${messages.length} message(s)</p>
     </div>
     <table>
@@ -288,12 +288,12 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       const { error: dbErr } = await supabase.from("documents").insert({
         artisan_id: user.id,
         nom: filename,
-        description: `Conversation Jarvis du ${dateLabel}`,
+        description: `Conversation Alfred du ${dateLabel}`,
         type_fichier: "autre",
         taille_octets: blob.size,
         mime_type: "text/html",
         storage_path: path,
-        tags: ["conversation", "jarvis"],
+        tags: ["conversation", "alfred"],
       } as any);
       if (dbErr) throw dbErr;
 
@@ -313,7 +313,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
     setLastTranscription(null);
     setLoading(true);
 
-    persistMessage("user", text.trim(), "jarvis", "app", currentTranscription);
+    persistMessage("user", text.trim(), "alfred", "app", currentTranscription);
 
     try {
       const finalText = await streamChat({
@@ -322,8 +322,8 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
           context: { page: location.pathname, activeDocId, activeDocType },
         },
         onChunk: (accumulated) => {
-          const persona = accumulated.startsWith("[Robert B]") ? "robert_b"
-            : accumulated.startsWith("[Auguste P]") ? "auguste_p" : "jarvis";
+          const persona = accumulated.startsWith("[Simone]") ? "simone"
+            : accumulated.startsWith("[Gustave]") ? "gustave" : "alfred";
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last?.role === "assistant") {
@@ -337,8 +337,8 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
       });
 
       if (finalText) {
-        const assistantPersona = finalText.startsWith("[Robert B]") ? "robert_b"
-          : finalText.startsWith("[Auguste P]") ? "auguste_p" : "jarvis";
+        const assistantPersona = finalText.startsWith("[Simone]") ? "simone"
+          : finalText.startsWith("[Gustave]") ? "gustave" : "alfred";
         persistMessage("assistant", finalText, assistantPersona, "app");
 
         const devisData = parseDevisData(finalText);
@@ -391,7 +391,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
             <Bot className="w-4 h-4 text-primary-foreground" />
           </div>
           <div>
-            <h3 className="font-display font-bold text-sm">Jarvis</h3>
+            <h3 className="font-display font-bold text-sm">Alfred</h3>
             <p className="text-[11px] text-muted-foreground">Assistant IA central</p>
           </div>
         </div>
@@ -416,7 +416,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
               <Bot className="w-7 h-7 text-accent" />
             </div>
             <div>
-              <p className="font-display font-bold text-sm">Bonjour, je suis Jarvis</p>
+              <p className="font-display font-bold text-sm">Bonjour, je suis Alfred</p>
               <p className="text-xs text-muted-foreground mt-1">Je peux vous aider avec vos devis, questions techniques ou juridiques.</p>
             </div>
             <div className="space-y-1.5 w-full">
@@ -430,7 +430,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
         )}
 
         {messages.map((msg, i) => {
-          const persona = msg.persona ? personaConfig[msg.persona] : personaConfig.jarvis;
+          const persona = msg.persona ? personaConfig[msg.persona] : personaConfig.alfred;
           const Icon = persona?.icon || Bot;
           return (
             <div key={i} className={cn("flex gap-2", msg.role === "user" ? "justify-end" : "")}>
@@ -458,7 +458,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                   )}
                 </div>
                 {msg.devisData && (
-                  <JarvisFormBoundary>
+                  <AlfredFormBoundary>
                     <DevisCreationForm
                       data={msg.devisData}
                       onCreated={(devisId?: string) => {
@@ -469,10 +469,10 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                         }
                       }}
                     />
-                  </JarvisFormBoundary>
+                  </AlfredFormBoundary>
                 )}
                 {msg.devisUpdateData && (
-                  <JarvisFormBoundary>
+                  <AlfredFormBoundary>
                     <DevisUpdateForm
                       data={msg.devisUpdateData}
                       onCreated={(devisId?: string) => {
@@ -483,20 +483,20 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                         }
                       }}
                     />
-                  </JarvisFormBoundary>
+                  </AlfredFormBoundary>
                 )}
                 {msg.avenantData && (
-                  <JarvisFormBoundary>
+                  <AlfredFormBoundary>
                     <AvenantCreationForm
                       data={msg.avenantData}
                       onCreated={() => {
                         setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avenantData: null } : m)));
                       }}
                     />
-                  </JarvisFormBoundary>
+                  </AlfredFormBoundary>
                 )}
                 {msg.factureData && (
-                  <JarvisFormBoundary>
+                  <AlfredFormBoundary>
                     <FactureCreationForm
                       data={msg.factureData}
                       onCreated={(factureId: string) => {
@@ -505,27 +505,27 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
                         setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, factureData: null } : m)));
                       }}
                     />
-                  </JarvisFormBoundary>
+                  </AlfredFormBoundary>
                 )}
                 {msg.avoirData && (
-                  <JarvisFormBoundary>
+                  <AlfredFormBoundary>
                     <AvoirCreationForm
                       data={msg.avoirData}
                       onCreated={() => {
                         setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, avoirData: null } : m)));
                       }}
                     />
-                  </JarvisFormBoundary>
+                  </AlfredFormBoundary>
                 )}
                 {msg.tsData && (
-                  <JarvisFormBoundary>
+                  <AlfredFormBoundary>
                     <TsCreationForm
                       data={msg.tsData}
                       onCreated={() => {
                         setMessages((prev) => prev.map((m, idx) => (idx === i ? { ...m, tsData: null } : m)));
                       }}
                     />
-                  </JarvisFormBoundary>
+                  </AlfredFormBoundary>
                 )}
                 <SourceBadge source={msg.source} />
               </div>
@@ -574,7 +574,7 @@ export default function JarvisPanel({ onClose }: { onClose: () => void }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-            placeholder={transcribing ? "Transcription en cours..." : "Posez votre question à Jarvis…"}
+            placeholder={transcribing ? "Transcription en cours..." : "Posez votre question à Alfred…"}
             rows={1}
             className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             style={{ minHeight: "40px", overflowY: "hidden" }}

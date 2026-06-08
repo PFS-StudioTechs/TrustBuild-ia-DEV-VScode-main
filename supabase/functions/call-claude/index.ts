@@ -174,16 +174,16 @@ serve(async (req) => {
           artisan_id: user.id,
           nom: nom || "Document généré par IA",
           description: `Généré par ${
-            docPersona === "robert_b"
-              ? "Robert B"
-              : docPersona === "auguste_p"
-              ? "Auguste P"
-              : "Jarvis"
+            docPersona === "simone"
+              ? "Simone"
+              : docPersona === "gustave"
+              ? "Gustave"
+              : "Alfred"
           }`,
           type_fichier: type_fichier || "courrier",
           mime_type: "text/plain",
           storage_path: `generated/${user.id}/${Date.now()}.txt`,
-          tags: ["ia-genere", docPersona || "jarvis"],
+          tags: ["ia-genere", docPersona || "alfred"],
           taille_octets: new TextEncoder().encode(contenu).length,
         })
         .select()
@@ -232,11 +232,11 @@ serve(async (req) => {
       [...messages].reverse().find((m: { role: string }) => m.role === "user")
         ?.content ?? "";
 
-    const validPersonas = ["jarvis", "robert_b", "auguste_p"];
+    const validPersonas = ["alfred", "simone", "gustave"];
     const routerResult: IntentResult =
       forcePersona && validPersonas.includes(forcePersona as string)
         ? {
-            persona: forcePersona as "jarvis" | "robert_b" | "auguste_p",
+            persona: forcePersona as "alfred" | "simone" | "gustave",
             intent: "GENERAL",
             entities: {},
             confidence: 1,
@@ -277,8 +277,8 @@ serve(async (req) => {
           }
         }
 
-        // Injection liste clients + chantiers pour Jarvis
-        if (user && persona === "jarvis") {
+        // Injection liste clients + chantiers pour Alfred
+        if (user && persona === "alfred") {
           const { data: clientsList } = await supabase
             .from("clients")
             .select("id, nom, prenom, email, telephone, type")

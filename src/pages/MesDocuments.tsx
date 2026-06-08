@@ -311,7 +311,7 @@ export default function MesDocuments() {
   };
 
   const handleAnalyzeAI = async (doc: Document) => {
-    toast.info(`Analyse IA de "${doc.nom}" envoyée à l'assistant Jarvis`);
+    toast.info(`Analyse IA de "${doc.nom}" envoyée à l'assistant Alfred`);
     // Navigate to assistant with doc context - could be expanded
   };
 

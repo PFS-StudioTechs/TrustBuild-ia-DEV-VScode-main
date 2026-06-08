@@ -1,5 +1,5 @@
 export interface IntentResult {
-  persona: "jarvis" | "robert_b" | "auguste_p";
+  persona: "alfred" | "simone" | "gustave";
   intent:
     | "DEVIS_CREATE"
     | "DEVIS_UPDATE"
@@ -18,7 +18,7 @@ export interface IntentResult {
 }
 
 const FALLBACK: IntentResult = {
-  persona: "jarvis",
+  persona: "alfred",
   intent: "GENERAL",
   entities: {},
   confidence: 0,
@@ -30,7 +30,7 @@ Retourne UNIQUEMENT ce JSON (sans markdown, sans texte autour) :
 
 DÉCISION — applique dans cet ordre :
 
-1. persona = "robert_b" si le message parle de :
+1. persona = "simone" si le message parle de :
    litige, dispute, conflit avec client, client ne veut pas payer, impayé, refus de paiement,
    garantie décennale, garantie biennale, garantie parfait achèvement,
    contrat de sous-traitance, sous-traitant (aspect légal), travail au noir,
@@ -38,7 +38,7 @@ DÉCISION — applique dans cet ordre :
    assurance RC pro, responsabilité civile, réserves de réception, pénalité de retard,
    retenue de garantie, CCAP, marché public.
 
-2. persona = "auguste_p" si le message parle de :
+2. persona = "gustave" si le message parle de :
    normes, réglementation, DTU, NF C, NF P, RE2020, RT2020,
    comment poser / installer / dimensionner / mettre en œuvre,
    quelle épaisseur, quelle section de câble, conformité technique,
@@ -49,14 +49,14 @@ DÉCISION — applique dans cet ordre :
    fissure, humidité, moisissure, pathologie bâtiment,
    enduit, chape, carrelage, tuile, ardoise, VMC, ventilation.
 
-3. persona = "jarvis" pour tout le reste :
+3. persona = "alfred" pour tout le reste :
    créer ou modifier un devis / facture, tarif, prix, planning, client (gestion), général.
 
 RÈGLES ABSOLUES :
-- "litige" ou "ne veut pas payer" → TOUJOURS robert_b, même si "client" ou "devis" apparaît
-- "quelles normes pour X" → TOUJOURS auguste_p, même sans "DTU" ni "NF"
-- "décennale" dans un contexte de devis → jarvis (assurance citée en passant)
-- "devis + DTU" → jarvis si l'intent principal est de chiffrer
+- "litige" ou "ne veut pas payer" → TOUJOURS simone, même si "client" ou "devis" apparaît
+- "quelles normes pour X" → TOUJOURS gustave, même sans "DTU" ni "NF"
+- "décennale" dans un contexte de devis → alfred (assurance citée en passant)
+- "devis + DTU" → alfred si l'intent principal est de chiffrer
 
 INTENT :
 - "DEVIS_CREATE" : créer un nouveau devis
@@ -68,7 +68,7 @@ INTENT :
 ENTITÉS (extraire seulement si présentes dans le message) :
 client (nom), prestation (type de travaux), surface (nombre en m²), materiau, montant (€)
 
-FORMAT EXACT : {"persona":"jarvis","intent":"GENERAL","entities":{},"confidence":0.95}`;
+FORMAT EXACT : {"persona":"alfred","intent":"GENERAL","entities":{},"confidence":0.95}`;
 
 export async function routeIntent(message: string): Promise<IntentResult> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
