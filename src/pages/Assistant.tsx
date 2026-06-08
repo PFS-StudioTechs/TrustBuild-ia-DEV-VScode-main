@@ -55,7 +55,7 @@ export default function Assistant() {
         <TabsContent value="simone" className="flex-1 overflow-hidden mt-0">
           <AgentChat
             persona="simone"
-            title="Simone — Expert Juridique"
+            title="Simone — Experte Juridique"
             subtitle="Droit de la construction, contrats, assurances, garanties et litiges."
             avatarSrc="/avatar-simone.png"
             iconColor="text-amber-600"
