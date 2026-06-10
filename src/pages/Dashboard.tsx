@@ -12,6 +12,17 @@ interface KPIs {
   chantiersActifs: number;
 }
 
+interface RelanceItem {
+  type: "devis" | "facture" | "acompte";
+  id: string;
+  numero: string;
+  client_name: string;
+  client_email: string;
+  montant: number;
+  date: string;
+  artisan_name: string;
+}
+
 function AnimatedCounter({ value, prefix = "", suffix = "" }: { value: number; prefix?: string; suffix?: string }) {
   const [display, setDisplay] = useState(0);
   const ref = useRef<number>();
@@ -44,15 +55,19 @@ export default function Dashboard() {
   const [nouveauOpen, setNouveauOpen] = useState(false);
   const [alfredMessage, setAlfredMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [relanceItems, setRelanceItems] = useState<RelanceItem[]>([]);
+  const [relanceLoading, setRelanceLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
-      const [profileRes, chantiersRes, devisRes, facturesRes] = await Promise.all([
+      const [profileRes, chantiersRes, devisRes, facturesRes, clientsRes, acomptesRes] = await Promise.all([
         supabase.from("profiles").select("nom, prenom").eq("user_id", user.id).single(),
         supabase.from("chantiers").select("id, nom, statut").eq("artisan_id", user.id),
-        supabase.from("devis").select("id, statut, montant_ht, numero, chantier_id, date_validite").eq("artisan_id", user.id),
-        supabase.from("factures").select("id, statut, montant_ht, solde_restant").eq("artisan_id", user.id),
+        supabase.from("devis").select("id, statut, montant_ht, numero, chantier_id, date_validite, client_id").eq("artisan_id", user.id),
+        supabase.from("factures").select("id, statut, montant_ht, solde_restant, client_id, numero, date_echeance").eq("artisan_id", user.id),
+        supabase.from("clients").select("id, nom, prenom, email").eq("artisan_id", user.id),
+        supabase.from("acomptes").select("id, numero, montant, date_echeance, statut, devis_id").eq("artisan_id", user.id).eq("statut", "en_attente"),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
       const chantiersActifs = chantiersRes.data?.filter((c) => c.statut === "en_cours").length ?? 0;
@@ -82,10 +97,63 @@ export default function Dashboard() {
       ).length;
       const nbImpayes = (facturesRes.data ?? []).filter(f => f.statut === "impayee").length;
 
+      const clientsMap = new Map((clientsRes.data ?? []).map((c: any) => [c.id, c]));
+      const devisMap = new Map((devisRes.data ?? []).map((d: any) => [d.id, d]));
+      const artisanName = profileRes.data
+        ? `${profileRes.data.prenom ?? ""} ${profileRes.data.nom ?? ""}`.trim()
+        : "";
+
+      const relItems: RelanceItem[] = [];
+
+      for (const d of (devisRes.data ?? []).filter((d: any) =>
+        d.statut === "envoye" && d.date_validite &&
+        new Date(d.date_validite) >= now && new Date(d.date_validite) <= in7d
+      )) {
+        const client = d.client_id ? clientsMap.get(d.client_id) : null;
+        if (!client?.email) continue;
+        relItems.push({
+          type: "devis", id: d.id, numero: d.numero ?? "",
+          client_name: [client.prenom, client.nom].filter(Boolean).join(" ") || client.nom,
+          client_email: client.email,
+          montant: Number(d.montant_ht), date: d.date_validite, artisan_name: artisanName,
+        });
+      }
+
+      for (const f of (facturesRes.data ?? []).filter((f: any) => f.statut === "impayee")) {
+        const client = f.client_id ? clientsMap.get(f.client_id) : null;
+        if (!client?.email) continue;
+        relItems.push({
+          type: "facture", id: f.id, numero: f.numero ?? "",
+          client_name: [client.prenom, client.nom].filter(Boolean).join(" ") || client.nom,
+          client_email: client.email,
+          montant: Number(f.solde_restant || f.montant_ht), date: f.date_echeance ?? "", artisan_name: artisanName,
+        });
+      }
+
+      const nbAcomptes = (acomptesRes.data ?? []).filter((a: any) =>
+        a.date_echeance && new Date(a.date_echeance) < now
+      ).length;
+      for (const a of (acomptesRes.data ?? []).filter((a: any) =>
+        a.date_echeance && new Date(a.date_echeance) < now
+      )) {
+        const devis = devisMap.get(a.devis_id);
+        const client = devis?.client_id ? clientsMap.get(devis.client_id) : null;
+        if (!client?.email) continue;
+        relItems.push({
+          type: "acompte", id: a.id, numero: a.numero ?? "",
+          client_name: [client.prenom, client.nom].filter(Boolean).join(" ") || client.nom,
+          client_email: client.email,
+          montant: Number(a.montant), date: a.date_echeance, artisan_name: artisanName,
+        });
+      }
+
+      setRelanceItems(relItems);
+
       const parts: string[] = [`Bonjour ${prenom}.`];
       if (devisExpirant > 0) parts.push(`Tu as ${devisExpirant} devis qui expire${devisExpirant > 1 ? "nt" : ""} cette semaine.`);
       if (nbImpayes > 0) parts.push(`${nbImpayes} facture${nbImpayes > 1 ? "s" : ""} en retard de paiement.`);
-      if (devisExpirant === 0 && nbImpayes === 0) {
+      if (nbAcomptes > 0) parts.push(`${nbAcomptes} acompte${nbAcomptes > 1 ? "s" : ""} en retard.`);
+      if (devisExpirant === 0 && nbImpayes === 0 && nbAcomptes === 0) {
         parts.push("Tout est à jour — aucune urgence aujourd'hui. Belle journée !");
       } else {
         parts.push("Je peux rédiger une relance si tu veux.");
@@ -103,6 +171,26 @@ export default function Dashboard() {
     };
     fetchData();
   }, [user]);
+
+  const handleRelance = async () => {
+    if (relanceItems.length === 0) {
+      navigate("/assistant");
+      return;
+    }
+    setRelanceLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke("generate-relance", {
+        body: { items: relanceItems },
+      });
+      if (error) throw new Error(error.message);
+      navigate("/messagerie?tab=brouillons");
+    } catch (err) {
+      console.error("[handleRelance]", err);
+      navigate("/messagerie?tab=brouillons");
+    } finally {
+      setRelanceLoading(false);
+    }
+  };
 
   const kpiCards = [
     { label: "CA du mois", value: kpis.caMois, icon: TrendingUp, iconBg: "bg-success/10", iconColor: "text-success", suffix: " €", link: "/finances?tab=tresorerie" },
@@ -237,10 +325,11 @@ export default function Dashboard() {
             </p>
             <Button
               size="sm"
-              onClick={() => navigate("/assistant")}
+              onClick={handleRelance}
+              disabled={relanceLoading}
               className="shrink-0 bg-orange-500 hover:bg-orange-600 text-white text-xs h-8 px-3 gap-1 rounded-lg"
             >
-              Lui répondre <ArrowRight className="w-3.5 h-3.5" />
+              {relanceLoading ? "Génération…" : <><span>Lui répondre</span> <ArrowRight className="w-3.5 h-3.5" /></>}
             </Button>
           </div>
         </div>

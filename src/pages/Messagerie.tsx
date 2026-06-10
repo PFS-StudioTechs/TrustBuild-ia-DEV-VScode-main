@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useContacts } from "@/hooks/useContacts";
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Mail, Plus, Send, Clock, CheckCircle2, AlertCircle, Search, Trash2,
   FileText, Receipt, MessageSquare, ChevronDown, ChevronUp, ArrowRight,
-  Pencil, XCircle,
+  Pencil, XCircle, BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,10 +55,11 @@ interface LigneDevisMin {
   ordre: number;
 }
 
-function InboundMessageCard({ m, onDelete, onMarkRead }: {
+function InboundMessageCard({ m, onDelete, onMarkRead, onDetail }: {
   m: Message;
   onDelete: (id: string) => void;
   onMarkRead: (id: string) => void;
+  onDetail: (m: Message) => void;
 }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
@@ -88,8 +89,8 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
 
   return (
     <div
-      className={`forge-card border-l-4 ${!m.read ? "border-l-primary bg-primary/5 cursor-pointer" : isRefus ? "border-l-red-400" : "border-l-amber-400"}`}
-      onClick={() => { if (!m.read) onMarkRead(m.id); }}
+      className={`forge-card border-l-4 cursor-pointer ${!m.read ? "border-l-primary bg-primary/5" : isRefus ? "border-l-red-400" : "border-l-amber-400"}`}
+      onClick={() => { if (!m.read) onMarkRead(m.id); onDetail(m); }}
     >
       <div className="flex items-start gap-3">
         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm ${isRefus ? "bg-red-100 text-red-600 dark:bg-red-900/30" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30"}`}>
@@ -219,14 +220,22 @@ function InboundMessageCard({ m, onDelete, onMarkRead }: {
 export default function Messagerie() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { contacts } = useContacts();
   const { fournisseurs } = useFournisseurs();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"sent" | "received">("sent");
+  const [tab, setTab] = useState<"sent" | "received" | "draft">(() =>
+    searchParams.get("tab") === "brouillons" ? "draft" : "sent"
+  );
   const [composeOpen, setComposeOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
+  const [detailMsg, setDetailMsg] = useState<Message | null>(null);
+  const [editDraft, setEditDraft] = useState<Message | null>(null);
+  const [editSubject, setEditSubject] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [sendingDraft, setSendingDraft] = useState(false);
 
   const [toInput, setToInput] = useState("");
   const [toEmail, setToEmail] = useState("");
@@ -316,8 +325,47 @@ export default function Messagerie() {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
   };
 
-  const sent = messages.filter(m => !m.direction || m.direction === "outbound");
+  const handleSendDraft = async (draft: Message) => {
+    setSendingDraft(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-message", {
+        body: {
+          to_email: draft.to_email,
+          to_name: draft.to_name ?? undefined,
+          subject: draft.subject,
+          body: draft.body,
+          document_type: draft.document_type ?? undefined,
+          document_id: draft.document_id ?? undefined,
+        },
+      });
+      if (error) throw new Error(error.message);
+      await (supabase as any).from("messages").update({ status: data?.status ?? "sent" }).eq("id", draft.id);
+      if (data?.status === "sent") toast.success("Relance envoyée");
+      else if (data?.status === "no_brevo") toast.success("Relance enregistrée (Brevo non configuré)");
+      else toast.error("Erreur lors de l'envoi");
+      setDetailMsg(null);
+      setEditDraft(null);
+      await fetchMessages();
+    } catch (err: any) {
+      toast.error("Erreur : " + err.message);
+    } finally {
+      setSendingDraft(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!editDraft) return;
+    await (supabase as any).from("messages")
+      .update({ subject: editSubject, body: editBody })
+      .eq("id", editDraft.id);
+    toast.success("Brouillon sauvegardé");
+    setEditDraft(null);
+    await fetchMessages();
+  };
+
+  const sent = messages.filter(m => (!m.direction || m.direction === "outbound") && m.status !== "draft");
   const received = messages.filter(m => m.direction === "inbound");
+  const drafts = messages.filter(m => m.status === "draft");
   const unreadCount = received.filter(m => !m.read).length;
 
   const q = search.toLowerCase();
@@ -339,7 +387,7 @@ export default function Messagerie() {
         <div>
           <h1 className="text-h1 font-display">Messagerie</h1>
           <p className="text-muted-foreground text-body mt-1">
-            {sent.length} envoyé{sent.length !== 1 ? "s" : ""} · {received.length} reçu{received.length !== 1 ? "s" : ""}
+            {sent.length} envoyé{sent.length !== 1 ? "s" : ""} · {received.length} reçu{received.length !== 1 ? "s" : ""}{drafts.length > 0 ? ` · ${drafts.length} brouillon${drafts.length > 1 ? "s" : ""}` : ""}
           </p>
         </div>
         <Button onClick={() => setComposeOpen(true)} className="touch-target bg-gradient-to-r from-primary to-primary/90 shadow-forge gap-2">
@@ -363,6 +411,17 @@ export default function Messagerie() {
           {unreadCount > 0 && (
             <span className="ml-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
               {unreadCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setTab("draft")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${tab === "draft" ? "border-orange-500 text-orange-500" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+        >
+          <BookOpen className="w-3.5 h-3.5" /> Brouillons
+          {drafts.length > 0 && (
+            <span className="ml-0.5 bg-orange-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+              {drafts.length}
             </span>
           )}
         </button>
@@ -406,7 +465,7 @@ export default function Messagerie() {
         ) : (
           <div className="space-y-3 animate-fade-up-2">
             {filteredSent.map(m => (
-              <div key={m.id} className="forge-card flex items-start gap-3">
+              <div key={m.id} className="forge-card flex items-start gap-3 cursor-pointer hover:border-primary/30 transition-all" onClick={() => setDetailMsg(m)}>
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary font-semibold text-sm">
                   {(m.to_name ?? m.to_email)[0].toUpperCase()}
                 </div>
@@ -480,7 +539,96 @@ export default function Messagerie() {
                 m={m}
                 onDelete={handleDelete}
                 onMarkRead={handleMarkRead}
+                onDetail={setDetailMsg}
               />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* ── Onglet Brouillons ── */}
+      {tab === "draft" && (
+        loading ? (
+          <div className="space-y-3">
+            {[1, 2].map(i => (
+              <div key={i} className="forge-card flex gap-3">
+                <div className="skeleton-shimmer w-10 h-10 rounded-full shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton-shimmer h-4 rounded w-1/2" />
+                  <div className="skeleton-shimmer h-3 rounded w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : drafts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-up">
+            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+              <BookOpen className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <p className="font-semibold text-foreground">Aucun brouillon</p>
+            <p className="text-sm text-muted-foreground mt-1">Les relances générées par Alfred apparaîtront ici.</p>
+          </div>
+        ) : (
+          <div className="space-y-3 animate-fade-up-2">
+            {drafts.map(m => (
+              <div key={m.id} className="forge-card border-l-4 border-l-orange-400 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0 text-orange-600 font-semibold text-sm">
+                  {(m.to_name ?? m.to_email)[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm">{m.to_name || m.to_email}</p>
+                      {m.to_name && <p className="text-xs text-muted-foreground">{m.to_email}</p>}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => handleDelete(m.id)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium mt-1">{m.subject}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{m.body}</p>
+                  {m.document_type && (
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      {m.document_type === "devis" && (
+                        <Badge className="bg-blue-500/10 text-blue-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                          <FileText className="w-2.5 h-2.5" /> Devis
+                        </Badge>
+                      )}
+                      {m.document_type === "facture" && (
+                        <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                          <Receipt className="w-2.5 h-2.5" /> Facture
+                        </Badge>
+                      )}
+                      {m.document_type === "acompte" && (
+                        <Badge className="bg-purple-500/10 text-purple-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                          <Receipt className="w-2.5 h-2.5" /> Acompte
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 gap-1"
+                      onClick={() => { setEditDraft(m); setEditSubject(m.subject); setEditBody(m.body); }}
+                    >
+                      <Pencil className="w-3 h-3" /> Modifier
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={sendingDraft}
+                      className="text-xs h-7 gap-1 bg-orange-500 hover:bg-orange-600 text-white"
+                      onClick={() => handleSendDraft(m)}
+                    >
+                      <Send className="w-3 h-3" />
+                      {sendingDraft ? "Envoi…" : "Envoyer"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )
@@ -542,6 +690,108 @@ export default function Messagerie() {
             <Button onClick={handleSend} disabled={sending} className="bg-primary text-primary-foreground gap-2">
               <Send className="w-4 h-4" />
               {sending ? "Envoi en cours…" : "Envoyer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal détail message */}
+      <Dialog open={!!detailMsg} onOpenChange={(v) => { if (!v) setDetailMsg(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          {detailMsg && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-display text-base leading-snug">{detailMsg.subject}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {detailMsg.direction === "inbound"
+                      ? `De : ${detailMsg.from_client_name ?? "Client"}`
+                      : `À : ${detailMsg.to_name ? `${detailMsg.to_name} <${detailMsg.to_email}>` : detailMsg.to_email}`}
+                  </span>
+                  <span>{new Date(detailMsg.sent_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {detailMsg.status !== "draft" && statusBadge(detailMsg.status)}
+                  {detailMsg.document_type === "devis" && (
+                    <Badge className="bg-blue-500/10 text-blue-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                      <FileText className="w-2.5 h-2.5" /> Devis
+                    </Badge>
+                  )}
+                  {detailMsg.document_type === "facture" && (
+                    <Badge className="bg-emerald-500/10 text-emerald-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                      <Receipt className="w-2.5 h-2.5" /> Facture
+                    </Badge>
+                  )}
+                  {detailMsg.document_type === "acompte" && (
+                    <Badge className="bg-purple-500/10 text-purple-600 text-[9px] h-4 px-1.5 flex items-center gap-0.5">
+                      <Receipt className="w-2.5 h-2.5" /> Acompte
+                    </Badge>
+                  )}
+                </div>
+                <div className="border rounded-lg p-3 bg-muted/30 whitespace-pre-wrap text-sm leading-relaxed">
+                  {detailMsg.body}
+                </div>
+              </div>
+              {detailMsg.status === "draft" && (
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => { setDetailMsg(null); setEditDraft(detailMsg); setEditSubject(detailMsg.subject); setEditBody(detailMsg.body); }}
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> Modifier
+                  </Button>
+                  <Button
+                    disabled={sendingDraft}
+                    className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+                    onClick={() => handleSendDraft(detailMsg)}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {sendingDraft ? "Envoi…" : "Envoyer la relance"}
+                  </Button>
+                </DialogFooter>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal édition brouillon */}
+      <Dialog open={!!editDraft} onOpenChange={(v) => { if (!v) setEditDraft(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display">Modifier le brouillon</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Destinataire</Label>
+              <p className="text-sm text-muted-foreground px-3 py-2 border rounded-md bg-muted/30">
+                {editDraft?.to_name ? `${editDraft.to_name} <${editDraft.to_email}>` : editDraft?.to_email}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Objet</Label>
+              <Input value={editSubject} onChange={e => setEditSubject(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Message</Label>
+              <Textarea value={editBody} onChange={e => setEditBody(e.target.value)} rows={8} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDraft(null)}>Annuler</Button>
+            <Button variant="outline" onClick={handleSaveDraft} className="gap-1.5">
+              <BookOpen className="w-3.5 h-3.5" /> Sauvegarder
+            </Button>
+            <Button
+              disabled={sendingDraft}
+              className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5"
+              onClick={() => editDraft && handleSendDraft({ ...editDraft, subject: editSubject, body: editBody })}
+            >
+              <Send className="w-3.5 h-3.5" />
+              {sendingDraft ? "Envoi…" : "Envoyer"}
             </Button>
           </DialogFooter>
         </DialogContent>
