@@ -1169,13 +1169,23 @@ serve(async (req) => {
       const { data: rawLines } = await db.from("lignes_devis")
         .select("designation, quantite, unite, prix_unitaire, tva")
         .eq("devis_id", documentId).order("ordre");
-      const lines: LineItem[] = (rawLines ?? []).map((l) => ({
+      let lines: LineItem[] = (rawLines ?? []).map((l) => ({
         designation: l.designation ?? "",
         quantite: Number(l.quantite),
         unite: l.unite ?? "u",
         prix_unitaire: Number(l.prix_unitaire),
         tva: Number(l.tva),
       }));
+
+      if (lines.length === 0 && Number(devis.montant_ht) > 0) {
+        lines = [{
+          designation: `Devis ${devis.numero}`,
+          quantite: 1,
+          unite: "C62",
+          prix_unitaire: Number(devis.montant_ht),
+          tva: Number(devis.tva) || 20,
+        }];
+      }
 
       // Template actif pour couleurs + logo
       const { data: tpl } = await db.from("document_templates")
