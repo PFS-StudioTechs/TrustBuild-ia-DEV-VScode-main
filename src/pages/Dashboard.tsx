@@ -61,13 +61,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
-      const [profileRes, chantiersRes, devisRes, facturesRes, clientsRes, acomptesRes] = await Promise.all([
+      const [profileRes, chantiersRes, devisRes, facturesRes, clientsRes, acomptesRes, draftsRes] = await Promise.all([
         supabase.from("profiles").select("nom, prenom").eq("user_id", user.id).single(),
         supabase.from("chantiers").select("id, nom, statut").eq("artisan_id", user.id),
         supabase.from("devis").select("id, statut, montant_ht, numero, chantier_id, date_validite, client_id").eq("artisan_id", user.id),
         supabase.from("factures").select("id, statut, montant_ht, solde_restant, client_id, numero, date_echeance").eq("artisan_id", user.id),
         supabase.from("clients").select("id, nom, prenom, email").eq("artisan_id", user.id),
         supabase.from("acomptes").select("id, numero, montant, date_echeance, statut, devis_id").eq("artisan_id", user.id).eq("statut", "en_attente"),
+        supabase.from("messages").select("document_id").eq("artisan_id", user.id).eq("status", "draft"),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
       const chantiersActifs = chantiersRes.data?.filter((c) => c.statut === "en_cours").length ?? 0;
@@ -147,13 +148,18 @@ export default function Dashboard() {
         });
       }
 
-      setRelanceItems(relItems);
+      const draftedDocIds = new Set((draftsRes.data ?? []).map((m: any) => m.document_id).filter(Boolean));
+      const filteredRelItems = relItems.filter(item => !draftedDocIds.has(item.id));
+      setRelanceItems(filteredRelItems);
 
       const parts: string[] = [`Bonjour ${prenom}.`];
-      if (devisExpirant > 0) parts.push(`Tu as ${devisExpirant} devis qui expire${devisExpirant > 1 ? "nt" : ""} cette semaine.`);
-      if (nbImpayes > 0) parts.push(`${nbImpayes} facture${nbImpayes > 1 ? "s" : ""} en retard de paiement.`);
-      if (nbAcomptes > 0) parts.push(`${nbAcomptes} acompte${nbAcomptes > 1 ? "s" : ""} en retard.`);
-      if (devisExpirant === 0 && nbImpayes === 0 && nbAcomptes === 0) {
+      const nbDevisRel = filteredRelItems.filter(i => i.type === "devis").length;
+      const nbFactRel = filteredRelItems.filter(i => i.type === "facture").length;
+      const nbAcRel = filteredRelItems.filter(i => i.type === "acompte").length;
+      if (nbDevisRel > 0) parts.push(`Tu as ${nbDevisRel} devis qui expire${nbDevisRel > 1 ? "nt" : ""} cette semaine.`);
+      if (nbFactRel > 0) parts.push(`${nbFactRel} facture${nbFactRel > 1 ? "s" : ""} en retard de paiement.`);
+      if (nbAcRel > 0) parts.push(`${nbAcRel} acompte${nbAcRel > 1 ? "s" : ""} en retard.`);
+      if (filteredRelItems.length === 0) {
         parts.push("Tout est à jour — aucune urgence aujourd'hui. Belle journée !");
       } else {
         parts.push("Je peux rédiger une relance si tu veux.");
@@ -183,6 +189,7 @@ export default function Dashboard() {
         body: { items: relanceItems },
       });
       if (error) throw new Error(error.message);
+      setRelanceItems([]);
       navigate("/messagerie?tab=brouillons");
     } catch (err) {
       console.error("[handleRelance]", err);
@@ -323,14 +330,16 @@ export default function Dashboard() {
               <span className="font-bold text-orange-400">Alfred — </span>
               {alfredMessage}
             </p>
-            <Button
-              size="sm"
-              onClick={handleRelance}
-              disabled={relanceLoading}
-              className="shrink-0 bg-orange-500 hover:bg-orange-600 text-white text-xs h-8 px-3 gap-1 rounded-lg"
-            >
-              {relanceLoading ? "Génération…" : <><span>Lui répondre</span> <ArrowRight className="w-3.5 h-3.5" /></>}
-            </Button>
+            {relanceItems.length > 0 && (
+              <Button
+                size="sm"
+                onClick={handleRelance}
+                disabled={relanceLoading}
+                className="shrink-0 bg-orange-500 hover:bg-orange-600 text-white text-xs h-8 px-3 gap-1 rounded-lg"
+              >
+                {relanceLoading ? "Génération…" : <><span>Lui répondre</span> <ArrowRight className="w-3.5 h-3.5" /></>}
+              </Button>
+            )}
           </div>
         </div>
       )}
