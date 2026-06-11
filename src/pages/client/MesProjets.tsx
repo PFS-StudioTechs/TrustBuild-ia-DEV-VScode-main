@@ -13,7 +13,7 @@ const tabs = [
 ];
 
 const statusMap: Record<string, string> = {
-  nouveau: "planification",
+  nouveau: "prospect",
   "en-cours": "en_cours",
   termine: "termine",
 };

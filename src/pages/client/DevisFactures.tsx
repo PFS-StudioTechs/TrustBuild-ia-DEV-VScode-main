@@ -50,10 +50,10 @@ export default function DevisFactures() {
     queryFn: async () => {
       const { data } = await supabase
         .from("devis")
-        .select("id, numero, statut, montant_ttc, created_at, objet")
+        .select("id, numero, statut, montant_ht, created_at, objet")
         .eq("client_id", clientData!.id)
         .order("created_at", { ascending: false });
-      return data ?? [];
+      return (data ?? []).map((d) => ({ ...d, montant: d.montant_ht }));
     },
   });
 
@@ -66,7 +66,7 @@ export default function DevisFactures() {
         .select("id, numero, statut, montant_ttc, created_at, objet")
         .eq("client_id", clientData!.id)
         .order("created_at", { ascending: false });
-      return data ?? [];
+      return (data ?? []).map((f) => ({ ...f, montant: f.montant_ttc }));
     },
   });
 
@@ -122,7 +122,7 @@ export default function DevisFactures() {
                 {item.objet && <p className="text-sm text-muted-foreground mt-0.5">{item.objet}</p>}
               </div>
               <div className="text-right">
-                <div className="font-mono font-bold text-sm">{formatEur(item.montant_ttc ?? 0)}</div>
+                <div className="font-mono font-bold text-sm">{formatEur(item.montant ?? 0)}</div>
                 <div className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString("fr-FR")}</div>
               </div>
             </div>

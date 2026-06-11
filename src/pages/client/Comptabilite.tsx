@@ -42,8 +42,8 @@ export default function Comptabilite() {
 
       const list = factures ?? [];
       const total = list.reduce((s, f) => s + (f.montant_ttc ?? 0), 0);
-      const paye = list.filter((f) => f.statut === "paye").reduce((s, f) => s + (f.montant_ttc ?? 0), 0);
-      const enAttente = list.filter((f) => f.statut !== "paye").reduce((s, f) => s + (f.montant_ttc ?? 0), 0);
+      const paye = list.filter((f) => f.statut === "payee").reduce((s, f) => s + (f.montant_ttc ?? 0), 0);
+      const enAttente = list.filter((f) => f.statut !== "payee").reduce((s, f) => s + (f.montant_ttc ?? 0), 0);
       return { total, paye, enAttente };
     },
   });
