@@ -160,7 +160,14 @@ export default function SendEmailDialog(props: Props) {
             : type === "avenant" ? "Consulter mon avenant"
             : "Consulter mes travaux supplémentaires";
           finalBody = body + `\n\n👉 ${btnLabel} : ${docUrl}`;
-          htmlBody = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">${body.replace(/\n/g, "<br>")}<div style="margin:24px 0;text-align:center"><a href="${docUrl}" style="background:#2563eb;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;font-size:15px">${btnLabel}</a></div></div>`;
+          if (type === "devis") {
+            const inviteUrl = `${window.location.origin}/auth?email=${encodeURIComponent(toEmail.trim())}`;
+            finalBody += `\n\n──────────────────────────\nSuivez vos devis et chantiers en temps réel sur TrustBuild-IA :\n${inviteUrl}`;
+          }
+          const inviteSection = type === "devis"
+            ? `<hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0"><p style="color:#6b7280;font-size:13px;text-align:center;margin:0 0 16px">Suivez vos devis et chantiers en temps réel</p><div style="text-align:center"><a href="${window.location.origin}/auth?email=${encodeURIComponent(toEmail.trim())}" style="background:#f3f4f6;color:#374151;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:500;display:inline-block;font-size:14px;border:1px solid #d1d5db">Créer mon espace client</a></div>`
+            : "";
+          htmlBody = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">${body.replace(/\n/g, "<br>")}<div style="margin:24px 0;text-align:center"><a href="${docUrl}" style="background:#2563eb;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;font-size:15px">${btnLabel}</a></div>${inviteSection}</div>`;
         }
       }
 

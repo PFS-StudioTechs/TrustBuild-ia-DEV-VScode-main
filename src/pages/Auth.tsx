@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -33,9 +33,11 @@ function validateCP(cp: string) {
 }
 
 export default function Auth() {
-  const [mode, setMode] = useState<"login" | "profile-select" | "register-artisan" | "register-client">("login");
+  const [searchParams] = useSearchParams();
+  const inviteEmail = searchParams.get("email") ?? "";
+  const [mode, setMode] = useState<"login" | "profile-select" | "register-artisan" | "register-client">(inviteEmail ? "profile-select" : "login");
   const [step, setStep] = useState(1);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(inviteEmail);
   const [password, setPassword] = useState("");
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
