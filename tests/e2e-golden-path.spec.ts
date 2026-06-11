@@ -1,6 +1,8 @@
 import { test, expect, Page } from "@playwright/test";
-import { TEST_DATA, BASE_URL } from "./test-data";
+import { TEST_DATA } from "./test-data";
 import fs from "fs";
+
+const BASE_URL = "http://localhost:8080";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -479,5 +481,218 @@ test.describe("TrustBuild-IA — Golden Path", () => {
     });
 
     console.log("\n✅ Golden Path terminé — captures dans tests/screenshots/");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GUARDS & SÉCURITÉ — T17/T18/T19/T20
+// ═══════════════════════════════════════════════════════════════════════════
+
+test.describe("TrustBuild-IA — Guards & Sécurité", () => {
+  test.setTimeout(60_000);
+
+  test("T19 — Non authentifié → redirect /auth sur route protégée", async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard`);
+    await page.waitForURL(`${BASE_URL}/auth`, { timeout: 10_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/auth`);
+  });
+
+  test("T19b — Non authentifié → redirect /auth sur route client", async ({ page }) => {
+    await page.goto(`${BASE_URL}/espace-client`);
+    await page.waitForURL(`${BASE_URL}/auth`, { timeout: 10_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/auth`);
+  });
+
+  test("T17 — Artisan ne peut pas accéder /espace-client", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.artisan.email);
+    await page.locator("#password").fill(TEST_DATA.artisan.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 20_000 });
+
+    await page.goto(`${BASE_URL}/espace-client`);
+    await page.waitForTimeout(2000);
+    await expect(page).toHaveURL(`${BASE_URL}/dashboard`);
+  });
+
+  test("T18 — Client ne peut pas accéder /dashboard", async ({ page }) => {
+    test.skip(!TEST_DATA.clientAccount.email, "PLAYWRIGHT_CLIENT_EMAIL non renseigné dans .env.local");
+
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+
+    await page.goto(`${BASE_URL}/dashboard`);
+    await page.waitForTimeout(2000);
+    await expect(page).toHaveURL(`${BASE_URL}/espace-client`);
+  });
+
+  test("T20 — Client sans profile_completed → redirect /complete-profile", async ({ page }) => {
+    test.skip(
+      !process.env.PLAYWRIGHT_CLIENT_INCOMPLETE_EMAIL,
+      "PLAYWRIGHT_CLIENT_INCOMPLETE_EMAIL non renseigné dans .env.local"
+    );
+
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(process.env.PLAYWRIGHT_CLIENT_INCOMPLETE_EMAIL ?? "");
+    await page.locator("#password").fill(process.env.PLAYWRIGHT_CLIENT_INCOMPLETE_PASSWORD ?? "");
+    await page.getByRole("button", { name: /se connecter/i }).click();
+
+    await page.waitForURL(`${BASE_URL}/complete-profile`, { timeout: 20_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/complete-profile`);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ESPACE CLIENT — T02/T03/T04/T11–T16
+// ═══════════════════════════════════════════════════════════════════════════
+
+test.describe("TrustBuild-IA — Espace Client", () => {
+  test.setTimeout(120_000);
+
+  test.beforeEach(async ({ page }) => {
+    test.skip(!TEST_DATA.clientAccount.email, "PLAYWRIGHT_CLIENT_EMAIL non renseigné dans .env.local");
+  });
+
+  test("T02 — Connexion artisan → redirect /dashboard", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.artisan.email);
+    await page.locator("#password").fill(TEST_DATA.artisan.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 20_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/dashboard`);
+  });
+
+  test("T03 — Connexion client → redirect /espace-client", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/espace-client`);
+  });
+
+  test("T04 — Déconnexion → redirect /auth", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+
+    const logoutBtn = page.getByRole("button", { name: /déconnexion|se déconnecter|quitter/i });
+    await logoutBtn.waitFor({ timeout: 10_000 });
+    await logoutBtn.click();
+    await page.waitForURL(`${BASE_URL}/auth`, { timeout: 10_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/auth`);
+  });
+
+  test("T11 — Dashboard client : KPIs chargés", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByText(/espace client|bienvenue|tableau de bord/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".skeleton-shimmer").first()).not.toBeVisible({ timeout: 15_000 });
+  });
+
+  test("T12 — MesProjets onglet En cours → liste chantiers", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+
+    await page.goto(`${BASE_URL}/espace-client/projets/en-cours`);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(/mes projets/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".skeleton-shimmer").first()).not.toBeVisible({ timeout: 15_000 });
+    // Page chargée sans erreur — liste vide ou avec données selon le compte
+    await expect(page.locator(".forge-card").first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("T13 — MesProjets onglet Nouveau projet → chantiers prospect", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+
+    await page.goto(`${BASE_URL}/espace-client/projets/nouveau`);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(/nouveau projet/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".skeleton-shimmer").first()).not.toBeVisible({ timeout: 15_000 });
+  });
+
+  test("T14 — DevisFactures onglet Devis → montants affichés", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+
+    await page.goto(`${BASE_URL}/espace-client/devis`);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(/devis & factures/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".skeleton-shimmer").first()).not.toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: /^devis$/i }).click();
+    await page.waitForTimeout(500);
+    // Soit une liste de devis, soit le message "aucun devis"
+    const hasDevis = await page.getByText(/DEV-/i).first().isVisible({ timeout: 3000 }).catch(() => false);
+    const hasEmpty = await page.getByText(/aucun devis/i).first().isVisible({ timeout: 3000 }).catch(() => false);
+    expect(hasDevis || hasEmpty).toBe(true);
+  });
+
+  test("T15 — DevisFactures onglet Factures → montants TTC", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+
+    await page.goto(`${BASE_URL}/espace-client/devis`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("button", { name: /factures/i }).click();
+    await page.waitForTimeout(500);
+    await expect(page.locator(".skeleton-shimmer").first()).not.toBeVisible({ timeout: 15_000 });
+
+    const hasFacture = await page.getByText(/FAC-/i).first().isVisible({ timeout: 3000 }).catch(() => false);
+    const hasEmpty = await page.getByText(/aucune facture/i).first().isVisible({ timeout: 3000 }).catch(() => false);
+    expect(hasFacture || hasEmpty).toBe(true);
+  });
+
+  test("T16 — Comptabilite : KPIs sans erreur", async ({ page }) => {
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+    await page.locator("#email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#password").fill(TEST_DATA.clientAccount.password);
+    await page.getByRole("button", { name: /se connecter/i }).click();
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+
+    await page.goto(`${BASE_URL}/espace-client/comptabilite`);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(/comptabilité/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".skeleton-shimmer").first()).not.toBeVisible({ timeout: 15_000 });
+    // Les 3 KPIs doivent être visibles
+    await expect(page.getByText(/total facturé/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/^payé$/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/en attente/i).first()).toBeVisible({ timeout: 10_000 });
   });
 });

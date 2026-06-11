@@ -1,8 +1,12 @@
 import { defineConfig } from "@playwright/test";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+config({ path: resolve(__dirname, ".env.local") });
 
 export default defineConfig({
   use: {
-    baseURL: "https://trust-build-ia-vs-code.vercel.app",
+    baseURL: "http://localhost:8080",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     headless: false,

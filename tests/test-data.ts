@@ -1,21 +1,20 @@
-import path from "path";
-
-/**
- * Données de test pour le parcours Golden Path.
- * Remplissez les champs marqués ← RENSEIGNER avant de lancer le test.
- */
+// Credentials chargés depuis .env.local via playwright.config.ts (dotenv)
 export const TEST_DATA = {
   // ─── Compte artisan ───────────────────────────────────────────────────
   artisan: {
-    email: "steevival@yahoo.fr",
-    password: "steevedo",
-    siret: "92265565900030", // ← RENSEIGNER ex: "80295478900027"
+    email: process.env.PLAYWRIGHT_ARTISAN_EMAIL ?? "",
+    password: process.env.PLAYWRIGHT_ARTISAN_PASSWORD ?? "",
+    siret: "92265565900030",
   },
 
   // ─── KBIS ─────────────────────────────────────────────────────────────
-  kbisPath: path.resolve(
-    "C:/Users/kstee/OneDrive/Bureau/Formations/Formation IA/Projet TrustBuild-IA/KBIS de test/KBIS0910925.pdf"
-  ),
+  kbisPath: process.env.PLAYWRIGHT_KBIS_PATH ?? "",
+
+  // ─── Compte client particulier ────────────────────────────────────────
+  clientAccount: {
+    email: process.env.PLAYWRIGHT_CLIENT_EMAIL ?? "",
+    password: process.env.PLAYWRIGHT_CLIENT_PASSWORD ?? "",
+  },
 
   // ─── Client de test ───────────────────────────────────────────────────
   client: {
@@ -100,4 +99,3 @@ export const TEST_DATA = {
   },
 };
 
-export const BASE_URL = "https://trust-build-ia-vs-code.vercel.app";
