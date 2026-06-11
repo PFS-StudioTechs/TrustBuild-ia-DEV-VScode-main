@@ -32,6 +32,16 @@ import Messagerie from "@/pages/Messagerie";
 import DevisPublic from "@/pages/DevisPublic";
 import DocumentPublic from "@/pages/DocumentPublic";
 import { Button } from "@/components/ui/button";
+import ClientLayout from "@/components/layout/ClientLayout";
+import EspaceClientDashboard from "@/pages/client/EspaceClientDashboard";
+import MesProjets from "@/pages/client/MesProjets";
+import DevisFactures from "@/pages/client/DevisFactures";
+import ComptabiliteClient from "@/pages/client/Comptabilite";
+import FournisseursClient from "@/pages/client/FournisseursClient";
+import ContactsClient from "@/pages/client/ContactsClient";
+import Conception from "@/pages/client/Conception";
+import MessagerieClient from "@/pages/client/MessagerieClient";
+import AssistantsClient from "@/pages/client/Assistants";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
 
@@ -91,10 +101,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/complete-profile" replace />;
   }
 
-  // Compte bloqué : KBIS manquant après la deadline → accès restreint à /upload-kbis
+  // Compte bloqué : KBIS manquant après la deadline → accès restreint à /upload-kbis (artisans uniquement)
   if (
     profile !== null &&
     profile.profile_completed &&
+    profile.account_type !== 'client' &&
     !profile.kbis_url &&
     profile.kbis_deadline &&
     new Date() > new Date(profile.kbis_deadline)
@@ -113,10 +124,30 @@ function AuthRequiredRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function HomeRedirect() {
+  const { user, loading, profile, profileLoading } = useAuth();
+  if (loading || profileLoading) return loadingSkeleton;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (profile?.account_type === 'client') return <Navigate to="/espace-client" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, profile, profileLoading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user && !profileLoading) {
+    if (profile?.account_type === 'client') return <Navigate to="/espace-client" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+}
+
+function ClientRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading, profile, profileLoading } = useAuth();
+  if (loading || (profileLoading && profile === null)) return loadingSkeleton;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!user.email_confirmed_at) return <EmailUnverifiedScreen email={user.email ?? ""} />;
+  if (profile !== null && profile.account_type !== 'client') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
@@ -172,7 +203,7 @@ const App = () => {
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/complete-profile" element={<AuthRequiredRoute><CompleteProfile /></AuthRequiredRoute>} />
                 <Route path="/upload-kbis" element={<AuthRequiredRoute><UploadKbis /></AuthRequiredRoute>} />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<HomeRedirect />} />
                 <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                   <Route path="/dashboard" element={<ProductionRoute><Dashboard /></ProductionRoute>} />
                   <Route path="/chantiers" element={<ProductionRoute><Chantiers /></ProductionRoute>} />
@@ -189,6 +220,20 @@ const App = () => {
                   <Route path="/knowledge" element={<ProductionRoute><Knowledge /></ProductionRoute>} />
                   <Route path="/testing" element={<TesterRoute><Testing /></TesterRoute>} />
                   <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+                </Route>
+                <Route element={<ClientRoute><ClientLayout /></ClientRoute>}>
+                  <Route path="/espace-client" element={<EspaceClientDashboard />} />
+                  <Route path="/espace-client/projets" element={<Navigate to="/espace-client/projets/en-cours" replace />} />
+                  <Route path="/espace-client/projets/nouveau" element={<MesProjets />} />
+                  <Route path="/espace-client/projets/en-cours" element={<MesProjets />} />
+                  <Route path="/espace-client/projets/termine" element={<MesProjets />} />
+                  <Route path="/espace-client/devis" element={<DevisFactures />} />
+                  <Route path="/espace-client/comptabilite" element={<ComptabiliteClient />} />
+                  <Route path="/espace-client/fournisseurs" element={<FournisseursClient />} />
+                  <Route path="/espace-client/contacts" element={<ContactsClient />} />
+                  <Route path="/espace-client/conception" element={<Conception />} />
+                  <Route path="/espace-client/messagerie" element={<MessagerieClient />} />
+                  <Route path="/espace-client/assistants" element={<AssistantsClient />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

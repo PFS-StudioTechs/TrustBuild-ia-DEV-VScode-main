@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, ArrowLeft, Eye, EyeOff, Mail, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, Eye, EyeOff, Mail, Loader2, AlertCircle, CheckCircle2, HardHat, User, Lock } from "lucide-react";
 import TrustBuildLogo from "@/components/TrustBuildLogo";
 import { toast } from "sonner";
 
@@ -25,13 +25,24 @@ interface SiretData {
 
 type SiretStatus = "idle" | "loading" | "valid" | "inactive" | "error";
 
+function validatePhone(tel: string) {
+  return /^0[1-9](\s?\d{2}){4}$/.test(tel.trim());
+}
+function validateCP(cp: string) {
+  return /^[0-9]{5}$/.test(cp.trim());
+}
+
 export default function Auth() {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "profile-select" | "register-artisan" | "register-client">("login");
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
+  const [adresse, setAdresse] = useState("");
+  const [codePostal, setCodePostal] = useState("");
+  const [ville, setVille] = useState("");
+  const [telephone, setTelephone] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [awaitingEmail, setAwaitingEmail] = useState(false);
@@ -49,7 +60,6 @@ export default function Auth() {
     setLoading(true);
     try {
       await signIn(email, password);
-      navigate("/dashboard");
     } catch (err: any) {
       toast.error(err.message || "Erreur de connexion");
     } finally {
@@ -111,7 +121,7 @@ export default function Auth() {
     setSiretStatus("valid");
   };
 
-  const handleRegister = async () => {
+  const handleRegisterArtisan = async () => {
     if (!siretData) return;
     setLoading(true);
     try {
@@ -140,9 +150,29 @@ export default function Auth() {
     }
   };
 
-  const resetRegister = () => {
-    setMode("login");
-    setStep(1);
+  const handleRegisterClient = async () => {
+    setLoading(true);
+    setRegisterError("");
+    try {
+      await signUp(email, password, {
+        account_type: "client",
+        nom,
+        prenom,
+        adresse,
+        code_postal: codePostal,
+        ville,
+        telephone,
+      });
+      setMode("login");
+      setStep(1);
+      setAwaitingEmail(true);
+    } catch (err: any) {
+      const msg = err.message || "Erreur lors de l'inscription";
+      toast.error(msg);
+      setRegisterError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (awaitingEmail) {
@@ -180,10 +210,7 @@ export default function Auth() {
           </p>
           <p className="text-xs text-muted-foreground">
             Déjà un compte ?{" "}
-            <button
-              onClick={() => setAwaitingEmail(false)}
-              className="text-primary font-semibold hover:underline"
-            >
+            <button onClick={() => setAwaitingEmail(false)} className="text-primary font-semibold hover:underline">
               Se connecter
             </button>
           </p>
@@ -192,13 +219,80 @@ export default function Auth() {
     );
   }
 
-  if (mode === "register") {
+  if (mode === "profile-select") {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
+        <div className="w-full max-w-md forge-card animate-fade-up space-y-6">
+          <div className="text-center">
+            <TrustBuildLogo size={64} className="mx-auto mb-4 block" />
+            <h1 className="text-h2 font-display font-bold">Créer un compte</h1>
+            <p className="text-small text-muted-foreground mt-1">Quel type de compte souhaitez-vous créer ?</p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => setMode("register-artisan")}
+              className="w-full forge-card border-2 border-transparent hover:border-primary text-left transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <HardHat className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <div className="font-semibold">Artisan BTP</div>
+                  <div className="text-sm text-muted-foreground">Gérez vos devis, chantiers et clients</div>
+                </div>
+                <ArrowRight className="w-5 h-5 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+              </div>
+            </button>
+
+            <button
+              onClick={() => setMode("register-client")}
+              className="w-full forge-card border-2 border-transparent hover:border-primary text-left transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <User className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <div className="font-semibold">Client particulier</div>
+                  <div className="text-sm text-muted-foreground">Suivez vos travaux et échangez avec votre artisan</div>
+                </div>
+                <ArrowRight className="w-5 h-5 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+              </div>
+            </button>
+
+            <div className="w-full forge-card border-2 border-dashed border-muted opacity-50 cursor-not-allowed">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                  <Lock className="w-6 h-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <div className="font-semibold text-muted-foreground">Fournisseur / Architecte</div>
+                  <div className="text-sm text-muted-foreground">Bientôt disponible</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-center text-small text-muted-foreground">
+            Déjà un compte ?{" "}
+            <button onClick={() => setMode("login")} className="text-primary font-semibold hover:underline">
+              Se connecter
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "register-artisan") {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
         <div className="w-full max-w-md forge-card animate-fade-up">
           <div className="text-center mb-6">
             <TrustBuildLogo size={64} className="mx-auto mb-4 block" />
-            <h1 className="text-h2 font-display">Créer un compte</h1>
+            <h1 className="text-h2 font-display">Créer un compte artisan</h1>
             <p className="text-small text-muted-foreground mt-1">Étape {step} sur 3</p>
             <div className="flex gap-1.5 justify-center mt-3">
               {[1, 2, 3].map((s) => (
@@ -254,11 +348,7 @@ export default function Auth() {
                       variant="outline"
                       className="shrink-0"
                     >
-                      {siretStatus === "loading" ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        "Vérifier"
-                      )}
+                      {siretStatus === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Vérifier"}
                     </Button>
                   </div>
                   {siretStatus === "valid" && siretData && (
@@ -307,11 +397,7 @@ export default function Auth() {
                       autoComplete="new-password"
                       className="touch-target pr-10"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    >
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
@@ -321,7 +407,7 @@ export default function Auth() {
                     <ArrowLeft className="w-4 h-4" />
                   </Button>
                   <Button
-                    onClick={handleRegister}
+                    onClick={handleRegisterArtisan}
                     disabled={!email || !password || loading}
                     className="flex-1 touch-target bg-cta text-primary-foreground font-bold btn-cta-pulse"
                   >
@@ -338,9 +424,120 @@ export default function Auth() {
             )}
 
             <p className="text-center text-small text-muted-foreground">
-              Déjà un compte ?{" "}
-              <button onClick={resetRegister} className="text-primary font-semibold hover:underline">
-                Se connecter
+              <button onClick={() => setMode("profile-select")} className="text-primary font-semibold hover:underline">
+                ← Changer de type de compte
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "register-client") {
+    const cpError = codePostal && !validateCP(codePostal) ? "Code postal invalide (5 chiffres)" : "";
+    const telError = telephone && !validatePhone(telephone) ? "Téléphone invalide (ex: 06 12 34 56 78)" : "";
+    const canSubmit = prenom && nom && adresse && codePostal && ville && email && password.length >= 6 && !cpError && !telError;
+
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
+        <div className="w-full max-w-md forge-card animate-fade-up">
+          <div className="text-center mb-6">
+            <TrustBuildLogo size={64} className="mx-auto mb-4 block" />
+            <h1 className="text-h2 font-display">Créer un compte client</h1>
+            <p className="text-small text-muted-foreground mt-1">Renseignez vos informations personnelles</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="c-prenom">Prénom <span className="text-destructive">*</span></Label>
+                <Input id="c-prenom" value={prenom} onChange={(e) => setPrenom(e.target.value)} placeholder="Marie" className="touch-target" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-nom">Nom <span className="text-destructive">*</span></Label>
+                <Input id="c-nom" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Dupont" className="touch-target" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="c-adresse">Adresse <span className="text-destructive">*</span></Label>
+              <Input id="c-adresse" value={adresse} onChange={(e) => setAdresse(e.target.value)} placeholder="12 rue de la Paix" className="touch-target" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="c-cp">Code postal <span className="text-destructive">*</span></Label>
+                <Input
+                  id="c-cp"
+                  value={codePostal}
+                  onChange={(e) => setCodePostal(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                  placeholder="75001"
+                  maxLength={5}
+                  className="touch-target"
+                />
+                {cpError && <p className="text-xs text-destructive">{cpError}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-ville">Ville <span className="text-destructive">*</span></Label>
+                <Input id="c-ville" value={ville} onChange={(e) => setVille(e.target.value)} placeholder="Paris" className="touch-target" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="c-tel">Téléphone</Label>
+              <Input
+                id="c-tel"
+                type="tel"
+                value={telephone}
+                onChange={(e) => setTelephone(e.target.value)}
+                placeholder="06 12 34 56 78"
+                className="touch-target"
+              />
+              {telError && <p className="text-xs text-destructive">{telError}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="c-email">Email <span className="text-destructive">*</span></Label>
+              <Input id="c-email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); setRegisterError(""); }} placeholder="marie@email.fr" className="touch-target" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="c-password">Mot de passe <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <Input
+                  id="c-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setRegisterError(""); }}
+                  placeholder="Min. 6 caractères"
+                  autoComplete="new-password"
+                  className="touch-target pr-10"
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {registerError && (
+              <div className="flex items-start gap-2 text-sm text-destructive">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{registerError}</span>
+              </div>
+            )}
+
+            <Button
+              onClick={handleRegisterClient}
+              disabled={!canSubmit || loading}
+              className="w-full touch-target bg-cta text-primary-foreground font-bold btn-cta-pulse"
+            >
+              {loading ? "Création…" : "Créer mon espace client"}
+            </Button>
+
+            <p className="text-center text-small text-muted-foreground">
+              <button onClick={() => setMode("profile-select")} className="text-primary font-semibold hover:underline">
+                ← Changer de type de compte
               </button>
             </p>
           </div>
@@ -357,7 +554,7 @@ export default function Auth() {
           <h1 className="text-h2 font-display font-bold tracking-tight">
             <span className="text-foreground">TrustBuild</span><span className="text-primary font-normal italic">-ia</span>
           </h1>
-          <p className="text-small text-muted-foreground mt-1">Connectez-vous à votre espace artisan</p>
+          <p className="text-small text-muted-foreground mt-1">Connectez-vous à votre espace</p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
@@ -418,7 +615,7 @@ export default function Auth() {
         </form>
         <p className="text-center text-small text-muted-foreground mt-4">
           Pas encore de compte ?{" "}
-          <button onClick={() => setMode("register")} className="text-primary font-semibold hover:underline">
+          <button onClick={() => setMode("profile-select")} className="text-primary font-semibold hover:underline">
             S'inscrire
           </button>
         </p>

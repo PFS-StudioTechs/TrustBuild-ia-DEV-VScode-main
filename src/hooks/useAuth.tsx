@@ -7,6 +7,8 @@ export interface ProfileData {
   user_id: string;
   nom: string;
   prenom: string;
+  account_type: 'artisan' | 'client' | 'fournisseur' | 'architecte';
+  telephone: string | null;
   siret: string | null;
   logo_url: string | null;
   plan_abonnement: string;
