@@ -103,7 +103,7 @@ export default function DevisFactures() {
       {!isLoading && items.length === 0 && (
         <div className="forge-card text-center py-12 space-y-3">
           {tab === "devis" ? <FileText className="w-10 h-10 text-muted-foreground mx-auto" /> : <Receipt className="w-10 h-10 text-muted-foreground mx-auto" />}
-          <p className="font-medium">Aucun {tab === "devis" ? "devis" : "facture"} pour l'instant</p>
+          <p className="font-medium">Aucun{tab === "factures" ? "e" : ""} {tab === "devis" ? "devis" : "facture"} pour l'instant</p>
           <p className="text-sm text-muted-foreground">Vos {tab === "devis" ? "devis" : "factures"} apparaîtront ici dès que votre artisan en créera.</p>
         </div>
       )}

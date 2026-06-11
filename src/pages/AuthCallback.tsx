@@ -27,14 +27,16 @@ export default function AuthCallback() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("profile_completed")
+        .select("profile_completed, account_type")
         .eq("user_id", session.user.id)
         .single();
 
-      if (profile?.profile_completed) {
-        navigate("/dashboard", { replace: true });
-      } else {
+      if (!profile?.profile_completed) {
         navigate("/complete-profile", { replace: true });
+      } else if (profile.account_type === "client") {
+        navigate("/espace-client", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
       }
     };
 
