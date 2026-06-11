@@ -147,6 +147,7 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   if (loading || (profileLoading && profile === null)) return loadingSkeleton;
   if (!user) return <Navigate to="/auth" replace />;
   if (!user.email_confirmed_at) return <EmailUnverifiedScreen email={user.email ?? ""} />;
+  if (profile !== null && !profile.profile_completed) return <Navigate to="/complete-profile" replace />;
   if (profile !== null && profile.account_type !== 'client') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }

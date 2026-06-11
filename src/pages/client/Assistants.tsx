@@ -1,4 +1,3 @@
-import { Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const agents = [
@@ -31,7 +30,7 @@ export default function Assistants() {
       <div>
         <h1 className="text-h1 font-display font-bold">Assistants IA</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Posez vos questions à nos experts via la bulle Alfred en bas à droite.
+          Nos experts IA sont disponibles pour répondre à vos questions.
         </p>
       </div>
 
@@ -58,14 +57,6 @@ export default function Assistants() {
         ))}
       </div>
 
-      <div className="forge-card bg-primary/5 border-primary/20">
-        <div className="flex items-center gap-3">
-          <Bot className="w-8 h-8 text-primary shrink-0" />
-          <p className="text-sm text-muted-foreground">
-            Cliquez sur la bulle <strong className="text-foreground">Alfred</strong> en bas à droite pour démarrer une conversation avec nos assistants IA.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
