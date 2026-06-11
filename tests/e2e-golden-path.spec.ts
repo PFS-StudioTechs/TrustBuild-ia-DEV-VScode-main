@@ -25,6 +25,93 @@ async function waitToast(page: Page, timeoutMs = 8000) {
   await page.locator("[data-sonner-toast]").first().waitFor({ state: "visible", timeout: timeoutMs }).catch(() => {});
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// INSCRIPTION — T00a / T00b
+// ⚠️  Ces tests créent de vrais comptes en base de données.
+//     Ils ne doivent tourner qu'UNE SEULE FOIS par environnement.
+//     Supprimer les comptes dans Supabase Auth avant de les rejouer.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test.describe("TrustBuild-IA — Inscription", () => {
+  test.setTimeout(120_000);
+
+  test("T00a — Inscription artisan complet → /dashboard", async ({ page }) => {
+    test.skip(!TEST_DATA.artisan.email, "PLAYWRIGHT_ARTISAN_EMAIL non renseigné dans .env.local");
+    test.skip(!TEST_DATA.artisan.siret, "PLAYWRIGHT_ARTISAN_SIRET non renseigné dans .env.local");
+
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("button", { name: /s'inscrire/i }).click();
+    await page.getByRole("button", { name: /artisan btp/i }).click();
+
+    // Étape 1 — Identité
+    await page.locator("#r-prenom").fill("Karl");
+    await page.locator("#r-nom").fill("Dorival");
+    await page.getByRole("button", { name: /suivant/i }).click();
+
+    // Étape 2 — SIRET
+    await page.locator("#r-siret").fill(TEST_DATA.artisan.siret);
+    await page.getByRole("button", { name: "Vérifier" }).click();
+    await expect(page.getByText(/établissement actif/i)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: /suivant/i }).click();
+
+    // Étape 3 — Credentials
+    await page.locator("#r-email").fill(TEST_DATA.artisan.email);
+    await page.locator("#r-password").fill(TEST_DATA.artisan.password);
+    await page.getByRole("button", { name: /créer mon compte/i }).click();
+    await page.waitForTimeout(3000);
+
+    const hasError = await page.locator('[class*="text-destructive"] span').last().isVisible().catch(() => false);
+    if (hasError) {
+      const msg = await page.locator('[class*="text-destructive"] span').last().textContent();
+      throw new Error(`Inscription artisan échouée : "${msg}". Compte peut-être déjà en DB — supprimer dans Supabase Auth avant de rejouer T00a.`);
+    }
+
+    await expect(page.getByText(/vérifiez votre email/i)).toBeVisible({ timeout: 10_000 });
+
+    // Confirmation email désactivée → session active → CompleteProfile auto-soumet (SIRET en user_metadata)
+    await page.goto(`${BASE_URL}/complete-profile`);
+    await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/dashboard`);
+  });
+
+  test("T00b — Inscription client → /espace-client", async ({ page }) => {
+    test.skip(!TEST_DATA.clientAccount.email, "PLAYWRIGHT_CLIENT_EMAIL non renseigné dans .env.local");
+
+    await page.goto(`${BASE_URL}/auth`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("button", { name: /s'inscrire/i }).click();
+    await page.getByRole("button", { name: /client particulier/i }).click();
+
+    const p = TEST_DATA.newClientProfile;
+    await page.locator("#c-prenom").fill(p.prenom);
+    await page.locator("#c-nom").fill(p.nom);
+    await page.locator("#c-adresse").fill(p.adresse);
+    await page.locator("#c-cp").fill(p.code_postal);
+    await page.locator("#c-ville").fill(p.ville);
+    await page.locator("#c-email").fill(TEST_DATA.clientAccount.email);
+    await page.locator("#c-password").fill(TEST_DATA.clientAccount.password);
+
+    await page.getByRole("button", { name: /créer mon espace client/i }).click();
+    await page.waitForTimeout(3000);
+
+    const hasError = await page.locator('[class*="text-destructive"] span').last().isVisible().catch(() => false);
+    if (hasError) {
+      const msg = await page.locator('[class*="text-destructive"] span').last().textContent();
+      throw new Error(`Inscription client échouée : "${msg}". Compte peut-être déjà en DB — supprimer dans Supabase Auth avant de rejouer T00b.`);
+    }
+
+    await expect(page.getByText(/vérifiez votre email/i)).toBeVisible({ timeout: 10_000 });
+
+    // Confirmation email désactivée → session active → profile_completed=TRUE pour clients
+    await page.goto(`${BASE_URL}/espace-client`);
+    await page.waitForURL(`${BASE_URL}/espace-client`, { timeout: 20_000 });
+    await expect(page).toHaveURL(`${BASE_URL}/espace-client`);
+  });
+});
+
 // ─── Test principal ────────────────────────────────────────────────────────
 
 test.describe("TrustBuild-IA — Golden Path", () => {

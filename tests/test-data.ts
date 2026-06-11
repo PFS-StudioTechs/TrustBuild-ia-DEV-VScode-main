@@ -4,7 +4,16 @@ export const TEST_DATA = {
   artisan: {
     email: process.env.PLAYWRIGHT_ARTISAN_EMAIL ?? "",
     password: process.env.PLAYWRIGHT_ARTISAN_PASSWORD ?? "",
-    siret: "92265565900030",
+    siret: process.env.PLAYWRIGHT_ARTISAN_SIRET ?? "",
+  },
+
+  // ─── Profil client à créer lors de l'inscription (T00b) ──────────────────
+  newClientProfile: {
+    prenom: "Tedy",
+    nom: "Steeve",
+    adresse: "24 avenue des Tests",
+    code_postal: "75012",
+    ville: "Paris",
   },
 
   // ─── KBIS ─────────────────────────────────────────────────────────────
