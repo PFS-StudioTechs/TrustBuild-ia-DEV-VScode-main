@@ -11,7 +11,7 @@ import AlfredBubble from "@/components/alfred/AlfredBubble";
 
 const mainNav = [
   { path: "/espace-client", icon: LayoutDashboard, label: "Tableau de bord", exact: true },
-  { path: "/espace-client/devis", icon: FileText, label: "Devis & Factures" },
+  { path: "/espace-client/devis", icon: FileText, label: "Mes documents" },
   { path: "/espace-client/comptabilite", icon: Wallet, label: "Comptabilité" },
   { path: "/espace-client/fournisseurs", icon: Truck, label: "Fournisseurs" },
   { path: "/espace-client/contacts", icon: BookUser, label: "Contacts" },
@@ -21,7 +21,7 @@ const mainNav = [
 ];
 
 const projetsSubNav = [
-  { path: "/espace-client/projets/nouveau", label: "Nouveau projet" },
+  { path: "/espace-client/projets/nouveau", label: "À venir" },
   { path: "/espace-client/projets/en-cours", label: "En cours" },
   { path: "/espace-client/projets/termine", label: "Terminé" },
 ];

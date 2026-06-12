@@ -118,7 +118,7 @@ export default function EspaceClientDashboard() {
             icon={FileText}
             label="Devis"
             value={counts?.devis ?? 0}
-            sub="Propositions reçues"
+            sub="Documents reçus"
             color="bg-primary/10 text-primary"
             to="/espace-client/devis"
           />

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { label: "Nouveau projet", path: "/espace-client/projets/nouveau" },
+  { label: "À venir", path: "/espace-client/projets/nouveau" },
   { label: "En cours", path: "/espace-client/projets/en-cours" },
   { label: "Terminé", path: "/espace-client/projets/termine" },
 ];
@@ -86,8 +86,8 @@ export default function MesProjets() {
       {!isLoading && chantiers?.length === 0 && (
         <div className="forge-card text-center py-12 space-y-3">
           <FolderOpen className="w-10 h-10 text-muted-foreground mx-auto" />
-          <p className="font-medium">Aucun projet {segment === "nouveau" ? "en planification" : segment === "en-cours" ? "en cours" : "terminé"}</p>
-          <p className="text-sm text-muted-foreground">Vos chantiers apparaîtront ici dès qu'ils seront créés par votre artisan.</p>
+          <p className="font-medium">Aucun projet {segment === "nouveau" ? "à venir" : segment === "en-cours" ? "en cours" : "terminé"}</p>
+          <p className="text-sm text-muted-foreground">Vos chantiers apparaîtront ici dès que votre artisan les aura créés.</p>
         </div>
       )}
 
