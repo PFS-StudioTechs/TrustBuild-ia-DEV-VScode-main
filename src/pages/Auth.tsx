@@ -144,7 +144,10 @@ export default function Auth() {
       setStep(1);
       setAwaitingEmail(true);
     } catch (err: any) {
-      const msg = err.message || "Erreur lors de l'inscription";
+      const raw = err.message || "Erreur lors de l'inscription";
+      const msg = /already registered|already exists/i.test(raw)
+        ? "Cette adresse email est déjà utilisée dans l'application. Connectez-vous ou utilisez une autre adresse."
+        : raw;
       toast.error(msg);
       setRegisterError(msg);
     } finally {
@@ -169,7 +172,10 @@ export default function Auth() {
       setStep(1);
       setAwaitingEmail(true);
     } catch (err: any) {
-      const msg = err.message || "Erreur lors de l'inscription";
+      const raw = err.message || "Erreur lors de l'inscription";
+      const msg = /already registered|already exists/i.test(raw)
+        ? "Cette adresse email est déjà utilisée dans l'application. Connectez-vous ou utilisez une autre adresse."
+        : raw;
       toast.error(msg);
       setRegisterError(msg);
     } finally {
