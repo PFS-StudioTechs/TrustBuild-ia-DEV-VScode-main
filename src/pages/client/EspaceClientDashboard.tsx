@@ -44,29 +44,29 @@ export default function EspaceClientDashboard() {
   const navigate = useNavigate();
   const prenom = profile?.prenom ?? "vous";
 
-  const { data: clientData } = useQuery({
-    queryKey: ["client-self"],
+  const { data: clientMeta } = useQuery({
+    queryKey: ["client-all"],
     queryFn: async () => {
+      const userId = (await supabase.auth.getUser()).data.user?.id ?? "";
       const { data } = await supabase
         .from("clients")
-        .select("id, nom, artisan_id")
-        .eq("auth_user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
-        .maybeSingle();
-      return data;
+        .select("id, artisan_id")
+        .eq("auth_user_id", userId);
+      return data ?? [];
     },
   });
 
-  const clientId = clientData?.id;
-  const hasArtisan = !!clientData?.artisan_id;
+  const clientIds = (clientMeta ?? []).map((c) => c.id);
+  const hasArtisan = (clientMeta ?? []).some((c) => !!c.artisan_id);
 
   const { data: counts } = useQuery({
-    queryKey: ["client-counts", clientId],
-    enabled: !!clientId,
+    queryKey: ["client-counts", clientIds],
+    enabled: clientIds.length > 0,
     queryFn: async () => {
       const [devis, factures, chantiers] = await Promise.all([
-        supabase.from("devis").select("id", { count: "exact", head: true }).eq("client_id", clientId!),
-        supabase.from("factures").select("id", { count: "exact", head: true }).eq("client_id", clientId!),
-        supabase.from("chantiers").select("id", { count: "exact", head: true }).eq("client_id", clientId!),
+        supabase.from("devis").select("id", { count: "exact", head: true }).in("client_id", clientIds),
+        supabase.from("factures").select("id", { count: "exact", head: true }).in("client_id", clientIds),
+        supabase.from("chantiers").select("id", { count: "exact", head: true }).in("client_id", clientIds),
       ]);
       return {
         devis: devis.count ?? 0,

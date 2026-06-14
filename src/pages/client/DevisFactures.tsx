@@ -26,7 +26,7 @@ const statusLabels: Record<string, string> = {
   paye: "Payé",
   payee: "Payé",
   en_attente: "En attente",
-  signe: "Signé",
+  signe: "Signé ✓",
 };
 
 const tabConfig: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -43,54 +43,76 @@ function formatEur(amount: number) {
 export default function DevisFactures() {
   const [tab, setTab] = useState<Tab>("devis");
 
-  const { data: clientData } = useQuery({
-    queryKey: ["client-self"],
+  const { data: clientMeta } = useQuery({
+    queryKey: ["client-all"],
     queryFn: async () => {
-      const { data } = await supabase
+      const userId = (await supabase.auth.getUser()).data.user?.id ?? "";
+      const { data: clients } = await supabase
         .from("clients")
-        .select("id")
-        .eq("auth_user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
-        .maybeSingle();
-      return data;
+        .select("id, artisan_id")
+        .eq("auth_user_id", userId);
+      if (!clients?.length) return { ids: [] as string[], artisanMap: {} as Record<string, string> };
+      const artisanIds = [...new Set(clients.map((c) => c.artisan_id).filter((id): id is string => !!id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, prenom, nom")
+        .in("id", artisanIds);
+      const profileMap = Object.fromEntries(
+        (profiles ?? []).map((p) => [p.id, [p.prenom, p.nom].filter(Boolean).join(" ")])
+      );
+      const artisanMap = Object.fromEntries(
+        clients.map((c) => [c.id, c.artisan_id ? (profileMap[c.artisan_id] ?? "Artisan") : "Artisan"])
+      );
+      return { ids: clients.map((c) => c.id), artisanMap };
     },
   });
 
-  const clientId = clientData?.id;
+  const clientIds = clientMeta?.ids ?? [];
+  const artisanMap = clientMeta?.artisanMap ?? {};
+  const hasClients = clientIds.length > 0;
 
   const { data: devis, isLoading: loadingDevis } = useQuery({
-    queryKey: ["client-devis", clientId],
-    enabled: !!clientId,
+    queryKey: ["client-devis", clientIds],
+    enabled: hasClients,
     queryFn: async () => {
       const { data } = await supabase
         .from("devis")
-        .select("id, numero, statut, montant_ht, created_at, objet")
-        .eq("client_id", clientId!)
+        .select("id, numero, statut, montant_ht, created_at, objet, client_id")
+        .in("client_id", clientIds)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((d) => ({ ...d, montant: d.montant_ht }));
+      return (data ?? []).map((d) => ({
+        ...d,
+        montant: d.montant_ht,
+        artisanNom: artisanMap[d.client_id] ?? "Artisan",
+      }));
     },
   });
 
   const { data: factures, isLoading: loadingFactures } = useQuery({
-    queryKey: ["client-factures", clientId],
-    enabled: !!clientId,
+    queryKey: ["client-factures", clientIds],
+    enabled: hasClients,
     queryFn: async () => {
       const { data } = await supabase
         .from("factures")
-        .select("id, numero, statut, montant_ttc, created_at, objet")
-        .eq("client_id", clientId!)
+        .select("id, numero, statut, montant_ttc, created_at, objet, client_id")
+        .in("client_id", clientIds)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((f) => ({ ...f, montant: f.montant_ttc }));
+      return (data ?? []).map((f) => ({
+        ...f,
+        montant: f.montant_ttc,
+        artisanNom: artisanMap[f.client_id] ?? "Artisan",
+      }));
     },
   });
 
   const { data: avenants, isLoading: loadingAvenants } = useQuery({
-    queryKey: ["client-avenants", clientId],
-    enabled: !!clientId,
+    queryKey: ["client-avenants", clientIds],
+    enabled: hasClients,
     queryFn: async () => {
       const { data: devisData } = await supabase
         .from("devis")
         .select("id")
-        .eq("client_id", clientId!);
+        .in("client_id", clientIds);
       const ids = (devisData ?? []).map((d) => d.id);
       if (ids.length === 0) return [];
       const { data } = await supabase
@@ -103,13 +125,13 @@ export default function DevisFactures() {
   });
 
   const { data: ts, isLoading: loadingTs } = useQuery({
-    queryKey: ["client-ts", clientId],
-    enabled: !!clientId,
+    queryKey: ["client-ts", clientIds],
+    enabled: hasClients,
     queryFn: async () => {
       const { data: devisData } = await supabase
         .from("devis")
         .select("id")
-        .eq("client_id", clientId!);
+        .in("client_id", clientIds);
       const ids = (devisData ?? []).map((d) => d.id);
       if (ids.length === 0) return [];
       const { data } = await (supabase as any)
@@ -160,6 +182,7 @@ export default function DevisFactures() {
   };
 
   const EmptyIcon = emptyIcons[tab];
+  const multiArtisan = clientIds.length > 1;
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
@@ -210,6 +233,9 @@ export default function DevisFactures() {
                   )}
                 </div>
                 {item.objet && <p className="text-sm text-muted-foreground mt-0.5">{item.objet}</p>}
+                {multiArtisan && item.artisanNom && (
+                  <p className="text-xs text-muted-foreground mt-1">Artisan : {item.artisanNom}</p>
+                )}
               </div>
               <div className="text-right">
                 <div className="font-mono font-bold text-sm">{formatEur(item.montant ?? 0)}</div>

@@ -24,26 +24,28 @@ export default function MesProjets() {
   const segment = location.pathname.split("/").pop() ?? "en-cours";
   const status = statusMap[segment] ?? "en_cours";
 
-  const { data: clientData } = useQuery({
-    queryKey: ["client-self"],
+  const { data: clientIds } = useQuery({
+    queryKey: ["client-all"],
     queryFn: async () => {
+      const userId = (await supabase.auth.getUser()).data.user?.id ?? "";
       const { data } = await supabase
         .from("clients")
         .select("id")
-        .eq("auth_user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
-        .maybeSingle();
-      return data;
+        .eq("auth_user_id", userId);
+      return (data ?? []).map((c) => c.id);
     },
   });
 
+  const ids = clientIds ?? [];
+
   const { data: chantiers, isLoading } = useQuery({
-    queryKey: ["client-chantiers", clientData?.id, status],
-    enabled: !!clientData?.id,
+    queryKey: ["client-chantiers", ids, status],
+    enabled: ids.length > 0,
     queryFn: async () => {
       const { data } = await supabase
         .from("chantiers")
         .select("id, nom, adresse, statut, date_debut, date_fin_prevue")
-        .eq("client_id", clientData!.id)
+        .in("client_id", ids)
         .eq("statut", status)
         .order("date_debut", { ascending: false });
       return data ?? [];
