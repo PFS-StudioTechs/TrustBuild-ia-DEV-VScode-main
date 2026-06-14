@@ -106,14 +106,15 @@ test.describe("TrustBuild-IA — Parcours Devis → Facture complet", () => {
           }
           await page.waitForTimeout(300);
 
-          const desig = page.getByPlaceholder(/description|désignation/i);
-          const qty   = page.getByPlaceholder(/quantité|qté/i);
-          const pu    = page.getByPlaceholder(/prix unitaire|p\.u\./i);
+          const desig = page.getByPlaceholder("Désignation");
+          const qty   = page.getByPlaceholder("Qté");
+          const pu    = page.getByPlaceholder("P.U.");
 
           // Ligne 1 : Dépose ancienne installation, qté 1, PU 500
+          await desig.nth(0).waitFor({ timeout: 5_000 });
           await desig.nth(0).fill("Dépose ancienne installation");
-          if (await qty.nth(0).isVisible()) await qty.nth(0).fill("1");
-          if (await pu.nth(0).isVisible())  await pu.nth(0).fill("500");
+          await qty.nth(0).fill("1");
+          await pu.nth(0).fill("500");
 
           // Ligne 2 : Fourniture et pose receveur de douche, qté 1, PU 1200
           await page
@@ -122,8 +123,8 @@ test.describe("TrustBuild-IA — Parcours Devis → Facture complet", () => {
             .click();
           await page.waitForTimeout(300);
           await desig.nth(1).fill("Fourniture et pose receveur de douche");
-          if (await qty.nth(1).isVisible()) await qty.nth(1).fill("1");
-          if (await pu.nth(1).isVisible())  await pu.nth(1).fill("1200");
+          await qty.nth(1).fill("1");
+          await pu.nth(1).fill("1200");
 
           await page
             .getByRole("button", { name: /créer le devis|créer|enregistrer/i })
@@ -132,11 +133,11 @@ test.describe("TrustBuild-IA — Parcours Devis → Facture complet", () => {
           await waitToast(page);
           await page.waitForTimeout(2_000);
 
-          // Récupérer le numéro DEV- depuis la page
-          const firstNum = page.getByText(/DEV-/i).first();
+          // Récupérer le numéro depuis la page (formats : DEVIS-2026-06-XXXX ou DEV-XXXXXXXX)
+          const firstNum = page.getByText(/DEVIS-|DEV-/i).first();
           await firstNum.waitFor({ timeout: 10_000 });
           const rawText = (await firstNum.textContent()) ?? "";
-          devisNumero = rawText.match(/DEV-[A-Z0-9\-]+/)?.[0] ?? "";
+          devisNumero = rawText.match(/DEVIS-[0-9\-]+|DEV-[A-Z0-9\-]+/)?.[0] ?? "";
 
           if (!devisNumero)
             throw new Error("Numéro devis non trouvé dans la page après création");
@@ -348,26 +349,21 @@ test.describe("TrustBuild-IA — Parcours Devis → Facture complet", () => {
 
           const av = TEST_DATA.devis1.avenant;
 
-          await page
-            .getByPlaceholder(/description|désignation/i)
-            .last()
-            .fill(av.description);
+          await page.getByPlaceholder("Désignation").last().fill(av.description);
 
           const motifInput = page.getByPlaceholder(/motif|raison/i).last();
           if (await motifInput.isVisible({ timeout: 2_000 }).catch(() => false))
             await motifInput.fill(av.motif);
 
-          const qtyInput = page.getByPlaceholder(/quantité|qté/i).last();
+          const qtyInput = page.getByPlaceholder("Qté").last();
           if (await qtyInput.isVisible({ timeout: 2_000 }).catch(() => false))
             await qtyInput.fill(String(av.quantite));
 
-          const uniteInput = page.getByPlaceholder(/unité/i).last();
+          const uniteInput = page.getByPlaceholder("u.").last();
           if (await uniteInput.isVisible({ timeout: 2_000 }).catch(() => false))
             await uniteInput.fill(av.unite);
 
-          const puInput = page
-            .getByPlaceholder(/prix unitaire|p\.u\./i)
-            .last();
+          const puInput = page.getByPlaceholder("P.U.").last();
           if (await puInput.isVisible({ timeout: 2_000 }).catch(() => false))
             await puInput.fill(String(av.prix_unitaire));
 
@@ -393,18 +389,13 @@ test.describe("TrustBuild-IA — Parcours Devis → Facture complet", () => {
             .click();
           await page.waitForTimeout(500);
 
-          await page
-            .getByPlaceholder(/description|désignation/i)
-            .last()
-            .fill("Remplacement robinetterie");
+          await page.getByPlaceholder("Désignation").last().fill("Remplacement robinetterie");
 
-          const qtyInput = page.getByPlaceholder(/quantité|qté/i).last();
+          const qtyInput = page.getByPlaceholder("Qté").last();
           if (await qtyInput.isVisible({ timeout: 2_000 }).catch(() => false))
             await qtyInput.fill("1");
 
-          const puInput = page
-            .getByPlaceholder(/prix unitaire|p\.u\./i)
-            .last();
+          const puInput = page.getByPlaceholder("P.U.").last();
           if (await puInput.isVisible({ timeout: 2_000 }).catch(() => false))
             await puInput.fill("350");
 
