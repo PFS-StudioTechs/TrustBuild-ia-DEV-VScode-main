@@ -88,10 +88,10 @@ function EmailUnverifiedScreen({ email }: { email: string }) {
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, profile, profileLoading } = useAuth();
+  const { isClient, loading: roleLoading } = useRole();
 
-  if (loading) return loadingSkeleton;
+  if (loading || (profileLoading && profile === null) || roleLoading) return loadingSkeleton;
   if (!user) return <Navigate to="/auth" replace />;
-  if (profileLoading && profile === null) return loadingSkeleton;
 
   if (!user.email_confirmed_at) {
     return <EmailUnverifiedScreen email={user.email ?? ""} />;
@@ -101,11 +101,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/complete-profile" replace />;
   }
 
-  // Compte bloqué : KBIS manquant après la deadline → accès restreint à /upload-kbis (artisans uniquement)
+  // Compte bloqué : KBIS manquant après la deadline → artisans uniquement
   if (
     profile !== null &&
     profile.profile_completed &&
-    profile.account_type !== 'client' &&
+    !isClient &&
     !profile.kbis_url &&
     profile.kbis_deadline &&
     new Date() > new Date(profile.kbis_deadline)
@@ -125,18 +125,20 @@ function AuthRequiredRoute({ children }: { children: React.ReactNode }) {
 }
 
 function HomeRedirect() {
-  const { user, loading, profile, profileLoading } = useAuth();
-  if (loading || profileLoading) return loadingSkeleton;
+  const { user, loading, profileLoading } = useAuth();
+  const { isClient, loading: roleLoading } = useRole();
+  if (loading || profileLoading || roleLoading) return loadingSkeleton;
   if (!user) return <Navigate to="/auth" replace />;
-  if (profile?.account_type === 'client') return <Navigate to="/espace-client" replace />;
+  if (isClient) return <Navigate to="/espace-client" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, profile, profileLoading } = useAuth();
+  const { user, loading } = useAuth();
+  const { isClient, loading: roleLoading } = useRole();
   if (loading) return null;
-  if (user && !profileLoading) {
-    if (profile?.account_type === 'client') return <Navigate to="/espace-client" replace />;
+  if (user && !roleLoading) {
+    if (isClient) return <Navigate to="/espace-client" replace />;
     return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
@@ -144,11 +146,12 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 function ClientRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, profile, profileLoading } = useAuth();
-  if (loading || (profileLoading && profile === null)) return loadingSkeleton;
+  const { isClient, loading: roleLoading } = useRole();
+  if (loading || (profileLoading && profile === null) || roleLoading) return loadingSkeleton;
   if (!user) return <Navigate to="/auth" replace />;
   if (!user.email_confirmed_at) return <EmailUnverifiedScreen email={user.email ?? ""} />;
   if (profile !== null && !profile.profile_completed) return <Navigate to="/complete-profile" replace />;
-  if (profile !== null && profile.account_type !== 'client') return <Navigate to="/dashboard" replace />;
+  if (!isClient) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
