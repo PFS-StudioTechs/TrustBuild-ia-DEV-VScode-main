@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, Save, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash, Calendar, ListOrdered } from "lucide-react";
+import { User, Save, MessageCircle, CheckCircle2, AlertCircle, Loader2, Palette, Building2, Hash, Calendar, ListOrdered, PlayCircle } from "lucide-react";
 import { previewDocNumber } from "@/lib/generateDocumentNumber";
 import { toast } from "sonner";
 import IntegrationsPanel from "@/components/integrations/IntegrationsPanel";
@@ -676,6 +676,19 @@ export default function Parametres() {
         </TabsContent>
 
       </Tabs>
+
+      <div className="forge-card mt-6">
+        <p className="text-sm font-medium mb-1">Tutoriel de prise en main</p>
+        <p className="text-xs text-muted-foreground mb-3">Relancez le tour guidé pour vous ou pour présenter l'application à un collaborateur.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.dispatchEvent(new CustomEvent("start-onboarding"))}
+        >
+          <PlayCircle className="w-4 h-4 mr-2" />
+          Relancer le tutoriel
+        </Button>
+      </div>
     </div>
   );
 }

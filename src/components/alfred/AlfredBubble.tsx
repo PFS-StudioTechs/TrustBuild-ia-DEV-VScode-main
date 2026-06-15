@@ -84,6 +84,7 @@ export default function AlfredBubble() {
 
       {/* Floating Bubble */}
       <button
+        id="onboarding-alfred-bubble"
         ref={bubbleRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

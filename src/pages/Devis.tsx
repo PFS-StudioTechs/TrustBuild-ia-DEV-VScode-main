@@ -2924,7 +2924,7 @@ export default function DevisPage() {
           <h1 className="text-h2 font-display">Devis & Factures</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{devisList.length} devis — {factures.length} facture{factures.length > 1 ? "s" : ""}</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-primary to-primary/90 shadow-forge">
+        <Button id="onboarding-nouveau-devis" onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-primary to-primary/90 shadow-forge">
           <Plus className="w-4 h-4 mr-1.5" /> Nouveau devis
         </Button>
       </div>
