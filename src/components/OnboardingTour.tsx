@@ -99,46 +99,52 @@ function TourOverlay({ stepIndex, total, onNext, onPrev, onClose }: TourOverlayP
     if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [stepIndex, step.target]);
 
-  if (!rect) return null;
-
-  const pos = computePopoverPos(rect);
   const { TitleIcon, gradient, title, description } = step;
+
+  const centered = !rect;
+  const pos = rect
+    ? computePopoverPos(rect)
+    : {
+        top: Math.round(window.innerHeight / 2 - POPOVER_H / 2),
+        left: Math.round(window.innerWidth / 2 - POPOVER_W / 2),
+      };
 
   return createPortal(
     <>
       {/* Backdrop clickable */}
-      <div className="fixed inset-0 z-[9997]" onClick={onClose} />
+      <div className="fixed inset-0 z-[9997]" style={{ background: "rgba(0,0,0,0.65)" }} onClick={onClose} />
 
-      {/* Spotlight — 4 panels */}
-      <div className="fixed inset-0 z-[9998] pointer-events-none">
-        <div className="absolute inset-x-0 top-0 bg-black/65" style={{ height: Math.max(0, rect.top - PAD) }} />
-        <div className="absolute inset-x-0 bottom-0 bg-black/65" style={{ top: rect.bottom + PAD }} />
-        <div
-          className="absolute left-0 bg-black/65"
-          style={{ top: rect.top - PAD, height: rect.height + PAD * 2, width: Math.max(0, rect.left - PAD) }}
-        />
-        <div
-          className="absolute right-0 bg-black/65"
-          style={{ top: rect.top - PAD, height: rect.height + PAD * 2, left: rect.right + PAD }}
-        />
-        {/* glow ring around target */}
-        <div
-          className="absolute rounded-xl"
-          style={{
-            top: rect.top - PAD,
-            left: rect.left - PAD,
-            width: rect.width + PAD * 2,
-            height: rect.height + PAD * 2,
-            boxShadow: "0 0 0 2px rgba(255,255,255,0.2), 0 0 24px rgba(37,99,235,0.45)",
-          }}
-        />
-      </div>
+      {/* Spotlight — 4 panels (only when target found) */}
+      {rect && (
+        <div className="fixed inset-0 z-[9998] pointer-events-none">
+          <div className="absolute inset-x-0 top-0 bg-black/65" style={{ height: Math.max(0, rect.top - PAD) }} />
+          <div className="absolute inset-x-0 bottom-0 bg-black/65" style={{ top: rect.bottom + PAD }} />
+          <div
+            className="absolute left-0 bg-black/65"
+            style={{ top: rect.top - PAD, height: rect.height + PAD * 2, width: Math.max(0, rect.left - PAD) }}
+          />
+          <div
+            className="absolute right-0 bg-black/65"
+            style={{ top: rect.top - PAD, height: rect.height + PAD * 2, left: rect.right + PAD }}
+          />
+          <div
+            className="absolute rounded-xl"
+            style={{
+              top: rect.top - PAD,
+              left: rect.left - PAD,
+              width: rect.width + PAD * 2,
+              height: rect.height + PAD * 2,
+              boxShadow: "0 0 0 2px rgba(255,255,255,0.2), 0 0 24px rgba(37,99,235,0.45)",
+            }}
+          />
+        </div>
+      )}
 
       {/* Popover card */}
       <div
         key={animKey}
         className="fixed z-[9999] animate-in fade-in zoom-in-95 duration-250"
-        style={{ top: pos.top, left: pos.left, width: POPOVER_W }}
+        style={{ top: pos.top, left: pos.left, width: POPOVER_W, ...(centered ? { transform: "none" } : {}) }}
       >
         <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
           style={{ background: "linear-gradient(145deg, #0f172a 0%, #1e1b4b 100%)" }}
