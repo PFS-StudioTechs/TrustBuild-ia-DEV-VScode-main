@@ -61,7 +61,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
-      const toArr = <T>(x: T[] | null | undefined): T[] => Array.isArray(x) ? x : [];
+      const toArr = <T,>(x: T[] | null | undefined): T[] => Array.isArray(x) ? x : [];
 
       const [profileRes, chantiersRes, devisRes, facturesRes, clientsRes, acomptesRes, draftsRes] = await Promise.all([
         supabase.from("profiles").select("nom, prenom").eq("user_id", user.id).single(),
