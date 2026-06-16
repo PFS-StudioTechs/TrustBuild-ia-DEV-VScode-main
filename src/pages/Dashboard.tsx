@@ -61,6 +61,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
+      const toArr = <T>(x: T[] | null | undefined): T[] => Array.isArray(x) ? x : [];
+
       const [profileRes, chantiersRes, devisRes, facturesRes, clientsRes, acomptesRes, draftsRes] = await Promise.all([
         supabase.from("profiles").select("nom, prenom").eq("user_id", user.id).single(),
         supabase.from("chantiers").select("id, nom, statut").eq("artisan_id", user.id),
@@ -68,45 +70,45 @@ export default function Dashboard() {
         supabase.from("factures").select("id, statut, montant_ht, solde_restant, client_id, numero, date_echeance").eq("artisan_id", user.id),
         supabase.from("clients").select("id, nom, prenom, email").eq("artisan_id", user.id),
         supabase.from("acomptes").select("id, numero, montant, date_echeance, statut, devis_id").eq("artisan_id", user.id).eq("statut", "en_attente"),
-        supabase.from("messages").select("document_id").eq("artisan_id", user.id).eq("status", "draft"),
+        supabase.from("messages").select("document_id").eq("artisan_id", user.id).eq("statut", "draft"),
       ]);
       if (profileRes.data) setProfile(profileRes.data);
-      const chantiersActifs = chantiersRes.data?.filter((c) => c.statut === "en_cours").length ?? 0;
-      // "À traiter" = brouillon (à envoyer) + envoye (en attente de signature)
-      const devisEnAttente = devisRes.data?.filter((d) => d.statut === "brouillon" || d.statut === "envoye").length ?? 0;
-      const facturePayees = facturesRes.data?.filter((f) => f.statut === "payee") ?? [];
+      const chantiers = toArr(chantiersRes.data);
+      const devis = toArr(devisRes.data);
+      const factures = toArr(facturesRes.data);
+      const clients = toArr(clientsRes.data);
+      const acomptes = toArr(acomptesRes.data);
+      const drafts = toArr(draftsRes.data);
+
+      const chantiersActifs = chantiers.filter((c) => c.statut === "en_cours").length;
+      const devisEnAttente = devis.filter((d) => d.statut === "brouillon" || d.statut === "envoye").length;
+      const facturePayees = factures.filter((f) => f.statut === "payee");
       const caMois = facturePayees.reduce((sum, f) => sum + Number(f.montant_ht), 0);
-      const impayes = facturesRes.data?.filter((f) => f.statut === "impayee").length ?? 0;
+      const impayes = factures.filter((f) => f.statut === "impayee").length;
       setKpis({ caMois, devisEnAttente, impayes, chantiersActifs });
 
-      // Devis brouillon avec nom du chantier
-      const brouillons = (devisRes.data ?? []).filter(d => d.statut === "brouillon").slice(0, 5);
+      const brouillons = devis.filter(d => d.statut === "brouillon").slice(0, 5);
       setDevisBrouillon(brouillons.map(d => ({
         id: d.id,
         numero: d.numero,
         montant_ht: Number(d.montant_ht),
-        chantier_nom: chantiersRes.data?.find(c => c.id === d.chantier_id)?.nom,
+        chantier_nom: chantiers.find(c => c.id === d.chantier_id)?.nom,
       })));
 
       // Alfred briefing
       const prenom = profileRes.data?.prenom ?? "";
       const now = new Date();
       const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const devisExpirant = (devisRes.data ?? []).filter(d =>
-        d.statut === "envoye" && d.date_validite &&
-        new Date(d.date_validite) >= now && new Date(d.date_validite) <= in7d
-      ).length;
-      const nbImpayes = (facturesRes.data ?? []).filter(f => f.statut === "impayee").length;
 
-      const clientsMap = new Map((clientsRes.data ?? []).map((c: any) => [c.id, c]));
-      const devisMap = new Map((devisRes.data ?? []).map((d: any) => [d.id, d]));
+      const clientsMap = new Map(clients.map((c: any) => [c.id, c]));
+      const devisMap = new Map(devis.map((d: any) => [d.id, d]));
       const artisanName = profileRes.data
         ? `${profileRes.data.prenom ?? ""} ${profileRes.data.nom ?? ""}`.trim()
         : "";
 
       const relItems: RelanceItem[] = [];
 
-      for (const d of (devisRes.data ?? []).filter((d: any) =>
+      for (const d of devis.filter((d: any) =>
         d.statut === "envoye" && d.date_validite &&
         new Date(d.date_validite) >= now && new Date(d.date_validite) <= in7d
       )) {
@@ -120,7 +122,7 @@ export default function Dashboard() {
         });
       }
 
-      for (const f of (facturesRes.data ?? []).filter((f: any) => f.statut === "impayee")) {
+      for (const f of factures.filter((f: any) => f.statut === "impayee")) {
         const client = f.client_id ? clientsMap.get(f.client_id) : null;
         if (!client?.email) continue;
         relItems.push({
@@ -131,14 +133,11 @@ export default function Dashboard() {
         });
       }
 
-      const nbAcomptes = (acomptesRes.data ?? []).filter((a: any) =>
-        a.date_echeance && new Date(a.date_echeance) < now
-      ).length;
-      for (const a of (acomptesRes.data ?? []).filter((a: any) =>
+      for (const a of acomptes.filter((a: any) =>
         a.date_echeance && new Date(a.date_echeance) < now
       )) {
-        const devis = devisMap.get(a.devis_id);
-        const client = devis?.client_id ? clientsMap.get(devis.client_id) : null;
+        const devisItem = devisMap.get(a.devis_id);
+        const client = devisItem?.client_id ? clientsMap.get(devisItem.client_id) : null;
         if (!client?.email) continue;
         relItems.push({
           type: "acompte", id: a.id, numero: a.numero ?? "",
@@ -148,7 +147,7 @@ export default function Dashboard() {
         });
       }
 
-      const draftedDocIds = new Set((draftsRes.data ?? []).map((m: any) => m.document_id).filter(Boolean));
+      const draftedDocIds = new Set(drafts.map((m: any) => m.document_id).filter(Boolean));
       const filteredRelItems = relItems.filter(item => !draftedDocIds.has(item.id));
       setRelanceItems(filteredRelItems);
 
@@ -171,7 +170,7 @@ export default function Dashboard() {
         .select("id, read")
         .eq("artisan_id", user.id)
         .eq("direction", "inbound");
-      setUnreadCount((inboundMsgs ?? []).filter((m: any) => !m.read).length);
+      setUnreadCount(toArr(inboundMsgs).filter((m: any) => !m.read).length);
 
       setLoaded(true);
     };
