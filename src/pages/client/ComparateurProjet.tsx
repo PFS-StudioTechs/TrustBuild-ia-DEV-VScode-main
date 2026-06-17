@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Plus, Trash2, Scale, FileText, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Scale, FileText, AlertTriangle, Loader2, CheckCircle2, AlertCircle, Info, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -32,6 +32,73 @@ interface LiaisonItem {
   devis_supprime_at: string | null;
   info: DevisInfo | null;
 }
+
+interface LigneComparee {
+  artisan_ref: string;
+  designation_origine: string;
+  quantite: number;
+  unite: string;
+  pu_ht: number;
+  montant_ht: number;
+  tva: number;
+  confiance: number;
+}
+
+interface PosteCanonique {
+  id: string;
+  libelle: string;
+  categorie: string;
+  lignes: LigneComparee[];
+  presence: Record<string, boolean>;
+  alerte_unite_heterogene: boolean;
+  alerte_ecart_prix: boolean;
+}
+
+interface Orpheline {
+  artisan_ref: string;
+  designation_origine: string;
+  quantite: number;
+  unite: string;
+  pu_ht: number;
+  montant_ht: number;
+  tva: number;
+  raison: string;
+}
+
+interface SyntheseArtisan {
+  artisan_ref: string;
+  nb_postes_couverts: number;
+  nb_postes_total: number;
+  postes_manquants: string[];
+}
+
+interface Observation {
+  type: string;
+  gravite: "haute" | "moyenne" | "basse";
+  message: string;
+}
+
+interface Comparison {
+  version: string;
+  demande_id: string;
+  nb_devis: number;
+  postes_canoniques: PosteCanonique[];
+  lignes_orphelines: Orpheline[];
+  synthese_par_artisan: SyntheseArtisan[];
+  observations: Observation[];
+}
+
+type MappingEntry = { devis_id: string; artisan_nom: string; numero_devis: string };
+type Mapping = Record<string, MappingEntry>;
+interface CompareResult { comparison: Comparison; mapping: Mapping; }
+
+const CONFIANCE_MIN = 0.75;
+
+const obsStyles: Record<Observation["gravite"], string> = {
+  haute: "border-l-red-500 bg-red-50 text-red-800",
+  moyenne: "border-l-amber-500 bg-amber-50 text-amber-800",
+  basse: "border-l-border bg-muted/40 text-foreground",
+};
 
 const statusColors: Record<string, string> = {
   envoye: "bg-blue-100 text-blue-700",
@@ -201,6 +268,43 @@ export default function ComparateurProjet() {
     onError: () => { toast.error("Erreur lors du retrait"); },
   });
 
+  const [result, setResult] = useState<CompareResult | null>(null);
+
+  const activeCount = (liaisons ?? []).filter((l) => !l.devis_supprime_at).length;
+
+  const compareMutation = useMutation({
+    mutationFn: async (): Promise<CompareResult> => {
+      const { data, error } = await supabase.functions.invoke("compare-devis", {
+        body: { projet_id: id },
+      });
+      if (error) {
+        let msg = "Erreur lors de la comparaison";
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) msg = body.error;
+        } catch { /* corps illisible — message générique */ }
+        throw new Error(msg);
+      }
+      if (!data?.comparison || !data?.mapping) {
+        throw new Error("Réponse de comparaison invalide");
+      }
+      return data as CompareResult;
+    },
+    onSuccess: (data) => setResult(data),
+    onError: (err: any) => { toast.error(err?.message ?? "Erreur lors de la comparaison"); },
+  });
+
+  const artisanName = (alias: string) =>
+    result?.mapping[alias]?.artisan_nom ?? alias;
+
+  const aliases = result
+    ? Object.keys(result.mapping).sort(
+        (a, b) =>
+          (parseInt(a.replace(/\D/g, ""), 10) || 0) -
+          (parseInt(b.replace(/\D/g, ""), 10) || 0)
+      )
+    : [];
+
   if (loadingProjet) {
     return (
       <div className="p-6 space-y-6 max-w-4xl mx-auto">
@@ -346,6 +450,180 @@ export default function ComparateurProjet() {
             </div>
           );
         })}
+      </div>
+
+      <div className="space-y-4 pt-2 border-t">
+        <div className="flex flex-col gap-1">
+          <Button
+            onClick={() => compareMutation.mutate()}
+            disabled={activeCount < 2 || compareMutation.isPending}
+            className="bg-gradient-to-r from-primary to-primary/90 shadow-forge w-full sm:w-auto"
+          >
+            {compareMutation.isPending
+              ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Analyse en cours…</>
+              : <><Scale className="w-4 h-4 mr-1.5" /> Comparer les devis</>}
+          </Button>
+          {activeCount < 2 && (
+            <p className="text-xs text-muted-foreground">Ajoutez au moins 2 devis pour comparer.</p>
+          )}
+        </div>
+
+        {result && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {result.comparison.synthese_par_artisan.map((s) => {
+                const manquants = s.postes_manquants?.length ?? 0;
+                return (
+                  <div key={s.artisan_ref} className="forge-card space-y-1.5">
+                    <div className="font-semibold text-sm">{artisanName(s.artisan_ref)}</div>
+                    {result.mapping[s.artisan_ref]?.numero_devis && (
+                      <div className="text-xs text-muted-foreground font-mono">{result.mapping[s.artisan_ref].numero_devis}</div>
+                    )}
+                    <div className="text-sm">
+                      <span className="font-mono font-bold">{s.nb_postes_couverts}</span>
+                      <span className="text-muted-foreground"> / {s.nb_postes_total} postes chiffrés</span>
+                    </div>
+                    {manquants > 0 ? (
+                      <Badge className="bg-amber-100 text-amber-700 text-xs">
+                        {manquants} poste{manquants > 1 ? "s" : ""} non chiffré{manquants > 1 ? "s" : ""}
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700 text-xs gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Tous les postes chiffrés
+                      </Badge>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block space-y-3">
+              <h2 className="text-h2 font-display font-bold">Comparatif par poste</h2>
+              <div className="overflow-x-auto forge-card !p-0">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b bg-muted/40">
+                      <th className="text-left font-semibold p-3 align-bottom min-w-[180px]">Poste</th>
+                      {aliases.map((a) => (
+                        <th key={a} className="text-left font-semibold p-3 align-bottom">
+                          <div>{artisanName(a)}</div>
+                          {result.mapping[a]?.numero_devis && (
+                            <div className="text-xs text-muted-foreground font-mono font-normal">{result.mapping[a].numero_devis}</div>
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.comparison.postes_canoniques.map((poste) => {
+                      const incertain = poste.lignes.some((l) => l.confiance < CONFIANCE_MIN);
+                      return (
+                        <tr key={poste.id} className="border-b last:border-0 align-top">
+                          <td className="p-3">
+                            <div className="font-medium">{poste.libelle}</div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {poste.alerte_unite_heterogene && <Badge className="bg-amber-100 text-amber-700 text-[10px]">unités ≠</Badge>}
+                              {poste.alerte_ecart_prix && <Badge className="bg-amber-100 text-amber-700 text-[10px]">écart de prix</Badge>}
+                              {incertain && <Badge className="bg-orange-100 text-orange-700 text-[10px] gap-0.5"><HelpCircle className="w-2.5 h-2.5" />à vérifier</Badge>}
+                            </div>
+                          </td>
+                          {aliases.map((a) => {
+                            const ligne = poste.lignes.find((l) => l.artisan_ref === a);
+                            const present = !!poste.presence?.[a] && !!ligne;
+                            if (!present) {
+                              return <td key={a} className="p-3 bg-red-50 text-red-700 text-xs">non chiffré</td>;
+                            }
+                            return (
+                              <td key={a} className="p-3">
+                                <div className="font-mono font-semibold">{formatEur(ligne!.montant_ht)}</div>
+                                <div className="text-[11px] text-muted-foreground">{ligne!.quantite} {ligne!.unite} × {formatEur(ligne!.pu_ht)}</div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="md:hidden space-y-3">
+              <h2 className="text-h2 font-display font-bold">Comparatif par poste</h2>
+              {result.comparison.postes_canoniques.map((poste) => {
+                const incertain = poste.lignes.some((l) => l.confiance < CONFIANCE_MIN);
+                return (
+                  <div key={poste.id} className="forge-card space-y-2">
+                    <div className="font-medium">{poste.libelle}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {poste.alerte_unite_heterogene && <Badge className="bg-amber-100 text-amber-700 text-[10px]">unités ≠</Badge>}
+                      {poste.alerte_ecart_prix && <Badge className="bg-amber-100 text-amber-700 text-[10px]">écart de prix</Badge>}
+                      {incertain && <Badge className="bg-orange-100 text-orange-700 text-[10px] gap-0.5"><HelpCircle className="w-2.5 h-2.5" />à vérifier</Badge>}
+                    </div>
+                    <div className="space-y-1.5 pt-1">
+                      {aliases.map((a) => {
+                        const ligne = poste.lignes.find((l) => l.artisan_ref === a);
+                        const present = !!poste.presence?.[a] && !!ligne;
+                        return (
+                          <div key={a} className="flex items-start justify-between gap-2 text-sm">
+                            <span className="text-muted-foreground truncate">{artisanName(a)}</span>
+                            {present ? (
+                              <span className="text-right shrink-0">
+                                <span className="font-mono font-semibold">{formatEur(ligne!.montant_ht)}</span>
+                                <span className="block text-[11px] text-muted-foreground">{ligne!.quantite} {ligne!.unite} × {formatEur(ligne!.pu_ht)}</span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-red-700 bg-red-50 px-1.5 py-0.5 rounded shrink-0">non chiffré</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {result.comparison.lignes_orphelines?.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-h2 font-display font-bold">Proposé par un seul artisan</h2>
+                <div className="space-y-2">
+                  {result.comparison.lignes_orphelines.map((o, i) => (
+                    <div key={i} className="forge-card opacity-70">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">{o.designation_origine}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{artisanName(o.artisan_ref)} — {o.raison}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono font-semibold text-sm">{formatEur(o.montant_ht)}</div>
+                          <div className="text-[11px] text-muted-foreground">{o.quantite} {o.unite}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.comparison.observations?.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-h2 font-display font-bold">À retenir</h2>
+                <div className="space-y-2">
+                  {result.comparison.observations.map((o, i) => {
+                    const Icon = o.gravite === "haute" ? AlertCircle : o.gravite === "moyenne" ? AlertTriangle : Info;
+                    return (
+                      <div key={i} className={cn("border-l-4 rounded-r-lg p-3 text-sm flex gap-2", obsStyles[o.gravite])}>
+                        <Icon className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{o.message}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
