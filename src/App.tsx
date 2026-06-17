@@ -103,6 +103,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/complete-profile" replace />;
   }
 
+  // Un client ne doit jamais voir le layout artisan, quel que soit le chemin d'entrée.
+  if (isClient) return <Navigate to="/espace-client" replace />;
+
   // Compte bloqué : KBIS manquant après la deadline → artisans uniquement
   if (
     profile !== null &&
