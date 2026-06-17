@@ -35,6 +35,8 @@ import { Button } from "@/components/ui/button";
 import ClientLayout from "@/components/layout/ClientLayout";
 import EspaceClientDashboard from "@/pages/client/EspaceClientDashboard";
 import MesProjets from "@/pages/client/MesProjets";
+import ComparateurDevis from "@/pages/client/ComparateurDevis";
+import ComparateurProjet from "@/pages/client/ComparateurProjet";
 import DevisFactures from "@/pages/client/DevisFactures";
 import ComptabiliteClient from "@/pages/client/Comptabilite";
 import FournisseursClient from "@/pages/client/FournisseursClient";
@@ -231,6 +233,8 @@ const App = () => {
                   <Route path="/espace-client/projets/nouveau" element={<MesProjets />} />
                   <Route path="/espace-client/projets/en-cours" element={<MesProjets />} />
                   <Route path="/espace-client/projets/termine" element={<MesProjets />} />
+                  <Route path="/espace-client/comparateur" element={<ComparateurDevis />} />
+                  <Route path="/espace-client/comparateur/:id" element={<ComparateurProjet />} />
                   <Route path="/espace-client/devis" element={<DevisFactures />} />
                   <Route path="/espace-client/comptabilite" element={<ComptabiliteClient />} />
                   <Route path="/espace-client/fournisseurs" element={<FournisseursClient />} />

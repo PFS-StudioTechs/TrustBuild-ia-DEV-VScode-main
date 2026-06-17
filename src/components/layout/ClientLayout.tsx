@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FolderOpen, FileText, Wallet, Truck,
-  BookUser, Pencil, MessageSquare, Bot, LogOut, ChevronDown, ChevronRight, Menu, X
+  BookUser, Pencil, MessageSquare, Bot, LogOut, ChevronDown, ChevronRight, Menu, X, Scale
 } from "lucide-react";
 import TrustBuildLogo from "@/components/TrustBuildLogo";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import AlfredBubble from "@/components/alfred/AlfredBubble";
 const mainNav = [
   { path: "/espace-client", icon: LayoutDashboard, label: "Tableau de bord", exact: true },
   { path: "/espace-client/devis", icon: FileText, label: "Mes documents" },
+  { path: "/espace-client/comparateur", icon: Scale, label: "Comparer mes devis" },
   { path: "/espace-client/comptabilite", icon: Wallet, label: "Comptabilité" },
   { path: "/espace-client/fournisseurs", icon: Truck, label: "Fournisseurs" },
   { path: "/espace-client/contacts", icon: BookUser, label: "Contacts" },
