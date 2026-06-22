@@ -44,7 +44,7 @@ export default function DevisFactures() {
   const [tab, setTab] = useState<Tab>("devis");
 
   const { data: clientMeta } = useQuery({
-    queryKey: ["client-all"],
+    queryKey: ["client-meta"],
     queryFn: async () => {
       const userId = (await supabase.auth.getUser()).data.user?.id ?? "";
       const { data: clients } = await supabase

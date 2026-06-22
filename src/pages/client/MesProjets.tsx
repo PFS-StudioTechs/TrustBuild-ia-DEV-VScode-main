@@ -25,7 +25,7 @@ export default function MesProjets() {
   const status = statusMap[segment] ?? "en_cours";
 
   const { data: clientIds } = useQuery({
-    queryKey: ["client-all"],
+    queryKey: ["client-ids"],
     queryFn: async () => {
       const userId = (await supabase.auth.getUser()).data.user?.id ?? "";
       const { data } = await supabase
