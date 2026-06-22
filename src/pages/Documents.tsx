@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -526,7 +527,7 @@ export default function Documents() {
         toast.success(`Chantier "${devisForm.chantier_nom}" créé`);
       }
       if (!chantierId) { toast.error("Un chantier est requis"); setSaving(false); return; }
-      const numero = devisForm.numero || `DEV-${Date.now().toString(36).toUpperCase()}`;
+      const numero = devisForm.numero || await generateDocumentNumber(user.id, "devis");
       const montantHt = createLignesDevis.filter(l => l.designation || l.prix_unitaire).length > 0
         ? lignesTotal(createLignesDevis)
         : parseFloat(devisForm.montant_ht) || 0;

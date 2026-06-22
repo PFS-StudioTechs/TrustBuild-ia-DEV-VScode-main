@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { streamChat } from "@/hooks/useStreamingChat";
 import { useVoiceMode } from "@/hooks/useVoiceMode";
 import { exportMarkdownToPdf } from "@/lib/exportToPdf";
+import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 
 interface Message {
   role: "user" | "assistant";
@@ -371,7 +372,7 @@ export default function AgentChat({
         (s: number, l: any) => s + (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0),
         0
       );
-      const numero = `DEV-${Date.now().toString(36).toUpperCase()}`;
+      const numero = await generateDocumentNumber(user.id, "devis");
       const { data: newDevis, error: de } = await (supabase as any)
         .from("devis")
         .insert({

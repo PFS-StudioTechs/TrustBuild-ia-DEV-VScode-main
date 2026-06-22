@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePersistedTab } from "@/hooks/usePersistedTab";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -263,7 +264,7 @@ export default function Chantiers() {
   const handleAddDevis = async (chantierId: string) => {
     if (!user) return;
     setLoading(true);
-    const numero = newDevisForm.numero || `DEV-${Date.now().toString(36).toUpperCase()}`;
+    const numero = newDevisForm.numero || await generateDocumentNumber(user.id, "devis");
     const lignesValides = newDevisLignes.filter(l => l.designation.trim() || parseFloat(l.prix_unitaire) > 0);
     const montantHt = lignesValides.length > 0
       ? lignesValides.reduce((s, l) => s + (parseFloat(l.quantite) || 0) * (parseFloat(l.prix_unitaire) || 0), 0)
