@@ -44,6 +44,7 @@ import ContactsClient from "@/pages/client/ContactsClient";
 import Conception from "@/pages/client/Conception";
 import MessagerieClient from "@/pages/client/MessagerieClient";
 import AssistantsClient from "@/pages/client/Assistants";
+import MonProfil from "@/pages/client/MonProfil";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false } } });
 
@@ -245,6 +246,7 @@ const App = () => {
                   <Route path="/espace-client/conception" element={<Conception />} />
                   <Route path="/espace-client/messagerie" element={<MessagerieClient />} />
                   <Route path="/espace-client/assistants" element={<AssistantsClient />} />
+                  <Route path="/espace-client/profil" element={<MonProfil />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

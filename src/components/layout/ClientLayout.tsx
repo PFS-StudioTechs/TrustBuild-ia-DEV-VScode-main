@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FolderOpen, FileText, Wallet, Truck,
-  BookUser, Pencil, MessageSquare, Bot, LogOut, ChevronDown, ChevronRight, Menu, X, Scale
+  BookUser, Pencil, MessageSquare, Bot, LogOut, ChevronDown, ChevronRight, Menu, X, Scale, UserCircle
 } from "lucide-react";
 import TrustBuildLogo from "@/components/TrustBuildLogo";
 import { cn } from "@/lib/utils";
@@ -123,7 +123,8 @@ export default function ClientLayout() {
         ))}
       </nav>
 
-      <div className="px-3 py-3 border-t border-white/10">
+      <div className="px-3 py-3 border-t border-white/10 space-y-1">
+        <NavItem path="/espace-client/profil" icon={UserCircle} label="Mon profil" />
         <button
           onClick={signOut}
           className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-destructive hover:bg-white/5 transition-colors"
