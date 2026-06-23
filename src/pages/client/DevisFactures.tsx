@@ -77,7 +77,7 @@ export default function DevisFactures() {
     queryFn: async () => {
       const { data } = await supabase
         .from("devis")
-        .select("id, numero, statut, montant_ht, created_at, objet, client_id")
+        .select("id, numero, statut, montant_ht, created_at, client_id")
         .in("client_id", clientIds)
         .order("created_at", { ascending: false });
       return (data ?? []).map((d) => ({
@@ -94,7 +94,7 @@ export default function DevisFactures() {
     queryFn: async () => {
       const { data } = await supabase
         .from("factures")
-        .select("id, numero, statut, montant_ttc, created_at, objet, client_id")
+        .select("id, numero, statut, montant_ttc, created_at, client_id")
         .in("client_id", clientIds)
         .order("created_at", { ascending: false });
       return (data ?? []).map((f) => ({
