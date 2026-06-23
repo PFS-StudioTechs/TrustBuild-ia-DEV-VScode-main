@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Receipt, GitBranch, Wrench } from "lucide-react";
+import { FileText, Receipt, GitBranch, Wrench, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ function formatEur(amount: number) {
 
 export default function DevisFactures() {
   const [tab, setTab] = useState<Tab>("devis");
+  const navigate = useNavigate();
 
   const { data: clientMeta } = useQuery({
     queryKey: ["client-meta"],
@@ -77,13 +79,26 @@ export default function DevisFactures() {
     queryFn: async () => {
       const { data } = await supabase
         .from("devis")
-        .select("id, numero, statut, montant_ht, created_at, client_id")
+        .select("id, numero, statut, created_at, client_id, token_public")
         .in("client_id", clientIds)
         .order("created_at", { ascending: false });
+      const devisIds = (data ?? []).map((d) => d.id);
+      const ttcById: Record<string, number> = {};
+      if (devisIds.length > 0) {
+        const { data: lignes } = await (supabase as any)
+          .from("lignes_devis_client")
+          .select("devis_id, prix_unitaire, quantite, tva")
+          .in("devis_id", devisIds);
+        for (const l of lignes ?? []) {
+          const line = (l.prix_unitaire ?? 0) * (l.quantite ?? 0) * (1 + (l.tva ?? 0) / 100);
+          ttcById[l.devis_id] = (ttcById[l.devis_id] ?? 0) + line;
+        }
+      }
       return (data ?? []).map((d) => ({
         ...d,
-        montant: d.montant_ht,
+        montant: ttcById[d.id] ?? 0,
         artisanNom: artisanMap[d.client_id] ?? "Artisan",
+        viewUrl: d.token_public ? `/devis/view/${d.token_public}` : null,
       }));
     },
   });
@@ -117,10 +132,15 @@ export default function DevisFactures() {
       if (ids.length === 0) return [];
       const { data } = await supabase
         .from("avenants")
-        .select("id, numero, statut, montant_ht, created_at, description")
+        .select("id, numero, statut, montant_ht, tva, created_at, description, token_public")
         .in("devis_id", ids)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((a) => ({ ...a, montant: a.montant_ht, objet: a.description }));
+      return (data ?? []).map((a) => ({
+        ...a,
+        montant: a.montant_ht * (1 + (a.tva ?? 0) / 100),
+        objet: a.description,
+        viewUrl: a.token_public ? `/document/view/${a.token_public}` : null,
+      }));
     },
   });
 
@@ -136,10 +156,15 @@ export default function DevisFactures() {
       if (ids.length === 0) return [];
       const { data } = await (supabase as any)
         .from("travaux_supplementaires")
-        .select("id, numero, statut, montant_ht, created_at, description")
+        .select("id, numero, statut, montant_ht, tva, created_at, description, token_public")
         .in("devis_id", ids)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((t: any) => ({ ...t, montant: t.montant_ht, objet: t.description }));
+      return (data ?? []).map((t: any) => ({
+        ...t,
+        montant: t.montant_ht * (1 + (t.tva ?? 0) / 100),
+        objet: t.description,
+        viewUrl: t.token_public ? `/document/view/${t.token_public}` : null,
+      }));
     },
   });
 
@@ -237,9 +262,20 @@ export default function DevisFactures() {
                   <p className="text-xs text-muted-foreground mt-1">Artisan : {item.artisanNom}</p>
                 )}
               </div>
-              <div className="text-right">
-                <div className="font-mono font-bold text-sm">{formatEur(item.montant ?? 0)}</div>
-                <div className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString("fr-FR")}</div>
+              <div className="flex items-center gap-3">
+                {item.viewUrl && (
+                  <button
+                    onClick={() => navigate(item.viewUrl)}
+                    className="p-2 rounded-lg hover:bg-muted transition-colors"
+                    title="Voir le document"
+                  >
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
+                <div className="text-right">
+                  <div className="font-mono font-bold text-sm">{formatEur(item.montant ?? 0)}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString("fr-FR")}</div>
+                </div>
               </div>
             </div>
           </div>
