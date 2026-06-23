@@ -132,12 +132,24 @@ export default function DevisFactures() {
       if (ids.length === 0) return [];
       const { data } = await supabase
         .from("avenants")
-        .select("id, numero, statut, montant_ht, tva, created_at, description, token_public")
+        .select("id, numero, statut, created_at, description, token_public")
         .in("devis_id", ids)
         .order("created_at", { ascending: false });
+      const avenantIds = (data ?? []).map((a) => a.id);
+      const ttcByAvenant: Record<string, number> = {};
+      if (avenantIds.length > 0) {
+        const { data: lignes } = await (supabase as any)
+          .from("lignes_avenant_client")
+          .select("avenant_id, prix_unitaire, quantite, tva")
+          .in("avenant_id", avenantIds);
+        for (const l of lignes ?? []) {
+          const line = (l.prix_unitaire ?? 0) * (l.quantite ?? 0) * (1 + (l.tva ?? 0) / 100);
+          ttcByAvenant[l.avenant_id] = (ttcByAvenant[l.avenant_id] ?? 0) + line;
+        }
+      }
       return (data ?? []).map((a) => ({
         ...a,
-        montant: a.montant_ht * (1 + (a.tva ?? 0) / 100),
+        montant: ttcByAvenant[a.id] ?? 0,
         objet: a.description,
         viewUrl: a.token_public ? `/document/view/${a.token_public}` : null,
       }));
@@ -156,12 +168,24 @@ export default function DevisFactures() {
       if (ids.length === 0) return [];
       const { data } = await (supabase as any)
         .from("travaux_supplementaires")
-        .select("id, numero, statut, montant_ht, tva, created_at, description, token_public")
+        .select("id, numero, statut, created_at, description, token_public")
         .in("devis_id", ids)
         .order("created_at", { ascending: false });
+      const tsIds = (data ?? []).map((t: any) => t.id);
+      const ttcByTs: Record<string, number> = {};
+      if (tsIds.length > 0) {
+        const { data: lignes } = await (supabase as any)
+          .from("lignes_ts_client")
+          .select("ts_id, prix_unitaire, quantite, tva")
+          .in("ts_id", tsIds);
+        for (const l of lignes ?? []) {
+          const line = (l.prix_unitaire ?? 0) * (l.quantite ?? 0) * (1 + (l.tva ?? 0) / 100);
+          ttcByTs[l.ts_id] = (ttcByTs[l.ts_id] ?? 0) + line;
+        }
+      }
       return (data ?? []).map((t: any) => ({
         ...t,
-        montant: t.montant_ht * (1 + (t.tva ?? 0) / 100),
+        montant: ttcByTs[t.id] ?? 0,
         objet: t.description,
         viewUrl: t.token_public ? `/document/view/${t.token_public}` : null,
       }));
