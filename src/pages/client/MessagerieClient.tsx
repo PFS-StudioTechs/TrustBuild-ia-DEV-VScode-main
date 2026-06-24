@@ -6,16 +6,17 @@ export default function MessagerieClient() {
   const { data: clientData } = useQuery({
     queryKey: ["client-self"],
     queryFn: async () => {
-      const { data } = await supabase
+      const uid = (await supabase.auth.getUser()).data.user?.id ?? "";
+      const { data, error } = await supabase
         .from("clients")
         .select("id, artisan_id")
-        .eq("auth_user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
-        .maybeSingle();
-      return data;
+        .eq("auth_user_id", uid);
+      if (error) console.error("[MessagerieClient] clients query error:", error.message);
+      return data ?? [];
     },
   });
 
-  const hasArtisan = !!clientData?.artisan_id;
+  const hasArtisan = (clientData ?? []).some((c) => !!c.artisan_id);
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
