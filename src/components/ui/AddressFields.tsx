@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, MapPin, CheckCircle2 } from "lucide-react";
 
-interface Parts {
+export interface Parts {
   numero_voie: string;
   nom_voie: string;
   code_postal: string;
@@ -23,7 +23,7 @@ interface BanFeature {
   };
 }
 
-function parseAddress(value: string): Parts {
+export function parseAddress(value: string): Parts {
   if (!value) return { numero_voie: "", nom_voie: "", code_postal: "", ville: "" };
   const full = value.match(/^(\d+[a-zA-Z]?)\s+(.+?),\s*(\d{5})\s+(.+)$/);
   if (full) return { numero_voie: full[1], nom_voie: full[2], code_postal: full[3], ville: full[4] };

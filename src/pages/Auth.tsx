@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowRight, ArrowLeft, Eye, EyeOff, Mail, Loader2, AlertCircle, CheckCircle2, HardHat, User, Lock } from "lucide-react";
 import TrustBuildLogo from "@/components/TrustBuildLogo";
 import { toast } from "sonner";
+import AddressFields, { parseAddress } from "@/components/ui/AddressFields";
 
 interface SiretData {
   siret: string;
@@ -28,9 +29,7 @@ type SiretStatus = "idle" | "loading" | "valid" | "inactive" | "error";
 function validatePhone(tel: string) {
   return /^0[1-9](\s?\d{2}){4}$/.test(tel.trim());
 }
-function validateCP(cp: string) {
-  return /^[0-9]{5}$/.test(cp.trim());
-}
+
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
@@ -44,6 +43,7 @@ export default function Auth() {
   const [adresse, setAdresse] = useState("");
   const [codePostal, setCodePostal] = useState("");
   const [ville, setVille] = useState("");
+  const [adresseFormatted, setAdresseFormatted] = useState("");
   const [telephone, setTelephone] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -443,9 +443,8 @@ export default function Auth() {
   }
 
   if (mode === "register-client") {
-    const cpError = codePostal && !validateCP(codePostal) ? "Code postal invalide (5 chiffres)" : "";
     const telError = telephone && !validatePhone(telephone) ? "Téléphone invalide (ex: 06 12 34 56 78)" : "";
-    const canSubmit = prenom && nom && adresse && codePostal && ville && email && password.length >= 6 && !cpError && !telError;
+    const canSubmit = prenom && nom && adresse && codePostal && ville && email && password.length >= 6 && !telError;
 
     return (
       <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
@@ -469,27 +468,18 @@ export default function Auth() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="c-adresse">Adresse <span className="text-destructive">*</span></Label>
-              <Input id="c-adresse" value={adresse} onChange={(e) => setAdresse(e.target.value)} placeholder="12 rue de la Paix" className="touch-target" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="c-cp">Code postal <span className="text-destructive">*</span></Label>
-                <Input
-                  id="c-cp"
-                  value={codePostal}
-                  onChange={(e) => setCodePostal(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                  placeholder="75001"
-                  maxLength={5}
-                  className="touch-target"
-                />
-                {cpError && <p className="text-xs text-destructive">{cpError}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="c-ville">Ville <span className="text-destructive">*</span></Label>
-                <Input id="c-ville" value={ville} onChange={(e) => setVille(e.target.value)} placeholder="Paris" className="touch-target" />
-              </div>
+              <Label>Adresse <span className="text-destructive">*</span></Label>
+              <AddressFields
+                value={adresseFormatted}
+                onChange={(formatted) => {
+                  setAdresseFormatted(formatted);
+                  const p = parseAddress(formatted);
+                  setAdresse([p.numero_voie, p.nom_voie].filter(Boolean).join(" "));
+                  setCodePostal(p.code_postal);
+                }}
+                onVilleChange={setVille}
+                required
+              />
             </div>
 
             <div className="space-y-2">
