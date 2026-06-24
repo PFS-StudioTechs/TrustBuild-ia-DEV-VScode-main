@@ -219,7 +219,7 @@ export default function ComparateurProjet() {
         .from("devis")
         .select("id, numero, montant_ht, statut, objet, artisan_id")
         .in("client_id", ids)
-        .eq("statut", "envoye")
+        .in("statut", ["envoye", "signe"])
         .order("created_at", { ascending: false });
       const artisanMap = await loadArtisanMap(
         [...new Set((devisRows ?? []).map((d) => d.artisan_id).filter((a): a is string => !!a))]
