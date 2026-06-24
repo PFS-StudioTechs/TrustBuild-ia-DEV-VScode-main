@@ -182,7 +182,7 @@ export default function ComparateurProjet() {
       if (activeIds.length > 0) {
         const { data: devisRows } = await supabase
           .from("devis")
-          .select("id, numero, montant_ht, statut, objet, artisan_id")
+          .select("id, numero, montant_ht, statut, artisan_id")
           .in("id", activeIds);
         const artisanMap = await loadArtisanMap(
           [...new Set((devisRows ?? []).map((d) => d.artisan_id).filter((a): a is string => !!a))]
@@ -195,7 +195,7 @@ export default function ComparateurProjet() {
               numero: d.numero,
               montant_ht: d.montant_ht,
               statut: d.statut,
-              objet: d.objet,
+              objet: null,
               artisanNom: d.artisan_id ? (artisanMap[d.artisan_id] ?? "Artisan") : "Artisan",
             } as DevisInfo,
           ])
@@ -217,7 +217,7 @@ export default function ComparateurProjet() {
     queryFn: async (): Promise<DevisInfo[]> => {
       const { data: devisRows } = await supabase
         .from("devis")
-        .select("id, numero, montant_ht, statut, objet, artisan_id")
+        .select("id, numero, montant_ht, statut, artisan_id")
         .in("client_id", ids)
         .in("statut", ["envoye", "signe"])
         .order("created_at", { ascending: false });
@@ -229,7 +229,7 @@ export default function ComparateurProjet() {
         numero: d.numero,
         montant_ht: d.montant_ht,
         statut: d.statut,
-        objet: d.objet,
+        objet: null,
         artisanNom: d.artisan_id ? (artisanMap[d.artisan_id] ?? "Artisan") : "Artisan",
       }));
     },
