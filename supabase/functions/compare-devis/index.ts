@@ -302,7 +302,7 @@ serve(async (req) => {
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [
         { role: "user", content: ONE_SHOT_USER },
@@ -323,12 +323,13 @@ serve(async (req) => {
 
   const anthropicData = await anthropicRes.json();
   const rawText = (anthropicData.content?.[0]?.text ?? "").trim();
+  const cleanedText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
   let comparison: unknown;
   try {
-    comparison = JSON.parse(rawText);
+    comparison = JSON.parse(cleanedText);
   } catch {
-    console.error("[compare-devis] JSON parse failed. Raw:", rawText.slice(0, 500));
+    console.error("[compare-devis] JSON parse failed. Raw:", cleanedText.slice(0, 500));
     return new Response(
       JSON.stringify({ error: "La réponse de l'IA n'est pas un JSON valide. Réessayez." }),
       {
