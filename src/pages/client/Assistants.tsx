@@ -1,62 +1,71 @@
-import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePersistedTab } from "@/hooks/usePersistedTab";
+import AgentChat from "@/components/agents/AgentChat";
+import AlfredClientPanel from "@/components/alfred/AlfredClientPanel";
 
-const agents = [
-  {
-    name: "Alfred",
-    avatar: "/avatar-alfred.png",
-    role: "Assistant principal",
-    description: "Répond à vos questions sur vos devis, factures et chantiers.",
-    available: true,
-  },
-  {
-    name: "Simone",
-    avatar: "/avatar-simone.png",
-    role: "Experte Juridique",
-    description: "Éclaire vos droits et obligations en tant que client d'artisan BTP.",
-    available: true,
-  },
-  {
-    name: "Gustave",
-    avatar: "/avatar-gustave.png",
-    role: "Expert Terrain BTP",
-    description: "Vous explique les travaux, matériaux et techniques de vos chantiers.",
-    available: true,
-  },
+const simoneSuggestions = [
+  "Quelles garanties l'artisan doit-il me fournir après les travaux ?",
+  "L'artisan a pris du retard, quels sont mes recours ?",
+  "Qu'est-ce que la garantie décennale en tant que client ?",
+];
+
+const gustaveSuggestions = [
+  "Comment vérifier la qualité d'une pose de carrelage ?",
+  "Quels matériaux privilégier pour une rénovation de salle de bain ?",
+  "Qu'est-ce qu'une douche à l'italienne et quels travaux implique-t-elle ?",
 ];
 
 export default function Assistants() {
+  const [activeTab, setActiveTab] = usePersistedTab("tab_client_assistant", "alfred");
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      <div>
-        <h1 className="text-h1 font-display font-bold">Assistants IA</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Nos experts IA sont disponibles pour répondre à vos questions.
-        </p>
-      </div>
+    <div className="flex flex-col h-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+        <div className="px-4 pt-4 shrink-0 border-b bg-card">
+          <TabsList className="w-full grid grid-cols-3">
+            <TabsTrigger value="alfred" className="gap-1.5 text-xs">
+              <img src="/avatar-alfred.png" alt="Alfred" className="w-5 h-5 rounded-full object-cover" /> Alfred
+            </TabsTrigger>
+            <TabsTrigger value="simone" className="gap-1.5 text-xs">
+              <img src="/avatar-simone.png" alt="Simone" className="w-5 h-5 rounded-full object-cover" /> Simone
+            </TabsTrigger>
+            <TabsTrigger value="gustave" className="gap-1.5 text-xs">
+              <img src="/avatar-gustave.png" alt="Gustave" className="w-5 h-5 rounded-full object-cover" /> Gustave
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <div className="grid sm:grid-cols-3 gap-4">
-        {agents.map((agent) => (
-          <div key={agent.name} className="forge-card text-center space-y-3">
-            <img
-              src={agent.avatar}
-              alt={agent.name}
-              className="w-16 h-16 rounded-full mx-auto object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
-            <div>
-              <div className="font-display font-semibold">{agent.name}</div>
-              <div className="text-xs text-muted-foreground">{agent.role}</div>
-            </div>
-            <p className="text-sm text-muted-foreground">{agent.description}</p>
-            <Badge variant="outline" className="text-xs text-primary border-primary/30">
-              Disponible
-            </Badge>
-          </div>
-        ))}
-      </div>
+        <TabsContent value="alfred" className="flex-1 overflow-hidden mt-0">
+          <AlfredClientPanel />
+        </TabsContent>
 
+        <TabsContent value="simone" className="flex-1 overflow-hidden mt-0">
+          <AgentChat
+            audience="client"
+            persona="simone"
+            title="Simone — Experte Juridique"
+            subtitle="Vos droits en tant que client : garanties, contrats et litiges avec artisans."
+            avatarSrc="/avatar-simone.png"
+            iconColor="text-amber-600"
+            iconBg="bg-amber-100"
+            suggestions={simoneSuggestions}
+            placeholder="Posez votre question juridique…"
+          />
+        </TabsContent>
+
+        <TabsContent value="gustave" className="flex-1 overflow-hidden mt-0">
+          <AgentChat
+            audience="client"
+            persona="gustave"
+            title="Gustave — Expert Technique BTP"
+            subtitle="Matériaux, travaux et techniques de construction expliqués pour les clients."
+            avatarSrc="/avatar-gustave.png"
+            iconColor="text-emerald-600"
+            iconBg="bg-emerald-100"
+            suggestions={gustaveSuggestions}
+            placeholder="Posez votre question technique…"
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

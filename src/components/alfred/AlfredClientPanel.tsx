@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Plus } from "lucide-react";
+import { X, Send, Plus, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,7 @@ type Phase = "loading" | "picking" | "chat";
 type Message = { role: "user" | "assistant"; content: string };
 type Projet = { id: string; libelle: string; statut: string };
 
-function Header({ projetLibelle, onClose }: { projetLibelle: string; onClose: () => void }) {
+function Header({ projetLibelle, onClose }: { projetLibelle: string; onClose?: () => void }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b bg-secondary/50 shrink-0">
       <div className="flex items-center gap-2">
@@ -21,9 +21,11 @@ function Header({ projetLibelle, onClose }: { projetLibelle: string; onClose: ()
           <p className="text-[11px] text-muted-foreground">{projetLibelle || "Cadrage de projet"}</p>
         </div>
       </div>
-      <Button variant="ghost" size="icon" onClick={onClose} className="w-8 h-8">
-        <X className="w-4 h-4" />
-      </Button>
+      {onClose && (
+        <Button variant="ghost" size="icon" onClick={onClose} className="w-8 h-8">
+          <X className="w-4 h-4" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -36,7 +38,7 @@ const Dots = () => (
   </div>
 );
 
-export default function AlfredClientPanel({ onClose }: { onClose: () => void }) {
+export default function AlfredClientPanel({ onClose }: { onClose?: () => void }) {
   const { user } = useAuth();
   const [phase, setPhase] = useState<Phase>("loading");
   const [projets, setProjets] = useState<Projet[]>([]);
@@ -45,6 +47,10 @@ export default function AlfredClientPanel({ onClose }: { onClose: () => void }) 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -106,6 +112,63 @@ export default function AlfredClientPanel({ onClose }: { onClose: () => void }) 
     setProjetLibelle(libelle);
     setMessages([]);
     setPhase("chat");
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      chunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        await transcribeAudio(blob);
+      };
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setRecording(true);
+    } catch {
+      toast.error("Impossible d'accéder au microphone. Vérifiez les autorisations de votre navigateur.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (blob: Blob) => {
+    setTranscribing(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "recording.webm");
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData }
+      );
+      if (!resp.ok) throw new Error("Transcription failed");
+      const data = await resp.json();
+      if (data.text) {
+        setInput(data.text);
+      } else {
+        toast.error("Aucun texte détecté");
+      }
+    } catch {
+      toast.error("Erreur de transcription audio");
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const toggleRecording = () => {
+    recording ? stopRecording() : startRecording();
   };
 
   const send = async (text: string) => {
@@ -239,16 +302,27 @@ export default function AlfredClientPanel({ onClose }: { onClose: () => void }) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-            placeholder="Décrivez votre projet…"
+            placeholder={transcribing ? "Transcription en cours..." : "Décrivez votre projet…"}
             rows={1}
             className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             style={{ minHeight: "40px" }}
-            disabled={loading}
+            disabled={loading || transcribing}
           />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={toggleRecording}
+            disabled={loading || transcribing}
+            className={`h-10 w-10 shrink-0 transition-all${recording ? " animate-pulse bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600" : ""}`}
+            title={recording ? "Arrêter l'enregistrement" : "Enregistrement vocal"}
+          >
+            <Mic className="w-3.5 h-3.5" />
+          </Button>
           <Button
             type="submit"
             size="icon"
-            disabled={!input.trim() || loading}
+            disabled={!input.trim() || loading || transcribing}
             className="h-10 w-10 shrink-0 bg-gradient-to-r from-primary to-accent"
           >
             <Send className="w-3.5 h-3.5" />

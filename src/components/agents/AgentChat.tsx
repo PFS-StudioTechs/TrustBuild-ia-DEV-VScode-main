@@ -27,6 +27,7 @@ interface AgentChatProps {
   iconBg: string;
   suggestions: string[];
   placeholder?: string;
+  audience?: "artisan" | "client";
 }
 
 export default function AgentChat({
@@ -38,6 +39,7 @@ export default function AgentChat({
   iconBg,
   suggestions,
   placeholder = "Posez votre question…",
+  audience = "artisan",
 }: AgentChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -75,7 +77,7 @@ export default function AgentChat({
 
   // Realtime subscription
   useEffect(() => {
-    if (!user) return;
+    if (!user || audience === "client") return;
 
     const channel = supabase
       .channel(`agent-${persona}-realtime`)
@@ -103,7 +105,7 @@ export default function AgentChat({
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user, persona]);
+  }, [user, persona, audience]);
 
   const startRecording = async () => {
     try {
@@ -225,7 +227,7 @@ export default function AgentChat({
       }
 
       // Auto-création du devis si Alfred a inclus un bloc DEVIS_DATA
-      if (persona === "alfred" && finalContent.includes("<!--DEVIS_DATA")) {
+      if (persona === "alfred" && audience !== "client" && finalContent.includes("<!--DEVIS_DATA")) {
         await createDevisFromAlfred(finalContent);
         // Nettoie le DEVIS_DATA du message stocké pour les futurs échanges
         setMessages((prev) =>
@@ -645,7 +647,7 @@ function buildConversationHtml(params: {
               </div>
               <div className="flex items-center gap-2">
                 <SourceBadge source={msg.source} />
-                {msg.role === "assistant" && !loading && (
+                {msg.role === "assistant" && !loading && audience !== "client" && (
                   <>
                     <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => saveDocument(i)} disabled={savingIdx === i}>
                       {savingIdx === i ? <CheckCircle className="w-3 h-3 text-emerald-500" /> : <Save className="w-3 h-3" />}
