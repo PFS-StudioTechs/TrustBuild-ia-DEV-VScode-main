@@ -466,9 +466,18 @@ function ClientCard({
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      "{fullName}" et toutes ses données associées seront supprimés.
+                    <AlertDialogTitle>Supprimer {fullName} ?</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-1.5">
+                        <p>Cette action est irréversible.</p>
+                        {(stats.nbDevis > 0 || stats.nbAvenants > 0 || stats.nbFactures > 0) && (
+                          <p>Seront supprimés : {[
+                            stats.nbDevis > 0 && `${stats.nbDevis} devis`,
+                            stats.nbAvenants > 0 && `${stats.nbAvenants} TS/avenant${stats.nbAvenants > 1 ? "s" : ""}`,
+                            stats.nbFactures > 0 && `${stats.nbFactures} facture${stats.nbFactures > 1 ? "s" : ""}`,
+                          ].filter(Boolean).join(", ")}.</p>
+                        )}
+                      </div>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

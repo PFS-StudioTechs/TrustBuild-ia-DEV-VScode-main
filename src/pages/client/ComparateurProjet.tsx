@@ -268,7 +268,14 @@ export default function ComparateurProjet() {
     onError: () => { toast.error("Erreur lors du retrait"); },
   });
 
-  const [result, setResult] = useState<CompareResult | null>(null);
+  const [result, setResult] = useState<CompareResult | null>(() => {
+    try {
+      const stored = localStorage.getItem(`comparateur-result-${id}`);
+      return stored ? (JSON.parse(stored) as CompareResult) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const activeCount = (liaisons ?? []).filter((l) => !l.devis_supprime_at).length;
 
@@ -290,9 +297,17 @@ export default function ComparateurProjet() {
       }
       return data as CompareResult;
     },
-    onSuccess: (data) => setResult(data),
+    onSuccess: (data) => {
+      setResult(data);
+      try { localStorage.setItem(`comparateur-result-${id}`, JSON.stringify(data)); } catch { /* quota */ }
+    },
     onError: (err: any) => { toast.error(err?.message ?? "Erreur lors de la comparaison"); },
   });
+
+  const clearResult = () => {
+    setResult(null);
+    localStorage.removeItem(`comparateur-result-${id}`);
+  };
 
   const artisanName = (alias: string) =>
     result?.mapping[alias]?.artisan_nom ?? alias;
@@ -454,15 +469,22 @@ export default function ComparateurProjet() {
 
       <div className="space-y-4 pt-2 border-t">
         <div className="flex flex-col gap-1">
-          <Button
-            onClick={() => compareMutation.mutate()}
-            disabled={activeCount < 2 || compareMutation.isPending}
-            className="bg-gradient-to-r from-primary to-primary/90 shadow-forge w-full sm:w-auto"
-          >
-            {compareMutation.isPending
-              ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Analyse en cours…</>
-              : <><Scale className="w-4 h-4 mr-1.5" /> Comparer les devis</>}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => compareMutation.mutate()}
+              disabled={activeCount < 2 || compareMutation.isPending}
+              className="bg-gradient-to-r from-primary to-primary/90 shadow-forge w-full sm:w-auto"
+            >
+              {compareMutation.isPending
+                ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Analyse en cours…</>
+                : <><Scale className="w-4 h-4 mr-1.5" /> {result ? "Relancer la comparaison" : "Comparer les devis"}</>}
+            </Button>
+            {result && (
+              <Button variant="outline" size="sm" onClick={clearResult} className="text-muted-foreground">
+                Effacer le résultat
+              </Button>
+            )}
+          </div>
           {activeCount < 2 && (
             <p className="text-xs text-muted-foreground">Ajoutez au moins 2 devis pour comparer.</p>
           )}

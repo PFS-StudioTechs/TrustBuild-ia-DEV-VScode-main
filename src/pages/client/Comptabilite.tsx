@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Wallet, TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { Wallet, TrendingDown, Clock } from "lucide-react";
 
 function formatEur(amount: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(amount);
@@ -19,26 +19,25 @@ function KpiCard({ label, value, icon: Icon, color }: { label: string; value: st
 }
 
 export default function Comptabilite() {
-  const { data: clientData } = useQuery({
-    queryKey: ["client-self"],
+  const { data: clientIds } = useQuery({
+    queryKey: ["client-self-ids"],
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")
         .select("id")
-        .eq("auth_user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
-        .maybeSingle();
-      return data;
+        .eq("auth_user_id", (await supabase.auth.getUser()).data.user?.id ?? "");
+      return (data ?? []).map((c) => c.id);
     },
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["client-compta", clientData?.id],
-    enabled: !!clientData?.id,
+    queryKey: ["client-compta", clientIds],
+    enabled: !!clientIds?.length,
     queryFn: async () => {
       const { data: factures } = await supabase
         .from("factures")
         .select("montant_ttc, statut")
-        .eq("client_id", clientData!.id);
+        .in("client_id", clientIds!);
 
       const list = factures ?? [];
       const total = list.reduce((s, f) => s + (f.montant_ttc ?? 0), 0);
@@ -52,7 +51,7 @@ export default function Comptabilite() {
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <h1 className="text-h1 font-display font-bold">Comptabilité</h1>
 
-      {!clientData && (
+      {!clientIds?.length && (
         <div className="forge-card text-center py-12">
           <Wallet className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <p className="font-medium">En attente de liaison</p>
@@ -60,7 +59,7 @@ export default function Comptabilite() {
         </div>
       )}
 
-      {clientData && (
+      {!!clientIds?.length && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <KpiCard
