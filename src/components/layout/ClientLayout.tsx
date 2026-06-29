@@ -176,7 +176,7 @@ export default function ClientLayout() {
         </main>
       </div>
 
-      <AlfredBubble />
+      <AlfredBubble audience="client" />
     </div>
   );
 }

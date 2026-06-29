@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import AlfredPanel from "./AlfredPanel";
+import AlfredClientPanel from "./AlfredClientPanel";
 
 const STORAGE_KEY = "alfred-bubble-pos";
 
@@ -12,7 +13,7 @@ function getInitialPos(): { x: number; y: number } | null {
   return null;
 }
 
-export default function AlfredBubble() {
+export default function AlfredBubble({ audience = "artisan" }: { audience?: "artisan" | "client" }) {
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(getInitialPos);
@@ -79,7 +80,10 @@ export default function AlfredBubble() {
               }
         ) : undefined}
       >
-        {open && <AlfredPanel onClose={() => setOpen(false)} />}
+        {open && audience === "client"
+          ? <AlfredClientPanel onClose={() => setOpen(false)} />
+          : open && <AlfredPanel onClose={() => setOpen(false)} />
+        }
       </div>
 
       {/* Floating Bubble */}
