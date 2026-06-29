@@ -49,6 +49,8 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
   const [loading, setLoading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [newProjetName, setNewProjetName] = useState("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -110,9 +112,15 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
   const startChat = (id: string, libelle: string) => {
     setProjetId(id);
     setProjetLibelle(libelle);
-    setMessages([]);
+    const stored = sessionStorage.getItem(`alfred_chat_${id}`);
+    setMessages(stored ? (JSON.parse(stored) as Message[]) : []);
     setPhase("chat");
   };
+
+  useEffect(() => {
+    if (!projetId || messages.length === 0) return;
+    sessionStorage.setItem(`alfred_chat_${projetId}`, JSON.stringify(messages));
+  }, [messages, projetId]);
 
   const startRecording = async () => {
     try {
@@ -169,6 +177,12 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
 
   const toggleRecording = () => {
     recording ? stopRecording() : startRecording();
+  };
+
+  const handleCreateNew = () => {
+    if (!newProjetName.trim()) return;
+    setCreatingNew(false);
+    createAndStart(newProjetName.trim());
   };
 
   const send = async (text: string) => {
@@ -230,15 +244,38 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
               </button>
             ))}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full gap-1.5"
-            onClick={() => createAndStart(`Projet ${new Date().toLocaleDateString("fr-FR")}`)}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Nouveau projet
-          </Button>
+          {!creatingNew ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-1.5"
+              onClick={() => { setCreatingNew(true); setNewProjetName(""); }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Nouveau projet
+            </Button>
+          ) : (
+            <div className="flex gap-1.5">
+              <input
+                autoFocus
+                type="text"
+                value={newProjetName}
+                onChange={(e) => setNewProjetName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateNew();
+                  if (e.key === "Escape") setCreatingNew(false);
+                }}
+                placeholder="Nom du projet…"
+                className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <Button size="sm" onClick={handleCreateNew} disabled={!newProjetName.trim()}>
+                Créer
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setCreatingNew(false)}>
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );
