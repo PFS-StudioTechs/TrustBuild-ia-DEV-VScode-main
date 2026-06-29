@@ -116,7 +116,12 @@ export default function AlfredClientPanel({ onClose }: { onClose: () => void }) 
 
     try {
       const { data, error } = await supabase.functions.invoke("alfred-client-cadrage", {
-        body: { action: "dialoguer", projet_id: projetId, message_client: text.trim() },
+        body: {
+          action: "dialoguer",
+          projet_id: projetId,
+          message_client: text.trim(),
+          historique: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+        },
       });
 
       if (error) throw error;

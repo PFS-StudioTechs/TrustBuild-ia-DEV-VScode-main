@@ -223,7 +223,10 @@ serve(async (req) => {
 
   // ── DIALOGUER ────────────────────────────────────────────────────────────
   if (action === "dialoguer") {
-    const { message_client } = body as { message_client?: string };
+    const { message_client, historique } = body as {
+      message_client?: string;
+      historique?: Array<{ role: string; content: string }>;
+    };
     if (!message_client?.trim()) {
       return json({ error: "Champ requis : message_client" }, 400);
     }
@@ -267,6 +270,13 @@ serve(async (req) => {
 
     const userMessage = `CONTEXTE ÉTAPE :\n${JSON.stringify(contexte, null, 2)}\n\nMESSAGE CLIENT :\n${message_client}`;
 
+    const histMessages = (historique ?? [])
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -279,7 +289,7 @@ serve(async (req) => {
         max_tokens: 1024,
         temperature: 0.3,
         system: ALFRED_CLIENT_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
+        messages: [...histMessages, { role: "user", content: userMessage }],
       }),
     });
 
