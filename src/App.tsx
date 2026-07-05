@@ -41,6 +41,7 @@ import DevisFactures from "@/pages/client/DevisFactures";
 import ComptabiliteClient from "@/pages/client/Comptabilite";
 import FournisseursClient from "@/pages/client/FournisseursClient";
 import ContactsClient from "@/pages/client/ContactsClient";
+import ContactDetail from "@/pages/client/ContactDetail";
 import Conception from "@/pages/client/Conception";
 import MessagerieClient from "@/pages/client/MessagerieClient";
 import AssistantsClient from "@/pages/client/Assistants";
@@ -243,6 +244,7 @@ const App = () => {
                   <Route path="/espace-client/comptabilite" element={<ComptabiliteClient />} />
                   <Route path="/espace-client/fournisseurs" element={<FournisseursClient />} />
                   <Route path="/espace-client/contacts" element={<ContactsClient />} />
+                  <Route path="/espace-client/contacts/:artisanId" element={<ContactDetail />} />
                   <Route path="/espace-client/conception" element={<Conception />} />
                   <Route path="/espace-client/messagerie" element={<MessagerieClient />} />
                   <Route path="/espace-client/assistants" element={<AssistantsClient />} />

@@ -2,11 +2,17 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Receipt, GitBranch, Wrench, Eye } from "lucide-react";
+import { FileText, Receipt, GitBranch, Wrench, Eye, ShieldCheck, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-type Tab = "devis" | "factures" | "avenants" | "ts";
+type Tab = "devis" | "factures" | "avenants" | "ts" | "artisans";
+
+const LEGAL_DOC_LABELS: Record<string, string> = {
+  kbis: "Extrait KBIS",
+  decennale: "Garantie décennale",
+  urssaf: "Attestation URSSAF",
+};
 
 const statusColors: Record<string, string> = {
   brouillon: "bg-muted text-muted-foreground",
@@ -35,6 +41,7 @@ const tabConfig: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "factures", label: "Factures", icon: Receipt },
   { id: "avenants", label: "Avenants", icon: GitBranch },
   { id: "ts", label: "Travaux suppl.", icon: Wrench },
+  { id: "artisans", label: "Documents artisans", icon: ShieldCheck },
 ];
 
 function formatEur(amount: number) {
@@ -53,7 +60,7 @@ export default function DevisFactures() {
         .from("clients")
         .select("id, artisan_id")
         .eq("auth_user_id", userId);
-      if (!clients?.length) return { ids: [] as string[], artisanMap: {} as Record<string, string> };
+      if (!clients?.length) return { ids: [] as string[], artisanMap: {} as Record<string, string>, artisanIds: [] as string[] };
       const artisanIds = [...new Set(clients.map((c) => c.artisan_id).filter((id): id is string => !!id))];
       const { data: profiles } = await supabase
         .from("profiles")
@@ -65,12 +72,13 @@ export default function DevisFactures() {
       const artisanMap = Object.fromEntries(
         clients.map((c) => [c.id, c.artisan_id ? (profileMap[c.artisan_id] ?? "Artisan") : "Artisan"])
       );
-      return { ids: clients.map((c) => c.id), artisanMap };
+      return { ids: clients.map((c) => c.id), artisanMap, artisanIds };
     },
   });
 
   const clientIds = clientMeta?.ids ?? [];
   const artisanMap = clientMeta?.artisanMap ?? {};
+  const artisanIds = clientMeta?.artisanIds ?? [];
   const hasClients = clientIds.length > 0;
 
   const { data: devis, isLoading: loadingDevis } = useQuery({
@@ -192,11 +200,65 @@ export default function DevisFactures() {
     },
   });
 
+  const { data: artisanDocs, isLoading: loadingArtisanDocs } = useQuery({
+    queryKey: ["client-artisan-docs", artisanIds],
+    enabled: artisanIds.length > 0,
+    queryFn: async () => {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, kbis_url, kbis_uploaded_at")
+        .in("user_id", artisanIds);
+      const { data: legalDocs } = await (supabase as any)
+        .from("artisan_documents_legaux")
+        .select("artisan_id, type, storage_path, nom_fichier, uploaded_at")
+        .in("artisan_id", artisanIds);
+
+      const items: {
+        id: string;
+        type: string;
+        artisanNom: string;
+        storagePath: string | null;
+        publicUrl: string | null;
+        uploaded_at: string;
+      }[] = [];
+
+      for (const p of profiles ?? []) {
+        if (p.kbis_url) {
+          items.push({
+            id: `${p.user_id}-kbis`,
+            type: "kbis",
+            artisanNom: artisanMap[p.user_id] ?? "Artisan",
+            storagePath: null,
+            publicUrl: p.kbis_url,
+            uploaded_at: p.kbis_uploaded_at ?? "",
+          });
+        }
+      }
+      for (const d of legalDocs ?? []) {
+        items.push({
+          id: `${d.artisan_id}-${d.type}`,
+          type: d.type,
+          artisanNom: artisanMap[d.artisan_id] ?? "Artisan",
+          storagePath: d.storage_path,
+          publicUrl: null,
+          uploaded_at: d.uploaded_at,
+        });
+      }
+      return items;
+    },
+  });
+
+  const handleDownloadArtisanDoc = async (storagePath: string) => {
+    const { data } = await supabase.storage.from("artisan-documents").createSignedUrl(storagePath, 300);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  };
+
   const loadingMap: Record<Tab, boolean> = {
     devis: loadingDevis,
     factures: loadingFactures,
     avenants: loadingAvenants,
     ts: loadingTs,
+    artisans: loadingArtisanDocs,
   };
 
   const itemsMap: Record<Tab, any[]> = {
@@ -204,6 +266,7 @@ export default function DevisFactures() {
     factures: factures ?? [],
     avenants: avenants ?? [],
     ts: ts ?? [],
+    artisans: artisanDocs ?? [],
   };
 
   const isLoading = loadingMap[tab];
@@ -214,6 +277,7 @@ export default function DevisFactures() {
     factures: "Aucune facture pour l'instant",
     avenants: "Aucun avenant pour l'instant",
     ts: "Aucun travail supplémentaire pour l'instant",
+    artisans: "Aucun document transmis pour l'instant",
   };
 
   const emptySubLabels: Record<Tab, string> = {
@@ -221,6 +285,7 @@ export default function DevisFactures() {
     factures: "Vos factures apparaîtront ici dès que votre artisan en émettra.",
     avenants: "Les avenants liés à vos devis apparaîtront ici.",
     ts: "Les travaux supplémentaires liés à vos chantiers apparaîtront ici.",
+    artisans: "La garantie décennale, l'attestation URSSAF ou le KBIS de vos artisans apparaîtront ici.",
   };
 
   const emptyIcons: Record<Tab, React.ElementType> = {
@@ -228,6 +293,7 @@ export default function DevisFactures() {
     factures: Receipt,
     avenants: GitBranch,
     ts: Wrench,
+    artisans: ShieldCheck,
   };
 
   const EmptyIcon = emptyIcons[tab];
@@ -268,43 +334,73 @@ export default function DevisFactures() {
         </div>
       )}
 
-      <div className="space-y-3">
-        {items.map((item) => (
-          <div key={item.id} className="forge-card hover:shadow-forge-hover transition-all">
-            <div className="flex items-center justify-between">
-              <div>
+      {tab === "artisans" ? (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="forge-card hover:shadow-forge-hover transition-all">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-semibold">{item.numero}</span>
-                  {item.statut && (
-                    <Badge className={cn("text-xs", statusColors[item.statut] ?? "bg-muted text-muted-foreground")}>
-                      {statusLabels[item.statut] ?? item.statut}
-                    </Badge>
-                  )}
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <div className="text-sm font-semibold">{LEGAL_DOC_LABELS[item.type] ?? item.type}</div>
+                    <div className="text-xs text-muted-foreground">Artisan : {item.artisanNom}</div>
+                  </div>
                 </div>
-                {item.objet && <p className="text-sm text-muted-foreground mt-0.5">{item.objet}</p>}
-                {multiArtisan && item.artisanNom && (
-                  <p className="text-xs text-muted-foreground mt-1">Artisan : {item.artisanNom}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {item.viewUrl && (
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-muted-foreground">
+                    {item.uploaded_at && new Date(item.uploaded_at).toLocaleDateString("fr-FR")}
+                  </div>
                   <button
-                    onClick={() => navigate(item.viewUrl)}
+                    onClick={() => (item.publicUrl ? window.open(item.publicUrl, "_blank") : handleDownloadArtisanDoc(item.storagePath))}
                     className="p-2 rounded-lg hover:bg-muted transition-colors"
-                    title="Voir le document"
+                    title="Télécharger"
                   >
-                    <Eye className="w-4 h-4 text-muted-foreground" />
+                    <Download className="w-4 h-4 text-muted-foreground" />
                   </button>
-                )}
-                <div className="text-right">
-                  <div className="font-mono font-bold text-sm">{formatEur(item.montant ?? 0)}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString("fr-FR")}</div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="forge-card hover:shadow-forge-hover transition-all">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-semibold">{item.numero}</span>
+                    {item.statut && (
+                      <Badge className={cn("text-xs", statusColors[item.statut] ?? "bg-muted text-muted-foreground")}>
+                        {statusLabels[item.statut] ?? item.statut}
+                      </Badge>
+                    )}
+                  </div>
+                  {item.objet && <p className="text-sm text-muted-foreground mt-0.5">{item.objet}</p>}
+                  {multiArtisan && item.artisanNom && (
+                    <p className="text-xs text-muted-foreground mt-1">Artisan : {item.artisanNom}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {item.viewUrl && (
+                    <button
+                      onClick={() => navigate(item.viewUrl)}
+                      className="p-2 rounded-lg hover:bg-muted transition-colors"
+                      title="Voir le document"
+                    >
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  )}
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-sm">{formatEur(item.montant ?? 0)}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString("fr-FR")}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

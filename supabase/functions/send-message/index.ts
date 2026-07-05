@@ -107,6 +107,32 @@ serve(async (req) => {
     }
   }
 
+  // Documents légaux (décennale, URSSAF) joints automatiquement au premier envoi d'un devis
+  const legalAttachments: { content: string; name: string }[] = [];
+  if (document_type === "devis" && document_id) {
+    const { data: devisRow } = await serviceClient.from("devis").select("statut").eq("id", document_id).single();
+    if (devisRow?.statut === "brouillon") {
+      const { data: legalDocs } = await (serviceClient as any)
+        .from("artisan_documents_legaux")
+        .select("type, storage_path, nom_fichier")
+        .eq("artisan_id", user.id);
+      for (const doc of legalDocs ?? []) {
+        try {
+          const { data: fileBlob, error: dlErr } = await serviceClient.storage
+            .from("artisan-documents")
+            .download(doc.storage_path);
+          if (dlErr || !fileBlob) continue;
+          const buf = new Uint8Array(await fileBlob.arrayBuffer());
+          let binary = "";
+          for (const byte of buf) binary += String.fromCharCode(byte);
+          legalAttachments.push({ content: btoa(binary), name: doc.nom_fichier });
+        } catch (e) {
+          console.warn("[send-message] Erreur lecture document légal:", doc.storage_path, e);
+        }
+      }
+    }
+  }
+
   let sendStatus = "sent";
   if (brevoApiKey) {
     const payload: Record<string, unknown> = {
@@ -118,11 +144,11 @@ serve(async (req) => {
       ...(document_id && document_type ? { tags: [`${document_type}:${document_id}`] } : {}),
     };
 
-    if (pdfBase64 && pdfFilename) {
-      payload.attachment = [{
-        content: pdfBase64,
-        name: pdfFilename,
-      }];
+    const attachments: { content: string; name: string }[] = [];
+    if (pdfBase64 && pdfFilename) attachments.push({ content: pdfBase64, name: pdfFilename });
+    attachments.push(...legalAttachments);
+    if (attachments.length > 0) {
+      payload.attachment = attachments;
     }
 
     const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {

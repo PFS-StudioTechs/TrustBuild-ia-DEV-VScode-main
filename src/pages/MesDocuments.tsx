@@ -16,7 +16,20 @@ import {
   Camera, Pen,
 } from "lucide-react";
 import KbisUploadSection from "@/components/kbis/KbisUploadSection";
+import LegalDocUploadSection, { LegalDocType } from "@/components/kbis/LegalDocUploadSection";
 import { toast } from "sonner";
+
+interface ArtisanDocLegal {
+  type: LegalDocType;
+  storage_path: string;
+  nom_fichier: string;
+  uploaded_at: string;
+}
+
+const LEGAL_DOC_LABELS: Record<LegalDocType, string> = {
+  decennale: "Garantie décennale",
+  urssaf: "Attestation URSSAF",
+};
 
 interface Document {
   id: string;
@@ -68,6 +81,8 @@ export default function MesDocuments() {
   const [filterTag, setFilterTag] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [showKbisUpload, setShowKbisUpload] = useState(false);
+  const [legalDocs, setLegalDocs] = useState<ArtisanDocLegal[]>([]);
+  const [showLegalUpload, setShowLegalUpload] = useState<LegalDocType | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
@@ -133,7 +148,17 @@ export default function MesDocuments() {
     if (f.data) setFournisseurs(f.data);
   }, [user]);
 
-  useEffect(() => { fetchDocuments(); fetchAssociations(); }, [fetchDocuments, fetchAssociations]);
+  const fetchLegalDocs = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await (supabase as any)
+      .from("artisan_documents_legaux")
+      .select("type, storage_path, nom_fichier, uploaded_at")
+      .eq("artisan_id", user.id);
+    if (data) setLegalDocs(data as ArtisanDocLegal[]);
+    if (error) console.error(error);
+  }, [user]);
+
+  useEffect(() => { fetchDocuments(); fetchAssociations(); fetchLegalDocs(); }, [fetchDocuments, fetchAssociations, fetchLegalDocs]);
 
   // All unique tags
   const allTags = [...new Set(documents.flatMap((d) => d.tags))].sort();
@@ -421,6 +446,53 @@ export default function MesDocuments() {
           <KbisUploadSection forceUpload onSuccess={() => setShowKbisUpload(false)} />
         )}
       </div>
+
+      {/* Section documents légaux facultatifs (décennale, URSSAF) */}
+      {(Object.keys(LEGAL_DOC_LABELS) as LegalDocType[]).map((type) => {
+        const doc = legalDocs.find((d) => d.type === type);
+        return (
+          <div key={type} className="forge-card !p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {doc ? (
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                ) : (
+                  <ShieldAlert className="w-5 h-5 text-muted-foreground" />
+                )}
+                <span className="font-semibold text-sm">{LEGAL_DOC_LABELS[type]}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  doc
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                    : "bg-muted text-muted-foreground"
+                }`}>
+                  {doc ? "Déposé" : "Facultatif"}
+                </span>
+              </div>
+              {showLegalUpload !== type && (
+                <button
+                  onClick={() => setShowLegalUpload(type)}
+                  className="text-xs text-primary hover:underline font-medium"
+                >
+                  {doc ? "Remplacer" : "Déposer"}
+                </button>
+              )}
+            </div>
+
+            {doc && showLegalUpload !== type && (
+              <p className="text-xs text-muted-foreground">
+                Déposé le {new Date(doc.uploaded_at).toLocaleDateString("fr-FR")}
+              </p>
+            )}
+
+            {showLegalUpload === type && (
+              <LegalDocUploadSection
+                type={type}
+                onSuccess={() => { setShowLegalUpload(null); fetchLegalDocs(); }}
+              />
+            )}
+          </div>
+        );
+      })}
 
       {/* Drop zone */}
       <div
