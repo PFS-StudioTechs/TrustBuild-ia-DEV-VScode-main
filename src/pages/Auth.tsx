@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,9 +53,29 @@ export default function Auth() {
   const [siretStatus, setSiretStatus] = useState<SiretStatus>("idle");
   const [siretData, setSiretData] = useState<SiretData | null>(null);
   const [siretError, setSiretError] = useState("");
+  const [checkingInvite, setCheckingInvite] = useState(!!inviteEmail);
+  const [accountAlreadyExists, setAccountAlreadyExists] = useState(false);
 
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!inviteEmail) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("check-account-exists", {
+          body: { email: inviteEmail },
+        });
+        if (!error && data?.exists) {
+          setAccountAlreadyExists(true);
+          setMode("login");
+        }
+      } finally {
+        setCheckingInvite(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,6 +202,14 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
+  if (checkingInvite) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (awaitingEmail) {
     return (
@@ -554,6 +582,12 @@ export default function Auth() {
           </h1>
           <p className="text-small text-muted-foreground mt-1">Connectez-vous à votre espace</p>
         </div>
+        {accountAlreadyExists && (
+          <div className="flex items-start gap-2 text-sm text-primary bg-primary/10 rounded-lg p-3 mb-4">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>Un compte existe déjà avec cette adresse email. Connectez-vous ci-dessous.</span>
+          </div>
+        )}
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
