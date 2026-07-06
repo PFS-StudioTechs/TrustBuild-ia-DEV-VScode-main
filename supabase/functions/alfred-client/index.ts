@@ -12,15 +12,44 @@ function json(body: unknown, status = 200) {
   });
 }
 
-const INTENTION_ROUTER_PROMPT = `Tu routes le message d'un client TrustBuild-IA vers l'un de ces deux agents :
+const INTENTION_ROUTER_PROMPT = `Tu routes le message d'un client TrustBuild-IA vers l'un de ces trois agents :
 
 - "expert_chantier" : le client demande un conseil sur le déroulement d'un chantier, ses étapes, des points de vigilance, ou un ordre de grandeur de matériaux/quantités ("comment ça se passe", "qu'est-ce qu'il me faut", "combien de").
 - "cadrage" : le client exprime une intention EXPLICITE d'obtenir un devis ou d'être mis en relation avec un artisan ("je veux des devis", "trouvez-moi un artisan").
+- "reglementaire" : le client demande une obligation légale, une démarche administrative, une norme, une certification, ou une aide financière liée à ses travaux (permis, déclaration préalable, mairie, PLU, mitoyenneté, norme, RGE, IRVE, Qualibat, aide, subvention, MaPrimeRénov, CEE, TVA réduite, crédit d'impôt, éco-PTZ, ANAH).
 
 En cas de doute ou de message ambigu, choisis "expert_chantier" (on conseille, on ne pousse jamais vers le devis).
 
 RÉPONSE OBLIGATOIRE — JSON pur, aucun texte autour, aucun bloc Markdown :
-{ "intention": "expert_chantier" | "cadrage" }`;
+{ "intention": "expert_chantier" | "cadrage" | "reglementaire" }`;
+
+const REGLEMENTAIRE_PROMPT = `Tu es Alfred, conseiller TrustBuild-IA. Tu informes un particulier sur les obligations légales et les aides financières liées à son projet de travaux.
+
+MÉTHODE OBLIGATOIRE : tu DOIS utiliser le web search pour toute affirmation sur un barème, une éligibilité, une démarche ou une obligation en vigueur. Ne réponds JAMAIS de mémoire sur ces points — les règles changent.
+
+LES 3 RÈGLES D'OR (impératives) :
+1. Quand tu doutes, tu cherches (web search).
+2. Quand tu conseilles sur du sensible, tu conditionnes : "selon les informations actuelles…", "sous réserve d'éligibilité…", "à confirmer auprès de votre mairie / d'un conseiller France Rénov'."
+3. Tu n'es jamais l'autorité : tu informes et orientes, tu ne te substitues jamais à la mairie, au fisc ou à un professionnel qualifié.
+
+CITATION : mentionne toujours la source officielle utilisée (nom + année).
+
+TON : clair, chaleureux, concis, vouvoiement. Va à l'essentiel.
+
+INVARIANTS : jamais de marges/coûts artisan ; n'impose jamais la mise en relation ; ne promets jamais un montant comme certain (toujours conditionnel).
+
+Réponds en texte libre, directement au client, sans JSON.`;
+
+const REGLEMENTAIRE_ALLOWED_DOMAINS = [
+  "service-public.fr",
+  "legifrance.gouv.fr",
+  "anah.gouv.fr",
+  "france-renov.gouv.fr",
+  "economie.gouv.fr",
+  "impots.gouv.fr",
+  "qualibat.com",
+  "qualifelec.fr",
+];
 
 const EXPERT_CHANTIER_PROMPT = `Tu es Alfred, conseiller de projet TrustBuild-IA pour un particulier.
 
@@ -68,6 +97,57 @@ async function appelClaude(
   return (data.content?.[0]?.text ?? "").trim();
 }
 
+async function appelClaudeReglementaire(
+  apiKey: string,
+  userMessage: string
+): Promise<{ reponse_alfred: string; sources: string[] }> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      temperature: 0.2,
+      system: REGLEMENTAIRE_PROMPT,
+      tools: [{
+        type: "web_search_20260209",
+        name: "web_search",
+        max_uses: 3,
+        allowed_domains: REGLEMENTAIRE_ALLOWED_DOMAINS,
+      }],
+      messages: [{ role: "user", content: userMessage }],
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Anthropic error ${res.status}: ${errText}`);
+  }
+  const data = await res.json();
+
+  let searchDeclenchee = false;
+  const sources: string[] = [];
+  const textParts: string[] = [];
+
+  for (const block of data.content ?? []) {
+    if (block.type === "server_tool_use") searchDeclenchee = true;
+    if (block.type === "web_search_tool_result") {
+      const results = Array.isArray(block.content) ? block.content : [];
+      for (const r of results) if (r.url) sources.push(r.url);
+    }
+    if (block.type === "text" && typeof block.text === "string") textParts.push(block.text);
+  }
+
+  if (!searchDeclenchee) {
+    console.warn("[alfred-client] reglementaire: aucune recherche web déclenchée pour ce message:", userMessage);
+  }
+
+  return { reponse_alfred: textParts.join("\n\n").trim(), sources: [...new Set(sources)] };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -101,12 +181,12 @@ serve(async (req) => {
   }
 
   // ── ÉTAPE 1 : détection d'intention ─────────────────────────────────────
-  let intention: "expert_chantier" | "cadrage" = "expert_chantier";
+  let intention: "expert_chantier" | "cadrage" | "reglementaire" = "expert_chantier";
   try {
     const routerText = await appelClaude(ANTHROPIC_API_KEY, INTENTION_ROUTER_PROMPT, message_client, 0, 100);
     const cleaned = routerText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     const parsed = JSON.parse(cleaned);
-    if (parsed.intention === "cadrage") intention = "cadrage";
+    if (parsed.intention === "cadrage" || parsed.intention === "reglementaire") intention = parsed.intention;
   } catch (e) {
     console.error("[alfred-client] détection intention échouée, fallback expert_chantier:", e);
   }
@@ -138,7 +218,18 @@ serve(async (req) => {
     }
   }
 
-  // ── ÉTAPE 2b : intention expert_chantier ────────────────────────────────
+  // ── ÉTAPE 2b : intention reglementaire ──────────────────────────────────
+  if (intention === "reglementaire") {
+    try {
+      const { reponse_alfred, sources } = await appelClaudeReglementaire(ANTHROPIC_API_KEY, message_client);
+      return json({ agent: "reglementaire", reponse_alfred, sources });
+    } catch (e) {
+      console.error("[alfred-client] erreur reglementaire:", e);
+      return json({ error: "Je n'ai pas pu vérifier cette information pour le moment. Adressez-vous à votre mairie ou à un conseiller France Rénov'." }, 500);
+    }
+  }
+
+  // ── ÉTAPE 2c : intention expert_chantier ────────────────────────────────
   try {
     const reponse_alfred = await appelClaude(ANTHROPIC_API_KEY, EXPERT_CHANTIER_PROMPT, message_client, 0.3, 1024);
     return json({ agent: "expert_chantier", reponse_alfred });
