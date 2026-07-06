@@ -44,7 +44,7 @@ RÉPONSE OBLIGATOIRE — JSON pur, aucun texte autour, aucun bloc Markdown :
 RÈGLES D'EXTRACTION :
 - Si le client fournit les infos de l'étape courante → extrais et confirme dans reponse_alfred
 - Si vague ou incomplet → reformule la question, "extraction": null
-- S1 (champ_attendu=description) : extrais la description textuelle ET les lots vers la nomenclature fermée fournie. Slugs exacts uniquement. Besoin sans correspondance → demande précision, ne jamais inventer un slug. Retourne deux entrées dans le tableau d'extraction : une pour "description" (string), une pour "lots" (array).
+- S1 (champ_attendu=description) : extrais TOUJOURS deux entrées dans le tableau d'extraction dès que tu extrais "description" — jamais l'une sans l'autre : une pour "description" (string), une pour "lots" (array de {corps_metier, detail}). "lots" ne doit JAMAIS être vide si une description a été extraite. Utilise UNIQUEMENT les slugs exacts de la nomenclature fermée fournie dans le contexte (nomenclature_corps_metier) — ne jamais inventer un slug hors de cette liste. Si le besoin décrit ne correspond à aucun corps de métier de façon évidente, choisis le corps de métier de la nomenclature le PLUS PROCHE du besoin et précise le détail réel du besoin en clair dans "detail" — ne redemande jamais de précision pour ce seul motif.
 - S2 (champ_attendu=localisation) : localisation en string (adresse, ville, code postal)
 - S3 (champ_attendu=pieces_jointes) : plans disponibles → {renseigne:true,plan_fourni:true,a_discuter_artisan:false} ; à discuter → {renseigne:true,plan_fourni:false,a_discuter_artisan:true} ; pas de plans → {renseigne:true,plan_fourni:false,a_discuter_artisan:false}
 - S4 (champ_attendu=archi_interieur) : client accepte → {propose:true,accepte:true} ; refuse → {propose:true,accepte:false} ; hésitant → reformule
@@ -104,7 +104,10 @@ async function persistReponse(
   const newBriefData: BriefData = structuredClone(currentBriefData);
 
   if (champ === "lots") {
-    if (!Array.isArray(valeur)) return { projet: null, error: "lots doit être un array" };
+    if (!Array.isArray(valeur)) {
+      console.error("[alfred-client-cadrage] extraction lots invalide (pas un array), reçu:", JSON.stringify(valeur));
+      return { projet: null, error: "lots doit être un array" };
+    }
     const lots = valeur as Array<{ corps_metier: string; detail: string }>;
     const corpsMetierIds = lots.map((l) => l.corps_metier);
     if (corpsMetierIds.length > 0) {
@@ -116,6 +119,7 @@ async function persistReponse(
       const knownIds = new Set((known ?? []).map((r: { id: string }) => r.id));
       const inconnus = corpsMetierIds.filter((id) => !knownIds.has(id));
       if (inconnus.length > 0) {
+        console.error("[alfred-client-cadrage] extraction lots avec corps_metier inconnus:", inconnus.join(", "), "reçu:", JSON.stringify(lots));
         return { projet: null, error: `Corps de métier inconnus : ${inconnus.join(", ")}` };
       }
     }
@@ -338,6 +342,30 @@ serve(async (req) => {
           continue;
         }
         projetCourant = updated!;
+      }
+    } else if (!mission.bloquant) {
+      // Étape optionnelle (S3/S4/S5) sans info exploitable dans la réponse du client :
+      // une réponse vide/négative ferme quand même l'étape.
+      const SKIP_CHAMP: Record<string, string> = {
+        S3_pieces_jointes: "pieces_jointes",
+        S4_archi: "archi",
+        S5_catalogue: "catalogue",
+      };
+      const SKIP_VALEUR: Record<string, unknown> = {
+        pieces_jointes: { renseigne: true, plan_fourni: false, a_discuter_artisan: false },
+        archi: { propose: true, accepte: null },
+        catalogue: { propose: true, consulte: null },
+      };
+      const skipChamp = SKIP_CHAMP[mission.etape];
+      if (skipChamp) {
+        const { projet: updated, error: persistErr } = await persistReponse(
+          userClient, projet_id, skipChamp, SKIP_VALEUR[skipChamp], projetCourant
+        );
+        if (persistErr) {
+          console.error("[alfred-client-cadrage] skip persist échoué:", skipChamp, persistErr);
+        } else {
+          projetCourant = updated!;
+        }
       }
     }
 
