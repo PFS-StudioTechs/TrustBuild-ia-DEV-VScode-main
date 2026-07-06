@@ -239,6 +239,42 @@ async function appelClaudeComparer(
   return appelClaude(apiKey, COMPARER_PROMPT, contexte, 0.3, 1024);
 }
 
+const LIBELLE_PROJET_PROMPT = `Génère un libellé de projet court (2 à 4 mots) à partir du message d'un client décrivant des travaux. Exemple : "je veux changer ma chaudière" → "Ma chaudière".
+
+RÉPONSE OBLIGATOIRE : uniquement le libellé, sans guillemets, sans préambule, sans ponctuation finale.`;
+
+async function genererLibelleProjet(apiKey: string, messageClient: string): Promise<string> {
+  try {
+    const brut = await appelClaude(apiKey, LIBELLE_PROJET_PROMPT, messageClient, 0.3, 20);
+    const nettoye = brut.replace(/^["'«]+|["'»]+$/g, "").replace(/[.!?]+$/g, "").trim();
+    if (!nettoye) return "Nouveau projet";
+    return nettoye.length > 40 ? nettoye.slice(0, 40).trim() : nettoye;
+  } catch (e) {
+    console.error("[alfred-client] génération libellé projet échouée:", e);
+    return "Nouveau projet";
+  }
+}
+
+async function creerProjetRacine(
+  userClient: ReturnType<typeof createClient>,
+  apiKey: string,
+  messageClient: string
+): Promise<string> {
+  const { data: userData, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !userData?.user) throw new Error("Utilisateur non authentifié");
+
+  const libelle = await genererLibelleProjet(apiKey, messageClient);
+
+  const { data, error } = await userClient
+    .from("client_projets")
+    .insert({ auth_user_id: userData.user.id, libelle, statut: "cadrage" })
+    .select("id")
+    .single();
+
+  if (error || !data) throw new Error(`Création projet racine échouée: ${error?.message}`);
+  return (data as { id: string }).id;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -261,18 +297,29 @@ serve(async (req) => {
     return json({ error: "Body JSON invalide" }, 400);
   }
 
-  const { action, projet_id, message_client, historique } = body as {
+  const { action, message_client, historique } = body as {
     action?: string;
-    projet_id?: string;
     message_client?: string;
     historique?: Array<{ role: string; content: string }>;
   };
+  let { projet_id } = body as { projet_id?: string };
 
   if (action !== "dialoguer") {
     return json({ error: `Action inconnue : ${action}` }, 400);
   }
-  if (!projet_id || !message_client?.trim()) {
-    return json({ error: "Champs requis : projet_id, message_client" }, 400);
+  if (!message_client?.trim()) {
+    return json({ error: "Champ requis : message_client" }, 400);
+  }
+
+  let projet_cree = false;
+  if (!projet_id) {
+    try {
+      projet_id = await creerProjetRacine(userClient, ANTHROPIC_API_KEY, message_client);
+      projet_cree = true;
+    } catch (e) {
+      console.error("[alfred-client] création projet racine échouée:", e);
+      return json({ error: "Impossible de créer le projet pour ce dialogue." }, 500);
+    }
   }
 
   // ── ÉTAPE 1 : détection d'intention ─────────────────────────────────────
@@ -306,7 +353,7 @@ serve(async (req) => {
       }
 
       const cadrageData = await delegateRes.json();
-      return json({ agent: "cadrage", ...cadrageData });
+      return json({ projet_id, projet_cree, agent: "cadrage", ...cadrageData });
     } catch (e) {
       console.error("[alfred-client] erreur délégation cadrage:", e);
       return json({ error: "Le service de cadrage est momentanément indisponible. Réessayez." }, 502);
@@ -317,7 +364,7 @@ serve(async (req) => {
   if (intention === "reglementaire") {
     try {
       const { reponse_alfred, sources } = await appelClaudeReglementaire(ANTHROPIC_API_KEY, message_client);
-      return json({ agent: "reglementaire", reponse_alfred, sources });
+      return json({ projet_id, projet_cree, agent: "reglementaire", reponse_alfred, sources });
     } catch (e) {
       console.error("[alfred-client] erreur reglementaire:", e);
       return json({ error: "Je n'ai pas pu vérifier cette information pour le moment. Adressez-vous à votre mairie ou à un conseiller France Rénov'." }, 500);
@@ -330,13 +377,14 @@ serve(async (req) => {
       const devisList = await chargerDevisProjetPourComparaison(userClient, projet_id);
       if (devisList.length === 0) {
         return json({
+          projet_id, projet_cree,
           agent: "comparer",
           reponse_alfred: "Vous n'avez aucun devis reçu pour ce projet pour l'instant.",
           devis_compares: [],
         });
       }
       const reponse_alfred = await appelClaudeComparer(ANTHROPIC_API_KEY, message_client, devisList);
-      return json({ agent: "comparer", reponse_alfred, devis_compares: devisList.map((d) => d.id) });
+      return json({ projet_id, projet_cree, agent: "comparer", reponse_alfred, devis_compares: devisList.map((d) => d.id) });
     } catch (e) {
       console.error("[alfred-client] erreur comparer:", e);
       return json({ error: "Erreur du service IA" }, 500);
@@ -346,7 +394,7 @@ serve(async (req) => {
   // ── ÉTAPE 2d : intention expert_chantier ────────────────────────────────
   try {
     const reponse_alfred = await appelClaude(ANTHROPIC_API_KEY, EXPERT_CHANTIER_PROMPT, message_client, 0.3, 1024);
-    return json({ agent: "expert_chantier", reponse_alfred });
+    return json({ projet_id, projet_cree, agent: "expert_chantier", reponse_alfred });
   } catch (e) {
     console.error("[alfred-client] erreur expert_chantier:", e);
     return json({ error: "Erreur du service IA" }, 500);
