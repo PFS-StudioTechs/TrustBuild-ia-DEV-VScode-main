@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -12,16 +13,29 @@ function json(body: unknown, status = 200) {
   });
 }
 
-const INTENTION_ROUTER_PROMPT = `Tu routes le message d'un client TrustBuild-IA vers l'un de ces trois agents :
+const INTENTION_ROUTER_PROMPT = `Tu routes le message d'un client TrustBuild-IA vers l'un de ces quatre agents :
 
 - "expert_chantier" : le client demande un conseil sur le déroulement d'un chantier, ses étapes, des points de vigilance, ou un ordre de grandeur de matériaux/quantités ("comment ça se passe", "qu'est-ce qu'il me faut", "combien de").
 - "cadrage" : le client exprime une intention EXPLICITE d'obtenir un devis ou d'être mis en relation avec un artisan ("je veux des devis", "trouvez-moi un artisan").
 - "reglementaire" : le client demande une obligation légale, une démarche administrative, une norme, une certification, ou une aide financière liée à ses travaux (permis, déclaration préalable, mairie, PLU, mitoyenneté, norme, RGE, IRVE, Qualibat, aide, subvention, MaPrimeRénov, CEE, TVA réduite, crédit d'impôt, éco-PTZ, ANAH).
+- "comparer" : le client veut comparer les devis qu'il a reçus pour ce projet, ou se faire aider à choisir ("comparer", "quel devis choisir", "aidez-moi à décider", "lequel est le mieux").
 
 En cas de doute ou de message ambigu, choisis "expert_chantier" (on conseille, on ne pousse jamais vers le devis).
 
 RÉPONSE OBLIGATOIRE — JSON pur, aucun texte autour, aucun bloc Markdown :
-{ "intention": "expert_chantier" | "cadrage" | "reglementaire" }`;
+{ "intention": "expert_chantier" | "cadrage" | "reglementaire" | "comparer" }`;
+
+const COMPARER_PROMPT = `Tu es Alfred, conseiller TrustBuild-IA. Tu aides un particulier à comparer objectivement les devis qu'il a reçus pour son projet.
+
+Tu compares sur : les postes/prestations, les totaux TTC, les délais mentionnés dans les descriptions, les garanties mentionnées, les exclusions.
+
+INVARIANT ABSOLU : ne mentionne JAMAIS de prix d'achat, de marge, ou de coût interne artisan — ces données ne te sont de toute façon jamais fournies, ne les invente pas.
+
+Reste NEUTRE : éclaire les différences, ne tranche pas à la place du client. Pointe les écarts notables ("le devis A mentionne la garantie décennale, pas le B").
+
+TON : clair, concis, vouvoiement. Pas de recommandation péremptoire — tu informes, le client décide.
+
+Réponds en texte libre, directement au client, sans JSON.`;
 
 const REGLEMENTAIRE_PROMPT = `Tu es Alfred, conseiller TrustBuild-IA. Tu informes un particulier sur les obligations légales et les aides financières liées à son projet de travaux.
 
@@ -148,6 +162,83 @@ async function appelClaudeReglementaire(
   return { reponse_alfred: textParts.join("\n\n").trim(), sources: [...new Set(sources)] };
 }
 
+interface DevisComparaison {
+  id: string;
+  numero: string;
+  statut: string;
+  montant_ttc: number;
+  date_validite: string | null;
+  artisanNom: string;
+  lignes: { designation: string; quantite: number; unite: string; prix_unitaire: number; tva: number; section_nom: string | null }[];
+}
+
+async function chargerDevisProjetPourComparaison(
+  userClient: ReturnType<typeof createClient>,
+  projet_id: string
+): Promise<DevisComparaison[]> {
+  const { data: liaisons } = await (userClient as any)
+    .from("client_projet_devis")
+    .select("devis_id")
+    .eq("projet_id", projet_id)
+    .is("devis_supprime_at", null);
+
+  const devisIds = [...new Set((liaisons ?? []).map((l: { devis_id: string }) => l.devis_id))];
+  if (devisIds.length === 0) return [];
+
+  const { data: devisRows } = await userClient
+    .from("devis")
+    .select("id, numero, statut, artisan_id, date_validite")
+    .in("id", devisIds);
+
+  const rows = (devisRows ?? []) as { id: string; numero: string; statut: string; artisan_id: string; date_validite: string | null }[];
+  if (rows.length === 0) return [];
+
+  const artisanIds = [...new Set(rows.map((r) => r.artisan_id))];
+  const { data: profiles } = await userClient
+    .from("profiles")
+    .select("user_id, nom, prenom")
+    .in("user_id", artisanIds);
+  const profileMap = Object.fromEntries(
+    (profiles ?? []).map((p: { user_id: string; nom: string; prenom: string }) => [p.user_id, `${p.prenom} ${p.nom}`.trim()])
+  );
+
+  const { data: lignes } = await (userClient as any)
+    .from("lignes_devis_client")
+    .select("devis_id, designation, quantite, unite, prix_unitaire, tva, ordre, section_nom")
+    .in("devis_id", devisIds)
+    .order("ordre", { ascending: true });
+
+  const lignesByDevis: Record<string, DevisComparaison["lignes"]> = {};
+  const montantByDevis: Record<string, number> = {};
+  for (const l of (lignes ?? []) as any[]) {
+    (lignesByDevis[l.devis_id] ??= []).push({
+      designation: l.designation, quantite: l.quantite, unite: l.unite,
+      prix_unitaire: l.prix_unitaire, tva: l.tva, section_nom: l.section_nom,
+    });
+    montantByDevis[l.devis_id] = (montantByDevis[l.devis_id] ?? 0)
+      + l.prix_unitaire * l.quantite * (1 + (l.tva ?? 0) / 100);
+  }
+
+  return rows.map((d) => ({
+    id: d.id,
+    numero: d.numero,
+    statut: d.statut,
+    montant_ttc: montantByDevis[d.id] ?? 0,
+    date_validite: d.date_validite,
+    artisanNom: profileMap[d.artisan_id] ?? "Artisan",
+    lignes: lignesByDevis[d.id] ?? [],
+  }));
+}
+
+async function appelClaudeComparer(
+  apiKey: string,
+  userMessage: string,
+  devisList: DevisComparaison[]
+): Promise<string> {
+  const contexte = `DEVIS DU PROJET (données déjà filtrées, aucune marge ni coût interne) :\n${JSON.stringify(devisList, null, 2)}\n\nMESSAGE CLIENT :\n${userMessage}`;
+  return appelClaude(apiKey, COMPARER_PROMPT, contexte, 0.3, 1024);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -158,6 +249,10 @@ serve(async (req) => {
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY non configuré" }, 500);
+
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
 
   let body: Record<string, unknown>;
   try {
@@ -181,12 +276,12 @@ serve(async (req) => {
   }
 
   // ── ÉTAPE 1 : détection d'intention ─────────────────────────────────────
-  let intention: "expert_chantier" | "cadrage" | "reglementaire" = "expert_chantier";
+  let intention: "expert_chantier" | "cadrage" | "reglementaire" | "comparer" = "expert_chantier";
   try {
     const routerText = await appelClaude(ANTHROPIC_API_KEY, INTENTION_ROUTER_PROMPT, message_client, 0, 100);
     const cleaned = routerText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
     const parsed = JSON.parse(cleaned);
-    if (parsed.intention === "cadrage" || parsed.intention === "reglementaire") intention = parsed.intention;
+    if (parsed.intention === "cadrage" || parsed.intention === "reglementaire" || parsed.intention === "comparer") intention = parsed.intention;
   } catch (e) {
     console.error("[alfred-client] détection intention échouée, fallback expert_chantier:", e);
   }
@@ -229,7 +324,26 @@ serve(async (req) => {
     }
   }
 
-  // ── ÉTAPE 2c : intention expert_chantier ────────────────────────────────
+  // ── ÉTAPE 2c : intention comparer ───────────────────────────────────────
+  if (intention === "comparer") {
+    try {
+      const devisList = await chargerDevisProjetPourComparaison(userClient, projet_id);
+      if (devisList.length === 0) {
+        return json({
+          agent: "comparer",
+          reponse_alfred: "Vous n'avez aucun devis reçu pour ce projet pour l'instant.",
+          devis_compares: [],
+        });
+      }
+      const reponse_alfred = await appelClaudeComparer(ANTHROPIC_API_KEY, message_client, devisList);
+      return json({ agent: "comparer", reponse_alfred, devis_compares: devisList.map((d) => d.id) });
+    } catch (e) {
+      console.error("[alfred-client] erreur comparer:", e);
+      return json({ error: "Erreur du service IA" }, 500);
+    }
+  }
+
+  // ── ÉTAPE 2d : intention expert_chantier ────────────────────────────────
   try {
     const reponse_alfred = await appelClaude(ANTHROPIC_API_KEY, EXPERT_CHANTIER_PROMPT, message_client, 0.3, 1024);
     return json({ agent: "expert_chantier", reponse_alfred });
