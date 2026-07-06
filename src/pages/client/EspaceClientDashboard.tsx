@@ -81,7 +81,7 @@ export default function EspaceClientDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-h1 font-display font-bold">
-          Bonjour, {prenom} 👋
+          Bonjour {prenom}, 👋
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           {hasArtisan

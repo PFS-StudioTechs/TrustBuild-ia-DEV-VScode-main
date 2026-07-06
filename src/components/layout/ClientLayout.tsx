@@ -30,13 +30,11 @@ const projetsSubNav = [
 export default function ClientLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, profile } = useAuth();
+  const { signOut } = useAuth();
   const [projetsOpen, setProjetsOpen] = useState(
     location.pathname.startsWith("/espace-client/projets")
   );
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const prenom = profile?.prenom ?? "";
 
   const isActive = (path: string, exact = false) =>
     exact ? location.pathname === path : location.pathname.startsWith(path);
@@ -74,9 +72,6 @@ export default function ClientLayout() {
             Espace client
           </span>
         </button>
-        {prenom && (
-          <span className="mt-2 text-xs text-white/70 font-medium">Bonjour, {prenom}</span>
-        )}
       </div>
 
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">

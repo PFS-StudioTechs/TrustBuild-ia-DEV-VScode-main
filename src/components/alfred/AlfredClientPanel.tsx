@@ -51,6 +51,8 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
   const [transcribing, setTranscribing] = useState(false);
   const [creatingNew, setCreatingNew] = useState(false);
   const [newProjetName, setNewProjetName] = useState("");
+  const [rootInput, setRootInput] = useState("");
+  const [rootLoading, setRootLoading] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -164,7 +166,7 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
       if (!resp.ok) throw new Error("Transcription failed");
       const data = await resp.json();
       if (data.text) {
-        setInput(data.text);
+        phase === "picking" ? setRootInput(data.text) : setInput(data.text);
       } else {
         toast.error("Aucun texte détecté");
       }
@@ -183,6 +185,41 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
     if (!newProjetName.trim()) return;
     setCreatingNew(false);
     createAndStart(newProjetName.trim());
+  };
+
+  const sendRoot = async (text: string) => {
+    if (!text.trim() || rootLoading) return;
+    const userText = text.trim();
+    setRootInput("");
+    setRootLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("alfred-client", {
+        body: { action: "dialoguer", message_client: userText },
+      });
+
+      if (error) throw error;
+      if (!data?.projet_id || !data?.reponse_alfred) throw new Error("Réponse vide");
+
+      const { data: projetRow } = await supabase
+        .from("client_projets")
+        .select("libelle")
+        .eq("id", data.projet_id)
+        .single();
+
+      setProjetId(data.projet_id);
+      setProjetLibelle((projetRow as { libelle: string } | null)?.libelle ?? "Nouveau projet");
+      setMessages([
+        { role: "user", content: userText },
+        { role: "assistant", content: data.reponse_alfred },
+      ]);
+      setPhase("chat");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur";
+      toast.error(msg);
+    } finally {
+      setRootLoading(false);
+    }
   };
 
   const send = async (text: string) => {
@@ -277,6 +314,43 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
             </div>
           )}
         </div>
+
+        <div className="border-t shrink-0 bg-card">
+          <form
+            onSubmit={(e) => { e.preventDefault(); sendRoot(rootInput); }}
+            className="flex gap-2 p-2 items-end"
+          >
+            <textarea
+              value={rootInput}
+              onChange={(e) => setRootInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendRoot(rootInput); } }}
+              placeholder={transcribing ? "Transcription en cours..." : "Construisons ensemble votre projet…"}
+              rows={1}
+              className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ minHeight: "40px" }}
+              disabled={rootLoading || transcribing}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={toggleRecording}
+              disabled={rootLoading || transcribing}
+              className={`h-10 w-10 shrink-0 transition-all${recording ? " animate-pulse bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600" : ""}`}
+              title={recording ? "Arrêter l'enregistrement" : "Enregistrement vocal"}
+            >
+              <Mic className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!rootInput.trim() || rootLoading || transcribing}
+              className="h-10 w-10 shrink-0 bg-gradient-to-r from-primary to-accent"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </Button>
+          </form>
+        </div>
       </div>
     );
   }
@@ -339,7 +413,7 @@ export default function AlfredClientPanel({ onClose }: { onClose?: () => void })
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-            placeholder={transcribing ? "Transcription en cours..." : "Décrivez votre projet…"}
+            placeholder={transcribing ? "Transcription en cours..." : messages.length === 0 ? "Construisons ensemble votre projet…" : "Décrivez votre projet…"}
             rows={1}
             className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             style={{ minHeight: "40px" }}
