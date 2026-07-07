@@ -18,6 +18,17 @@ export default function ResetPassword() {
 
   useEffect(() => {
     const init = async () => {
+      const code = new URLSearchParams(window.location.search).get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          setReady(true);
+          return;
+        }
+        toast.error("Lien de réinitialisation invalide ou expiré");
+        return;
+      }
+
       // First check if there's already a session (link was processed)
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
