@@ -2,9 +2,19 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { FolderOpen, Plus } from "lucide-react";
+import { FolderOpen, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import NouveauProjetDialog from "@/components/client/NouveauProjetDialog";
@@ -42,6 +52,7 @@ export default function MesProjets() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
+  const [projetASupprimer, setProjetASupprimer] = useState<ProjetAvecStatut | null>(null);
   const segment = location.pathname.split("/").pop() ?? "en-cours";
   const activeStatut: ProjetStatutDerive = segment === "nouveau" ? "a_venir" : segment === "termine" ? "termine" : "en_cours";
 
@@ -109,6 +120,23 @@ export default function MesProjets() {
       queryClient.invalidateQueries({ queryKey: ["client-projets-avec-statut", user?.id] });
     },
     onError: () => { toast.error("Erreur lors de la création"); },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (projetId: string) => {
+      const { error } = await (supabase as any)
+        .from("client_projets")
+        .delete()
+        .eq("id", projetId)
+        .eq("auth_user_id", user!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Projet supprimé");
+      queryClient.invalidateQueries({ queryKey: ["client-projets-avec-statut", user?.id] });
+    },
+    onError: () => { toast.error("Erreur lors de la suppression"); },
+    onSettled: () => setProjetASupprimer(null),
   });
 
   const handleSave = async (libelle: string): Promise<boolean> => {
@@ -186,15 +214,52 @@ export default function MesProjets() {
                   Créé le {new Date(p.created_at).toLocaleDateString("fr-FR")}
                 </p>
               </div>
-              <Badge variant="outline" className="text-xs shrink-0 ml-2">
-                {p.statut === "a_venir" ? "À venir" : p.statut === "en_cours" ? "En cours" : "Terminé"}
-              </Badge>
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <Badge variant="outline" className="text-xs">
+                  {p.statut === "a_venir" ? "À venir" : p.statut === "en_cours" ? "En cours" : "Terminé"}
+                </Badge>
+                {p.statut === "a_venir" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    aria-label="Supprimer le projet"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setProjetASupprimer(p);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
       <NouveauProjetDialog open={formOpen} onOpenChange={setFormOpen} onSave={handleSave} />
+
+      <AlertDialog open={!!projetASupprimer} onOpenChange={(open) => !open && setProjetASupprimer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer le projet ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Le projet « {projetASupprimer?.libelle} » et ses liaisons de devis seront supprimés définitivement. Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={() => projetASupprimer && deleteMutation.mutate(projetASupprimer.id)}
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
