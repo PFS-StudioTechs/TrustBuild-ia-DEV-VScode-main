@@ -171,21 +171,33 @@ export default function SendEmailDialog(props: Props) {
         }
       }
 
-      const { data, error } = await supabase.functions.invoke("send-message", {
-        body: {
-          to_email: toEmail.trim(),
-          to_name: clientNom || undefined,
-          subject,
-          body: finalBody,
-          html_body: htmlBody,
-          document_type: type,
-          document_id: doc.id,
-          ...(clientTelephone ? { to_phone: clientTelephone } : {}),
-          ...(docUrl ? { doc_url: docUrl } : {}),
-        },
-      });
+      const invokeBody = {
+        to_email: toEmail.trim(),
+        to_name: clientNom || undefined,
+        subject,
+        body: finalBody,
+        html_body: htmlBody,
+        document_type: type,
+        document_id: doc.id,
+        ...(clientTelephone ? { to_phone: clientTelephone } : {}),
+        ...(docUrl ? { doc_url: docUrl } : {}),
+      };
 
-      if (error) throw new Error(error.message);
+      const RETRY_DELAY_MS = 60_000;
+      const MAX_RETRIES = 3;
+      let data: any;
+      let error: any;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        ({ data, error } = await supabase.functions.invoke("send-message", { body: invokeBody }));
+        if (!error) break;
+        if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      }
+
+      if (error) {
+        toast.error("Problème d'envoi - réessayez plus tard");
+        log({ action: "email.send_failed", entity_type: type, entity_id: doc.id, status: "error", details: { to: toEmail, subject, numero: doc.numero, error: error.message, retries_exhausted: true } });
+        return;
+      }
 
       // Met à jour le statut (token_public + token_expires_at déjà mis à jour ci-dessus)
       if (type === "devis") {
