@@ -79,7 +79,7 @@ type LigneState = {
   marge_pct?: number | null;
 };
 
-type FournisseurRef = { id: string; nom: string };
+type FournisseurRef = { id: string; nom: string; catalogue_fournisseur_id: string | null };
 type ProduitRef = { id: string; designation: string; reference: string | null; unite: string; prix_achat: number; prix_negocie_valeur: number | null };
 
 const calcPV = (pa: number, marge: number) =>
@@ -138,7 +138,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
     if (!user) return;
     supabase
       .from("fournisseurs")
-      .select("id, nom")
+      .select("id, nom, catalogue_fournisseur_id")
       .eq("artisan_id", user.id)
       .order("nom")
       .then(({ data: rows }) => setFournisseurs((rows ?? []) as FournisseurRef[]));
@@ -146,15 +146,39 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
 
   const loadProduits = async (fournisseurId: string) => {
     if (produitsCache[fournisseurId]) return;
-    const { data: rows } = await (supabase as any)
-      .from("produits")
-      .select("id, designation, reference, unite, prix_achat, prix_negocie_valeur")
-      .eq("artisan_id", user!.id)
-      .eq("fournisseur_id", fournisseurId)
-      .eq("actif", true)
-      .in("statut_import", ["valide", "manuel"])
-      .order("designation");
-    setProduitsCache(prev => ({ ...prev, [fournisseurId]: (rows ?? []) as ProduitRef[] }));
+
+    const fournisseur = fournisseurs.find(f => f.id === fournisseurId);
+    const catalogueFournisseurId = fournisseur?.catalogue_fournisseur_id ?? null;
+
+    if (!catalogueFournisseurId) {
+      setProduitsCache(prev => ({ ...prev, [fournisseurId]: [] }));
+      return;
+    }
+
+    const [{ data: rows }, { data: prix }] = await Promise.all([
+      (supabase as any)
+        .from("produits")
+        .select("id, designation, reference, unite, prix_achat")
+        .eq("fournisseur_id", catalogueFournisseurId)
+        .eq("actif", true)
+        .in("statut_import", ["valide", "manuel"])
+        .order("designation"),
+      (supabase as any)
+        .from("artisan_prix_negocie")
+        .select("produit_id, prix_negocie_valeur")
+        .eq("artisan_id", user!.id),
+    ]);
+
+    const prixMap = new Map<string, number | null>(
+      (prix ?? []).map((p: any) => [p.produit_id, p.prix_negocie_valeur])
+    );
+
+    const merged: ProduitRef[] = (rows ?? []).map((p: any) => ({
+      ...p,
+      prix_negocie_valeur: prixMap.get(p.id) ?? null,
+    }));
+
+    setProduitsCache(prev => ({ ...prev, [fournisseurId]: merged }));
   };
 
   const startVoicePA = (idx: number) => {
