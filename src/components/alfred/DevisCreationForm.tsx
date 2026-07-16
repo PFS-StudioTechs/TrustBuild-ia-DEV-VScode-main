@@ -4,12 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, FileText, Trash2, Plus, Check, Loader2, Users, Building2, Layers, Pencil, Package, Mic } from "lucide-react";
+import { UserPlus, FileText, Trash2, Plus, Check, Loader2, Users, Building2, Layers, Pencil, Package, Mic, Store } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import AddressFields from "@/components/ui/AddressFields";
 import { generateDocumentNumber } from "@/lib/generateDocumentNumber";
+import CatalogueComparateurDialog from "@/components/CatalogueComparateurDialog";
 
 export interface DevisData {
   tva?: number;
@@ -131,6 +132,7 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
   const [produitsCache, setProduitsCache] = useState<Record<string, ProduitRef[]>>({});
   const [pricingOpenIdx, setPricingOpenIdx] = useState<number | null>(null);
   const [listeningIdx, setListeningIdx] = useState<number | null>(null);
+  const [catalogueDialogOpen, setCatalogueDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -279,6 +281,19 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
 
   const lastSection = lignes.length > 0 ? lignes[lignes.length - 1].section : undefined;
   const addLigne = () => setLignes(prev => [...prev, { description: "", quantite: 1, unite: "u", prix_unitaire: 0, section: lastSection }]);
+
+  const addLigneFromCatalogue = (article: { designation: string; unite: string }, offre: { produit_id: string; prix_achat: number }) => {
+    setLignes(prev => [...prev, {
+      description: article.designation,
+      quantite: 1,
+      unite: article.unite,
+      prix_unitaire: offre.prix_achat,
+      produit_id: offre.produit_id,
+      section: lastSection,
+    }]);
+    setCatalogueDialogOpen(false);
+    toast.success("Ligne ajoutée depuis le catalogue partenaire");
+  };
 
   const addLigneToSection = (section: string) =>
     setLignes(prev => [...prev, { description: "", quantite: 1, unite: "u", prix_unitaire: 0, section }]);
@@ -601,9 +616,21 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
 
       <Card className="border-muted">
         <CardHeader className="py-2 px-3">
-          <CardTitle className="text-xs flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-            Lignes du devis
+          <CardTitle className="text-xs flex items-center justify-between gap-1.5">
+            <span className="flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+              Lignes du devis
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              className="h-6 text-[10px] px-2"
+              onClick={() => setCatalogueDialogOpen(true)}
+            >
+              <Store className="w-3 h-3 mr-1" />
+              Catalogues partenaires
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3 pb-3 space-y-2">
@@ -849,6 +876,12 @@ export default function DevisCreationForm({ data, onCreated }: Props) {
           <><Check className="w-4 h-4 mr-2" /> {selectedClientId ? "Créer le devis" : "Créer le client et le devis"}</>
         )}
       </Button>
+
+      <CatalogueComparateurDialog
+        open={catalogueDialogOpen}
+        onClose={() => setCatalogueDialogOpen(false)}
+        onSelect={(article, offre) => addLigneFromCatalogue(article, offre)}
+      />
     </div>
   );
 }

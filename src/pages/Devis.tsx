@@ -16,10 +16,11 @@ import {
   Plus, X, ChevronDown, ChevronUp, Pencil, Trash2, Lock, Send,
   CheckCircle2, XCircle, Building2, FileText, AlertTriangle,
   Loader2, Users, CreditCard, Wrench, ArrowRight, Eye, Printer,
-  GitBranch, RotateCcw, ClipboardList, Layers, Mail, Download, MailOpen, MousePointerClick,
+  GitBranch, RotateCcw, ClipboardList, Layers, Mail, Download, MailOpen, MousePointerClick, Store,
 } from "lucide-react";
 import SendEmailDialog from "@/components/SendEmailDialog";
 import AddressFields from "@/components/ui/AddressFields";
+import CatalogueComparateurDialog from "@/components/CatalogueComparateurDialog";
 import { toast } from "sonner";
 
 // ─── Types ─────────────────────────────────────────────────
@@ -43,6 +44,7 @@ interface LigneDevis {
   tva: number;
   ordre: number;
   section_nom?: string | null;
+  produit_id?: string | null;
 }
 
 interface DevisRow {
@@ -200,8 +202,23 @@ function LignesEditor({
   allAnnotations?: AnnotationItem[];
   onAnnotationDelete?: (index: number) => void;
 }) {
+  const [catalogueDialogOpen, setCatalogueDialogOpen] = useState(false);
+
   const addLigne = () =>
     onChange([...lignes, { designation: "", quantite: 1, unite: "u", prix_unitaire: 0, tva: 20, ordre: lignes.length }]);
+
+  const addLigneFromCatalogue = (article: { designation: string; unite: string }, offre: { produit_id: string; prix_achat: number }) => {
+    onChange([...lignes, {
+      designation: article.designation,
+      quantite: 1,
+      unite: article.unite,
+      prix_unitaire: offre.prix_achat,
+      tva: 20,
+      ordre: lignes.length,
+      produit_id: offre.produit_id,
+    }]);
+    setCatalogueDialogOpen(false);
+  };
 
   const updateLigne = (i: number, field: keyof LigneDevis, value: string | number) => {
     const updated = lignes.map((l, idx) => (idx === i ? { ...l, [field]: value } : l));
@@ -212,6 +229,20 @@ function LignesEditor({
 
   return (
     <div className="space-y-2">
+      {!disabled && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 text-[10px] px-2"
+            onClick={() => setCatalogueDialogOpen(true)}
+          >
+            <Store className="w-3 h-3 mr-1" />
+            Catalogues partenaires
+          </Button>
+        </div>
+      )}
       {lignes.map((l, i) => {
         const ligneAnns = allAnnotations && l.id
           ? allAnnotations.map((a, idx) => ({ ...a, _idx: idx })).filter(a => a.ligne_id === l.id)
@@ -291,6 +322,12 @@ function LignesEditor({
           <Plus className="w-3.5 h-3.5 mr-1" /> Ajouter une ligne
         </Button>
       )}
+
+      <CatalogueComparateurDialog
+        open={catalogueDialogOpen}
+        onClose={() => setCatalogueDialogOpen(false)}
+        onSelect={(article, offre) => addLigneFromCatalogue(article, offre)}
+      />
     </div>
   );
 }
