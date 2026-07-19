@@ -57,6 +57,7 @@ RÈGLES ABSOLUES :
 - "quelles normes pour X" → TOUJOURS gustave, même sans "DTU" ni "NF"
 - "décennale" dans un contexte de devis → alfred (assurance citée en passant)
 - "devis + DTU" → alfred si l'intent principal est de chiffrer
+- Si le message commence par "[Persona du tour précédent : X]", c'est une indication de contexte uniquement : en cas de message ambigu ou trop court pour trancher seul, reste sur X ; mais un signal clair dans le message (règles ci-dessus) prime toujours sur cet indice
 
 INTENT :
 - "DEVIS_CREATE" : créer un nouveau devis
@@ -70,9 +71,16 @@ client (nom), prestation (type de travaux), surface (nombre en m²), materiau, m
 
 FORMAT EXACT : {"persona":"alfred","intent":"GENERAL","entities":{},"confidence":0.95}`;
 
-export async function routeIntent(message: string): Promise<IntentResult> {
+export async function routeIntent(
+  message: string,
+  previousPersona?: "alfred" | "simone" | "gustave"
+): Promise<IntentResult> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return FALLBACK;
+
+  const userContent = previousPersona
+    ? `[Persona du tour précédent : ${previousPersona}]\n${message}`
+    : message;
 
   try {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -87,7 +95,7 @@ export async function routeIntent(message: string): Promise<IntentResult> {
         max_tokens: 200,
         temperature: 0,
         system: ROUTER_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: message }],
+        messages: [{ role: "user", content: userContent }],
       }),
     });
 
