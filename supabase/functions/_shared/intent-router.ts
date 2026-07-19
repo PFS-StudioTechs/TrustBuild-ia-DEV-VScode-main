@@ -57,7 +57,7 @@ RÈGLES ABSOLUES :
 - "quelles normes pour X" → TOUJOURS gustave, même sans "DTU" ni "NF"
 - "décennale" dans un contexte de devis → alfred (assurance citée en passant)
 - "devis + DTU" → alfred si l'intent principal est de chiffrer
-- Si le message commence par "[Persona du tour précédent : X]", c'est une indication de contexte uniquement : en cas de message ambigu ou trop court pour trancher seul, reste sur X ; mais un signal clair dans le message (règles ci-dessus) prime toujours sur cet indice
+- Si le message commence par "[Persona du tour précédent : X]" : reste sur X seulement si aucun mot-clé des règles 1/2 n'apparaît dans le message actuel. Dès qu'un mot-clé de règle 1 ou 2 apparaît, applique cette règle même si le message référence le tour précédent par un pronom ou une expression comme "à ce sujet", "sur ce point", "pour ça".
 
 INTENT :
 - "DEVIS_CREATE" : créer un nouveau devis

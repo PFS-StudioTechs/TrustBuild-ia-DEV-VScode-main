@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 // @ts-nocheck — fichier Node.js dans un répertoire Deno, hors scope du tsconfig Vite
 /**
- * Test routeIntent() — 15 cas de routing
+ * Test routeIntent() — 19 cas de routing
  *
  * Run :
  *   $env:ANTHROPIC_API_KEY="sk-ant-..."
@@ -61,6 +61,7 @@ interface IntentResult {
 interface TestCase {
   id: number;
   message: string;
+  hint?: "alfred" | "simone" | "gustave";
   expected: {
     persona: string;
     intent: string;
@@ -107,6 +108,7 @@ RÈGLES ABSOLUES :
 - "quelles normes pour X" → TOUJOURS gustave, même sans "DTU" ni "NF"
 - "décennale" dans un contexte de devis → alfred (assurance citée en passant)
 - "devis + DTU" → alfred si l'intent principal est de chiffrer
+- Si le message commence par "[Persona du tour précédent : X]" : reste sur X seulement si aucun mot-clé des règles 1/2 n'apparaît dans le message actuel. Dès qu'un mot-clé de règle 1 ou 2 apparaît, applique cette règle même si le message référence le tour précédent par un pronom ou une expression comme "à ce sujet", "sur ce point", "pour ça".
 
 INTENT :
 - "DEVIS_CREATE" : créer un nouveau devis
@@ -127,7 +129,13 @@ const FALLBACK: IntentResult = {
   confidence: 0,
 };
 
-async function routeIntent(message: string): Promise<IntentResult> {
+async function routeIntent(
+  message: string,
+  hint?: "alfred" | "simone" | "gustave"
+): Promise<IntentResult> {
+  const userContent = hint
+    ? `[Persona du tour précédent : ${hint}]\n${message}`
+    : message;
   try {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -141,7 +149,7 @@ async function routeIntent(message: string): Promise<IntentResult> {
         max_tokens: 200,
         temperature: 0,
         system: ROUTER_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: message }],
+        messages: [{ role: "user", content: userContent }],
       }),
     });
 
@@ -160,7 +168,8 @@ async function routeIntent(message: string): Promise<IntentResult> {
     console.log("=== END ROUTER DEBUG ===");
 
     try {
-      return JSON.parse(text.trim()) as IntentResult;
+      const cleaned = text.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+      return JSON.parse(cleaned) as IntentResult;
     } catch {
       console.error(`  JSON parse error. Raw: ${text}`);
       return FALLBACK;
@@ -344,6 +353,50 @@ const TESTS: TestCase[] = [
     },
     note: "Gustave diagnostique condensation interstitielle, mentionne Simone pour responsabilité",
   },
+  {
+    id: 16,
+    message: "Et que peux-tu me dire sur les dernières normes DTU associées à ce sujet ?",
+    hint: "alfred",
+    expected: {
+      persona: "gustave",
+      intent: "QUERY_EXPERT",
+      minConfidence: 0.8,
+    },
+    note: "Cas réel — mot-clé normes/DTU doit primer sur l'indice de continuité alfred",
+  },
+  {
+    id: 17,
+    message: "et pour l'épaisseur ?",
+    hint: "gustave",
+    expected: {
+      persona: "gustave",
+      intent: "QUERY_EXPERT",
+      minConfidence: 0.6,
+    },
+    note: "Mot-clé règle 2 (épaisseur) cohérent avec l'indice — reste gustave",
+  },
+  {
+    id: 18,
+    message: "et sinon ?",
+    hint: "gustave",
+    expected: {
+      persona: "gustave",
+      intent: "GENERAL",
+      minConfidence: 0.6,
+    },
+    note: "Aucun mot-clé règle 1/2 — indice de continuité légitime, reste gustave",
+  },
+  {
+    id: 19,
+    message: "continue",
+    hint: "simone",
+    expected: {
+      persona: "simone",
+      intent: "GENERAL",
+      minConfidence: 0.6,
+    },
+    note: "Aucun mot-clé règle 1/2 — indice de continuité légitime, reste simone",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -399,17 +452,17 @@ function checkEntities(
 
   const SEP = "─".repeat(72);
   console.log(`\n${"═".repeat(72)}`);
-  console.log(`  intent-router — suite de test (15 cas)`);
+  console.log(`  intent-router — suite de test (${TESTS.length} cas)`);
   console.log(`  Modèle : claude-haiku-4-5-20251001`);
   console.log(`${"═".repeat(72)}\n`);
 
   for (const tc of TESTS) {
     console.log(`${SEP}`);
-    console.log(`Test ${tc.id.toString().padStart(2, "0")}/15`);
-    console.log(`  Message  : "${tc.message}"`);
+    console.log(`Test ${tc.id.toString().padStart(2, "0")}/${TESTS.length}`);
+    console.log(`  Message  : "${tc.message}"${tc.hint ? ` (hint: ${tc.hint})` : ""}`);
     if (tc.note) console.log(`  Attendu  : ${tc.note}`);
 
-    const result = await routeIntent(tc.message);
+    const result = await routeIntent(tc.message, tc.hint);
 
     console.log(`  Résultat : persona=${result.persona}  intent=${result.intent}  confidence=${result.confidence.toFixed(2)}`);
     if (Object.keys(result.entities).length > 0) {
@@ -460,7 +513,7 @@ function checkEntities(
   console.log(`\n${"═".repeat(72)}`);
   console.log(`  RÉSUMÉ`);
   console.log(`${"═".repeat(72)}`);
-  console.log(`  ✅ PASS : ${passCount}/15`);
+  console.log(`  ✅ PASS : ${passCount}/${TESTS.length}`);
   console.log(`  ⚠️  WARN : ${warnCount}  (persona+intent OK, confidence zone grise)`);
   console.log(`  ❌ FAIL : ${failCount}`);
   if (failDetails.length > 0) {
