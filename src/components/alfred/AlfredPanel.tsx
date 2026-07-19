@@ -38,6 +38,7 @@ interface Message {
   content: string;
   persona?: string;
   source?: string;
+  isPassation?: boolean;
   devisData?: DevisData | null;
   devisUpdateData?: DevisUpdateData | null;
   avenantData?: AvenantData | null;
@@ -50,6 +51,12 @@ const personaConfig: Record<string, { label: string; avatar: string; color: stri
   alfred: { label: "Alfred", avatar: "/avatar-alfred.png", color: "text-accent" },
   simone: { label: "Simone", avatar: "/avatar-simone.png", color: "text-amber-600" },
   gustave: { label: "Gustave", avatar: "/avatar-gustave.png", color: "text-emerald-600" },
+};
+
+const passationText: Record<string, string> = {
+  alfred: "Alfred reprend la main",
+  simone: "Simone prend le relais",
+  gustave: "Gustave prend le relais",
 };
 
 export default function AlfredPanel({ onClose }: { onClose: () => void }) {
@@ -305,6 +312,7 @@ export default function AlfredPanel({ onClose }: { onClose: () => void }) {
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
+    const previousPersona = [...messages].reverse().find((m) => m.role === "assistant")?.persona;
     const userMsg: Message = { role: "user", content: text.trim(), source: "app" };
     const updated = [...messages, userMsg];
     setMessages(updated);
@@ -320,13 +328,22 @@ export default function AlfredPanel({ onClose }: { onClose: () => void }) {
         body: {
           messages: updated.map((m) => ({ role: m.role, content: m.content })),
           context: { page: location.pathname, activeDocId, activeDocType },
+          previousPersona,
+        },
+        onRouting: (routing) => {
+          if (previousPersona && routing.persona !== previousPersona) {
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content: "", isPassation: true, persona: routing.persona, source: "app" },
+            ]);
+          }
         },
         onChunk: (accumulated) => {
           const persona = accumulated.startsWith("[Simone]") ? "simone"
             : accumulated.startsWith("[Gustave]") ? "gustave" : "alfred";
           setMessages((prev) => {
             const last = prev[prev.length - 1];
-            if (last?.role === "assistant") {
+            if (last?.role === "assistant" && !last.isPassation) {
               return prev.map((m, i) =>
                 i === prev.length - 1 ? { ...m, content: accumulated, persona, source: "app" } : m
               );
@@ -431,6 +448,17 @@ export default function AlfredPanel({ onClose }: { onClose: () => void }) {
 
         {messages.map((msg, i) => {
           const persona = msg.persona ? personaConfig[msg.persona] : personaConfig.alfred;
+
+          if (msg.isPassation) {
+            return (
+              <div key={i} className="flex justify-center">
+                <span className="text-[10px] text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+                  {passationText[msg.persona ?? "alfred"]}
+                </span>
+              </div>
+            );
+          }
+
           return (
             <div key={i} className={cn("flex gap-2", msg.role === "user" ? "justify-end" : "")}>
               {msg.role === "assistant" && (

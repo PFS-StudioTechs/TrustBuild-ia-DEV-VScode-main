@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Expose-Headers":
+    "X-Trustbuild-Persona, X-Trustbuild-Intent, X-Trustbuild-Confidence",
 };
 
 // ---------------------------------------------------------------------------
@@ -137,6 +139,7 @@ serve(async (req) => {
       stream = true,
       context,
       persona: forcePersona,
+      previousPersona,
       action,
     } = body;
 
@@ -241,7 +244,18 @@ serve(async (req) => {
             entities: {},
             confidence: 1,
           }
-        : await routeIntent(lastUserMsg);
+        : await routeIntent(
+            lastUserMsg,
+            validPersonas.includes(previousPersona as string)
+              ? (previousPersona as "alfred" | "simone" | "gustave")
+              : undefined
+          );
+
+    const routingHeaders = {
+      "X-Trustbuild-Persona": routerResult.persona,
+      "X-Trustbuild-Intent": routerResult.intent,
+      "X-Trustbuild-Confidence": String(routerResult.confidence),
+    };
 
     const persona = routerResult.persona;
     let systemContent = getSystemPrompt(persona);
@@ -424,7 +438,11 @@ serve(async (req) => {
     if (stream) {
       const transformedStream = anthropicToOpenAiSse(anthropicResponse.body!);
       return new Response(transformedStream, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        headers: {
+          ...corsHeaders,
+          ...routingHeaders,
+          "Content-Type": "text/event-stream",
+        },
       });
     }
 
@@ -436,7 +454,13 @@ serve(async (req) => {
         choices: [{ message: { content: text } }],
         routing: routerResult,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        headers: {
+          ...corsHeaders,
+          ...routingHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   } catch (e) {
     console.error("call-claude error:", e);

@@ -10,6 +10,8 @@ export interface StreamingChatOptions {
   onChunk: (accumulated: string) => void;
   /** Appelé une seule fois quand le stream est terminé */
   onDone?: (finalText: string) => void;
+  /** Appelé dès que les headers de routage (persona/intent) sont reçus */
+  onRouting?: (routing: { persona: string; intent: string; confidence: number }) => void;
 }
 
 /**
@@ -21,6 +23,7 @@ export async function streamChat({
   body,
   onChunk,
   onDone,
+  onRouting,
 }: StreamingChatOptions): Promise<string | null> {
   // Récupère le token de session pour identifier l'utilisateur côté edge function
   const { data: { session } } = await supabase.auth.getSession();
@@ -47,6 +50,15 @@ export async function streamChat({
   }
   if (!resp.ok || !resp.body) {
     throw new Error("Erreur de connexion");
+  }
+
+  const routingPersona = resp.headers.get("X-Trustbuild-Persona");
+  if (routingPersona) {
+    onRouting?.({
+      persona: routingPersona,
+      intent: resp.headers.get("X-Trustbuild-Intent") ?? "GENERAL",
+      confidence: Number(resp.headers.get("X-Trustbuild-Confidence") ?? "0"),
+    });
   }
 
   const reader = resp.body.getReader();
