@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 // @ts-nocheck — fichier Node.js dans un répertoire Deno, hors scope du tsconfig Vite
 /**
- * Test routeIntent() — 23 cas de routing
+ * Test routeIntent() — 26 cas de routing
  *
  * Run :
  *   $env:ANTHROPIC_API_KEY="sk-ant-..."
@@ -90,6 +90,7 @@ interface IntentResult {
     | "QUOTE_SUGGEST"
     | "QUERY_EXPERT"
     | "GUIDE_APP"
+    | "SEARCH_HISTORY"
     | "GENERAL";
   entities: {
     client?: string;
@@ -98,6 +99,7 @@ interface IntentResult {
     materiau?: string;
     montant?: number;
     domaine?: "juridique" | "technique";
+    recherche?: string;
   };
   confidence: number;
 }
@@ -146,7 +148,11 @@ DÉCISION — applique dans cet ordre :
 
 3. persona = "alfred", intent = "GUIDE_APP" si le message porte sur la prise en main de l'application elle-même : comment configurer/personnaliser/trouver/paramétrer un écran, un champ, une fonctionnalité de l'app (profil, logo, SIRET, documents légaux, navigation), PAS sur le contenu métier d'un devis/chantier/client en cours.
 
-4. persona = "alfred" pour tout le reste :
+4. persona = "alfred", intent = "SEARCH_HISTORY" si le message porte sur la RECHERCHE d'une information déjà saisie dans un devis passé de CET artisan : "retrouve", "je cherche", "j'avais mis", "dans un devis précédent/passé/il y a", "quel était le prix de", "c'était combien déjà". Extrais le terme cherché (référence ou nom du produit/prestation) dans entities.recherche quand il est identifiable.
+   Distinction vs DEVIS_UPDATE : SEARCH_HISTORY est une question de lecture, sans devis_id/document actif visé pour modification — "change/modifie/ajoute sur ce devis" reste DEVIS_UPDATE.
+   Distinction vs QUERY_EXPERT : même si le terme cherché est technique (épaisseur, DTU, matériau...), une recherche dans SES PROPRES devis passés reste SEARCH_HISTORY et persona alfred, jamais gustave/simone.
+
+5. persona = "alfred" pour tout le reste :
    créer ou modifier un devis / facture, tarif, prix, planning, client (gestion), général.
 
 RÈGLES ABSOLUES :
@@ -154,7 +160,7 @@ RÈGLES ABSOLUES :
 - "quelles normes pour X" → TOUJOURS gustave, même sans "DTU" ni "NF"
 - "décennale" dans un contexte de devis → alfred (assurance citée en passant)
 - "devis + DTU" → alfred si l'intent principal est de chiffrer
-- Si le message commence par "[Persona du tour précédent : X]" : reste sur X seulement si aucun mot-clé des règles 1/2 n'apparaît dans le message actuel. Dès qu'un mot-clé de règle 1 ou 2 apparaît, applique cette règle même si le message référence le tour précédent par un pronom ou une expression comme "à ce sujet", "sur ce point", "pour ça".
+- Si le message commence par "[Persona du tour précédent : X]" : reste sur X seulement si aucun mot-clé des règles 1/2/4 n'apparaît dans le message actuel. Dès qu'un mot-clé de règle 1, 2 ou 4 apparaît, applique cette règle même si le message référence le tour précédent par un pronom ou une expression comme "à ce sujet", "sur ce point", "pour ça".
 - "comment créer un devis" (demande d'action, chiffrage à faire maintenant) → DEVIS_CREATE. "où est le bouton pour créer un devis" / "comment fonctionne l'écran devis" (mode d'emploi de l'app, aucune action de chiffrage attendue) → GUIDE_APP. Le persona reste "alfred" dans les deux cas.
 
 INTENT :
@@ -162,6 +168,7 @@ INTENT :
 - "DEVIS_UPDATE" : modifier un devis existant
 - "QUOTE_SUGGEST" : situation décrite, chiffrage attendu
 - "GUIDE_APP" : question sur le fonctionnement/la prise en main de l'application (pas une action métier)
+- "SEARCH_HISTORY" : recherche d'une info déjà saisie dans un devis passé de l'artisan (lecture, pas d'édition)
 - "QUERY_EXPERT" : question juridique ou technique sans devis
 - "GENERAL" : bonjour, autre
 
@@ -484,6 +491,38 @@ const TESTS: TestCase[] = [
     },
     note: "Mode d'emploi de l'écran Devis, aucune action de chiffrage attendue — désambiguïsation vs test 22",
   },
+  {
+    id: 24,
+    message: "Retrouve la référence du produit que j'avais mis chez Dupont pour la clim",
+    expected: {
+      persona: "alfred",
+      intent: "SEARCH_HISTORY",
+      minConfidence: 0.7,
+      entities: { recherche: "clim" },
+    },
+    note: "Recherche dans l'historique — pas d'édition, pas de devis actif visé",
+  },
+  {
+    id: 25,
+    message: "Change la référence du carrelage sur ce devis",
+    expected: {
+      persona: "alfred",
+      intent: "DEVIS_UPDATE",
+      minConfidence: 0.7,
+    },
+    note: "Non-régression : édition d'un devis identifié, pas une recherche",
+  },
+  {
+    id: 26,
+    message: "Quelle épaisseur d'isolant j'avais mise chez Martin déjà ?",
+    hint: "gustave",
+    expected: {
+      persona: "alfred",
+      intent: "SEARCH_HISTORY",
+      minConfidence: 0.6,
+    },
+    note: "Mot-clé SEARCH_HISTORY prime sur l'indice de continuité gustave — reste alfred, malgré le terme technique",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -511,7 +550,7 @@ function checkEntities(
         details.push(`  entité "${key}": ${actualVal} ≠ ${expectedVal}`);
         ok = false;
       }
-    } else if (key === "client" || key === "prestation" || key === "materiau") {
+    } else if (key === "client" || key === "prestation" || key === "materiau" || key === "recherche") {
       // Correspondance souple : mot-clé principal présent
       const keyword = String(expectedVal).toLowerCase().split(/[\s,]+/)[0];
       if (!String(actualVal).toLowerCase().includes(keyword)) {

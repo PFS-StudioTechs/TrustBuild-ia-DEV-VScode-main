@@ -3,6 +3,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeIntent, type IntentResult } from "../_shared/intent-router.ts";
 import { getSystemPrompt, getGuideSystemPrompt } from "../_shared/system-prompts.ts";
 
+// Marqueur invisible (commentaire HTML) placé en fin de réponse quand Alfred
+// pose la question de courtoisie "tu as une référence ?" — permet de détecter
+// au tour suivant une réponse courte ok/non sans appel modèle supplémentaire.
+const SEARCH_HISTORY_MARKER = "<!--SEARCH_HISTORY_PENDING-->";
+const SEARCH_HISTORY_AFFIRMATIVE = /^(ok|oui|vas[- ]?y|cherche quand m[êe]me)[.!?]?$/i;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
   "Access-Control-Allow-Headers":
@@ -235,9 +241,19 @@ serve(async (req) => {
       [...messages].reverse().find((m: { role: string }) => m.role === "user")
         ?.content ?? "";
 
+    // Détection déterministe (regex, pas d'appel modèle) d'une réponse courte
+    // à la question de courtoisie posée par Alfred au tour précédent.
+    const lastAssistantMsg =
+      [...messages].reverse().find((m: { role: string }) => m.role === "assistant")
+        ?.content ?? "";
+    const pendingSearchFollowUp = String(lastAssistantMsg).includes(SEARCH_HISTORY_MARKER);
+    const isSearchFallbackTrigger =
+      pendingSearchFollowUp && SEARCH_HISTORY_AFFIRMATIVE.test(String(lastUserMsg).trim());
+
     const validPersonas = ["alfred", "simone", "gustave"];
-    const routerResult: IntentResult =
-      forcePersona && validPersonas.includes(forcePersona as string)
+    const routerResult: IntentResult = isSearchFallbackTrigger
+      ? { persona: "alfred", intent: "SEARCH_HISTORY", entities: {}, confidence: 1 }
+      : forcePersona && validPersonas.includes(forcePersona as string)
         ? {
             persona: forcePersona as "alfred" | "simone" | "gustave",
             intent: "GENERAL",
@@ -291,6 +307,44 @@ serve(async (req) => {
 
           if (knowledgeContext) {
             systemContent += `\n\n---\n## Informations de ta base de connaissances personnelle\nUtilise en priorité les extraits suivants pour répondre à la question de l'artisan :\n\n${knowledgeContext}\n---`;
+          }
+        }
+
+        // Recherche dans l'historique des lignes de devis (intent SEARCH_HISTORY)
+        if (user && persona === "alfred" && routerResult.intent === "SEARCH_HISTORY") {
+          if (isSearchFallbackTrigger) {
+            const { data: matches } = await supabase
+              .from("lignes_devis")
+              .select(
+                "id, designation, prix_unitaire, unite, devis_id, devis:devis_id(numero, created_at, client_id, clients:client_id(nom))"
+              )
+              .eq("artisan_id", user.id)
+              .order("created_at", { ascending: false })
+              .limit(10);
+
+            systemContent += matches && matches.length > 0
+              ? `\n\n---\n## Recherche de repli dans l'historique (10 lignes les plus récentes, sans filtre)\n${JSON.stringify(matches)}\n---\nConsigne : présente ces lignes pour que l'artisan reconnaisse la bonne — ne devine jamais laquelle correspond à sa recherche.`
+              : `\n\n---\n## Recherche de repli dans l'historique : aucune ligne de devis trouvée\n---\nConsigne : dis clairement à l'artisan que tu n'as trouvé aucune ligne de devis dans son historique.`;
+          } else {
+            const searchTerm = (routerResult.entities?.recherche ?? "").trim();
+
+            if (!searchTerm) {
+              systemContent += `\n\n---\nConsigne recherche historique : l'artisan n'a pas donné de terme précis (référence ou nom du produit) pour chercher dans son historique de devis. Réponds avec l'équivalent de : "Ça m'aurait aidé d'avoir la référence ou le nom du produit que tu cherches. Mais si tu ne l'as pas, c'est pas grave, je vais me débrouiller — dis-moi juste ok ou non." Termine ta réponse par ce marqueur exact, seul sur sa ligne, à la toute fin : ${SEARCH_HISTORY_MARKER}\n---`;
+            } else {
+              const { data: matches } = await supabase
+                .from("lignes_devis")
+                .select(
+                  "id, designation, prix_unitaire, unite, devis_id, devis:devis_id(numero, created_at, client_id, clients:client_id(nom))"
+                )
+                .eq("artisan_id", user.id)
+                .ilike("designation", `%${searchTerm}%`)
+                .order("created_at", { ascending: false })
+                .limit(10);
+
+              systemContent += matches && matches.length > 0
+                ? `\n\n---\n## Résultats de recherche dans l'historique pour "${searchTerm}" (${matches.length})\n${JSON.stringify(matches)}\n---\nConsigne : si un seul résultat correspond clairement, tu peux le donner directement. S'il y en a plusieurs, liste-les (devis, client, date, prix) pour que l'artisan choisisse — ne devine jamais lequel correspond.`
+                : `\n\n---\n## Recherche dans l'historique : aucun résultat pour "${searchTerm}"\n---\nConsigne : dis clairement à l'artisan que tu n'as rien trouvé dans son historique de devis pour cette recherche.`;
+            }
           }
         }
 
