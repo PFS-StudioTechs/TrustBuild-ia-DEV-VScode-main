@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeIntent, type IntentResult } from "../_shared/intent-router.ts";
-import { getSystemPrompt } from "../_shared/system-prompts.ts";
+import { getSystemPrompt, getGuideSystemPrompt } from "../_shared/system-prompts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
@@ -258,7 +258,10 @@ serve(async (req) => {
     };
 
     const persona = routerResult.persona;
-    let systemContent = getSystemPrompt(persona);
+    let systemContent =
+      routerResult.intent === "GUIDE_APP"
+        ? getGuideSystemPrompt()
+        : getSystemPrompt(persona);
 
     if (context) {
       systemContent += `\n\nContexte actuel de l'artisan :\n${JSON.stringify(context, null, 2)}`;

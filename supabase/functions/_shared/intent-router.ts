@@ -5,6 +5,7 @@ export interface IntentResult {
     | "DEVIS_UPDATE"
     | "QUOTE_SUGGEST"
     | "QUERY_EXPERT"
+    | "GUIDE_APP"
     | "GENERAL";
   entities: {
     client?: string;
@@ -49,7 +50,9 @@ DÉCISION — applique dans cet ordre :
    fissure, humidité, moisissure, pathologie bâtiment,
    enduit, chape, carrelage, tuile, ardoise, VMC, ventilation.
 
-3. persona = "alfred" pour tout le reste :
+3. persona = "alfred", intent = "GUIDE_APP" si le message porte sur la prise en main de l'application elle-même : comment configurer/personnaliser/trouver/paramétrer un écran, un champ, une fonctionnalité de l'app (profil, logo, SIRET, documents légaux, navigation), PAS sur le contenu métier d'un devis/chantier/client en cours.
+
+4. persona = "alfred" pour tout le reste :
    créer ou modifier un devis / facture, tarif, prix, planning, client (gestion), général.
 
 RÈGLES ABSOLUES :
@@ -58,12 +61,14 @@ RÈGLES ABSOLUES :
 - "décennale" dans un contexte de devis → alfred (assurance citée en passant)
 - "devis + DTU" → alfred si l'intent principal est de chiffrer
 - Si le message commence par "[Persona du tour précédent : X]" : reste sur X seulement si aucun mot-clé des règles 1/2 n'apparaît dans le message actuel. Dès qu'un mot-clé de règle 1 ou 2 apparaît, applique cette règle même si le message référence le tour précédent par un pronom ou une expression comme "à ce sujet", "sur ce point", "pour ça".
+- "comment créer un devis" (demande d'action, chiffrage à faire maintenant) → DEVIS_CREATE. "où est le bouton pour créer un devis" / "comment fonctionne l'écran devis" (mode d'emploi de l'app, aucune action de chiffrage attendue) → GUIDE_APP. Le persona reste "alfred" dans les deux cas.
 
 INTENT :
 - "DEVIS_CREATE" : créer un nouveau devis
 - "DEVIS_UPDATE" : modifier un devis existant
 - "QUOTE_SUGGEST" : situation décrite, chiffrage attendu
 - "QUERY_EXPERT" : question juridique ou technique sans devis
+- "GUIDE_APP" : question sur le fonctionnement/la prise en main de l'application (pas une action métier)
 - "GENERAL" : bonjour, autre
 
 ENTITÉS (extraire seulement si présentes dans le message) :
