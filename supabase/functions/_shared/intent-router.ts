@@ -71,6 +71,17 @@ client (nom), prestation (type de travaux), surface (nombre en m²), materiau, m
 
 FORMAT EXACT : {"persona":"alfred","intent":"GENERAL","entities":{},"confidence":0.95}`;
 
+export function stripJsonFence(text: string): string {
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/, "");
+  }
+  if (cleaned.endsWith("```")) {
+    cleaned = cleaned.replace(/```\s*$/, "");
+  }
+  return cleaned.trim();
+}
+
 export async function routeIntent(
   message: string,
   previousPersona?: "alfred" | "simone" | "gustave"
@@ -108,11 +119,11 @@ export async function routeIntent(
     const text: string = data.content?.[0]?.text ?? "";
 
     try {
-      const result = JSON.parse(text.trim()) as IntentResult;
+      const result = JSON.parse(stripJsonFence(text)) as IntentResult;
       console.log(`routeIntent → persona=${result.persona} intent=${result.intent} conf=${result.confidence}`);
       return result;
     } catch {
-      console.error("routeIntent JSON.parse failed:", text);
+      console.error("routeIntent JSON.parse failed:", `len=${text.length}`, text);
       return FALLBACK;
     }
   } catch (e) {

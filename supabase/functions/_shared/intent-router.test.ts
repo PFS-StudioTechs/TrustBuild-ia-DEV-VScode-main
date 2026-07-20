@@ -28,6 +28,49 @@ try {
   // dotenv absent — on utilise process.env directement
 }
 
+// ---------------------------------------------------------------------------
+// stripJsonFence — nettoyage fences markdown avant JSON.parse (copie de intent-router.ts)
+// ---------------------------------------------------------------------------
+
+function stripJsonFence(text: string): string {
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/, "");
+  }
+  if (cleaned.endsWith("```")) {
+    cleaned = cleaned.replace(/```\s*$/, "");
+  }
+  return cleaned.trim();
+}
+
+const FENCE_TESTS: { label: string; input: string; expected: string }[] = [
+  { label: "réponse nue", input: '{"a":1}', expected: '{"a":1}' },
+  { label: "avec ```json", input: '```json\n{"a":1}\n```', expected: '{"a":1}' },
+  { label: "avec ``` seul", input: '```\n{"a":1}\n```', expected: '{"a":1}' },
+  { label: "espaces/sauts de ligne", input: '  \n{"a":1}\n  ', expected: '{"a":1}' },
+];
+
+(function runFenceTests() {
+  console.log(`\n${"═".repeat(72)}`);
+  console.log(`  stripJsonFence — tests unitaires (${FENCE_TESTS.length} cas)`);
+  console.log(`${"═".repeat(72)}\n`);
+  let pass = 0;
+  let fail = 0;
+  for (const t of FENCE_TESTS) {
+    const result = stripJsonFence(t.input);
+    const ok = result === t.expected;
+    console.log(`  ${ok ? "✅" : "❌"} ${t.label} → ${JSON.stringify(result)}`);
+    if (!ok) {
+      fail++;
+      console.log(`     attendu: ${JSON.stringify(t.expected)}`);
+    } else {
+      pass++;
+    }
+  }
+  console.log(`\n  stripJsonFence : ${pass}/${FENCE_TESTS.length} PASS\n`);
+  if (fail > 0) process.exitCode = 1;
+})();
+
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 if (!ANTHROPIC_API_KEY) {
@@ -168,10 +211,9 @@ async function routeIntent(
     console.log("=== END ROUTER DEBUG ===");
 
     try {
-      const cleaned = text.trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-      return JSON.parse(cleaned) as IntentResult;
+      return JSON.parse(stripJsonFence(text)) as IntentResult;
     } catch {
-      console.error(`  JSON parse error. Raw: ${text}`);
+      console.error(`  JSON parse error. len=${text.length} Raw: ${text}`);
       return FALLBACK;
     }
   } catch (e) {
