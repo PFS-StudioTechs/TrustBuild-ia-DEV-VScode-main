@@ -25,7 +25,7 @@ interface AgentChatProps {
   avatarSrc: string;
   iconColor: string;
   iconBg: string;
-  suggestions: string[];
+  suggestions?: string[];
   placeholder?: string;
   audience?: "artisan" | "client";
 }
@@ -37,7 +37,7 @@ export default function AgentChat({
   avatarSrc,
   iconColor,
   iconBg,
-  suggestions,
+  suggestions = [],
   placeholder = "Posez votre question…",
   audience = "artisan",
 }: AgentChatProps) {
@@ -616,13 +616,15 @@ function buildConversationHtml(params: {
               <h2 className="text-h3 font-display">{title}</h2>
               <p className="text-body text-muted-foreground mt-1">{subtitle}</p>
             </div>
-            <div className="space-y-2 w-full max-w-sm">
-              {suggestions.map((s) => (
-                <button key={s} onClick={() => send(s)} className="w-full text-left p-3 rounded-lg border text-sm hover:bg-primary-glow hover:border-primary/20 transition-all touch-target">
-                  {s}
-                </button>
-              ))}
-            </div>
+            {suggestions.length > 0 && (
+              <div className="space-y-2 w-full max-w-sm">
+                {suggestions.map((s) => (
+                  <button key={s} onClick={() => send(s)} className="w-full text-left p-3 rounded-lg border text-sm hover:bg-primary-glow hover:border-primary/20 transition-all touch-target">
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {messages.map((msg, i) => (
